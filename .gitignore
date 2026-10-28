@@ -1,0 +1,12 @@
+node_modules/
+out/
+release/
+dist/
+*.log
+lifecycle-log.json
+.ai
+.DS_Store
+.vite/
+.idea/
+.vscode/*
+!.vscode/extensions.json

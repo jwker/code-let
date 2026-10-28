@@ -1,0 +1,38 @@
+appId: dev.codelet.desktop
+productName: Codelet
+copyright: Copyright © 2026 Codelet
+
+directories:
+  buildResources: build
+  output: release
+
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+  - '!**/{.eslintrc,.editorconfig,.prettierrc,.prettierignore,.gitignore}'
+
+# Pi 依赖的 photon-node 是 wasm，node-pty 需要原生模块，都不能在 asar 里跑
+asarUnpack:
+  - '**/node_modules/@silvia-odwyer/photon-node/**'
+  - '**/node_modules/node-pty/**'
+
+npmRebuild: true
+buildDependenciesFromSource: false
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+  darkModeSupport: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+
+linux:
+  target:
+    - AppImage
+  category: Development
