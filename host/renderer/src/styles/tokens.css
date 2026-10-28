@@ -1,0 +1,137 @@
+/*
+ * 设计令牌 —— 唯一的原始色值/字号/圆角来源。
+ *
+ * 组件只消费这里的变量，不得自带原始色值（PLAN.md 底线 1）。
+ * 命名避开 Tailwind 的主题命名空间（--color-* / --font-* / --text-* / --shadow-* / --radius-*），
+ * 以免与 @theme inline 的映射撞名。
+ */
+
+:root,
+[data-theme='dark'] {
+  --font-ui:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', system-ui, sans-serif;
+  --font-code: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-full: 999px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  --dur: 160ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+[data-theme='dark'] {
+  --canvas: #0c0c0f;
+  --surface: #121216;
+  --raised: #191920;
+  --sunken: #08080a;
+  --overlay: rgba(18, 18, 22, 0.9);
+  --hairline: #26262e;
+  --hairline-strong: #373742;
+  --fg-1: #ededf1;
+  --fg-2: #9c9ca8;
+  --fg-3: #6a6a76;
+  --accent: #8b7cff;
+  --accent-hover: #9d91ff;
+  --accent-fg: #12101c;
+  --accent-wash: #201d38;
+  --accent-line: #3b3568;
+  --ok: #5bd69a;
+  --ok-wash: #10261d;
+  --ok-line: #1e4a37;
+  --warn: #e5b75c;
+  --warn-wash: #2a2113;
+  --warn-line: #4a3c1c;
+  --danger: #f2776b;
+  --danger-wash: #2c1717;
+  --danger-line: #542826;
+  --info: #6faef0;
+  --info-wash: #111f2e;
+  --info-line: #1e3c5a;
+  /* ANSI 基础 16 色 —— 工具输出的颜色还原走这里（R4） */
+  --ansi-black: #6a6a76;
+  --ansi-red: #f2776b;
+  --ansi-green: #5bd69a;
+  --ansi-yellow: #e5b75c;
+  --ansi-blue: #6faef0;
+  --ansi-magenta: #c08bf0;
+  --ansi-cyan: #5ecfd6;
+  --ansi-white: #9c9ca8;
+  --ansi-bright-black: #8b8b96;
+  --ansi-bright-red: #ff8a7d;
+  --ansi-bright-green: #7ae3b2;
+  --ansi-bright-yellow: #f2c874;
+  --ansi-bright-blue: #8cc2f7;
+  --ansi-bright-magenta: #d3a5f7;
+  --ansi-bright-cyan: #7ee0e6;
+  --ansi-bright-white: #ededf1;
+
+  --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --sh-md: 0 12px 30px -12px rgba(0, 0, 0, 0.65);
+  --sh-lg: 0 30px 72px -26px rgba(0, 0, 0, 0.8);
+}
+
+[data-theme='light'] {
+  --canvas: #f6f6f7;
+  --surface: #ffffff;
+  --raised: #ffffff;
+  --sunken: #f0f0f2;
+  --overlay: rgba(255, 255, 255, 0.9);
+  --hairline: #e6e6ea;
+  --hairline-strong: #d4d4da;
+  --fg-1: #111114;
+  --fg-2: #52525c;
+  --fg-3: #8b8b95;
+  --accent: #5b4bd6;
+  --accent-hover: #4a3bc4;
+  --accent-fg: #ffffff;
+  --accent-wash: #efecfd;
+  --accent-line: #d6cffa;
+  --ok: #2e7d53;
+  --ok-wash: #e8f5ee;
+  --ok-line: #bfe3d0;
+  --warn: #9c6b15;
+  --warn-wash: #fbf2df;
+  --warn-line: #efdcb2;
+  --danger: #b8342a;
+  --danger-wash: #fcecea;
+  --danger-line: #f3c9c4;
+  --info: #2563a8;
+  --info-wash: #e9f1fa;
+  --info-line: #c4daf0;
+  /* ANSI 基础 16 色 —— 工具输出的颜色还原走这里（R4） */
+  --ansi-black: #4b4b55;
+  --ansi-red: #b8342a;
+  --ansi-green: #2e7d53;
+  --ansi-yellow: #9c6b15;
+  --ansi-blue: #2563a8;
+  --ansi-magenta: #7c3fbf;
+  --ansi-cyan: #0f7b83;
+  --ansi-white: #6b6b76;
+  --ansi-bright-black: #8b8b95;
+  --ansi-bright-red: #d4453a;
+  --ansi-bright-green: #2f9e68;
+  --ansi-bright-yellow: #b9862a;
+  --ansi-bright-blue: #2f7fd0;
+  --ansi-bright-magenta: #9352d6;
+  --ansi-bright-cyan: #149aa4;
+  --ansi-bright-white: #111114;
+
+  --sh-sm: 0 1px 2px rgba(16, 16, 24, 0.05);
+  --sh-md: 0 10px 26px -10px rgba(16, 16, 24, 0.2);
+  --sh-lg: 0 28px 64px -24px rgba(16, 16, 24, 0.32);
+}

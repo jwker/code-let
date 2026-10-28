@@ -1,0 +1,168 @@
+import {
+  createAgentSessionFromServices,
+  createAgentSessionRuntime,
+  createAgentSessionServices,
+  createEventBus,
+  getAgentDir,
+  SessionManager,
+  type AgentSession,
+  type AgentSessionRuntime,
+  type CreateAgentSessionRuntimeFactory,
+  type EventBus
+} from '@earendil-works/pi-coding-agent'
+import type { ConversationInfo, StreamItem } from '@contract/index'
+import { entriesToItems } from '@contract/stream'
+
+export type PiEventListener = (event: { type: string; data: unknown }) => void
+
+/**
+ * Pi 运行时的宿主封装。
+ *
+ * 只做三件事：把 runtime 起在某个 cwd 上、把会话流事件转出去、把会话列表读出来。
+ * Pi 自己的 API 一律不外泄到渲染进程（D5 / 边界 1）。
+ */
+export class PiRuntime {
+  /** 扩展与宿主之间的唯一通道（PLAN.md D6） */
+  readonly bus: EventBus = createEventBus()
+
+  private runtime: AgentSessionRuntime | null = null
+  private unbind: (() => void) | null = null
+  private listeners = new Set<PiEventListener>()
+  private sessionId: string | null = null
+
+  /** 当前 runtime 所在的目录 */
+  get cwd(): string | null {
+    return this.runtime?.cwd ?? null
+  }
+
+  get currentSessionId(): string | null {
+    return this.sessionId
+  }
+
+  get ready(): boolean {
+    return this.runtime !== null
+  }
+
+  onEvent(listener: PiEventListener): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  private emit(event: { type: string; data: unknown }): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(event)
+      } catch {
+        // 单个订阅者出错不能拖垮整条流
+      }
+    }
+  }
+
+  private bind(session: AgentSession): void {
+    this.unbind?.()
+    this.unbind = session.subscribe((event) => {
+      const { type, ...rest } = event as unknown as { type: string } & Record<string, unknown>
+      this.emit({ type, data: rest })
+    })
+    this.sessionId = session.sessionId ?? null
+  }
+
+  /**
+   * 在指定目录上起（或重起）runtime。
+   * 换项目、换会话都走这里 —— 同一时刻只有一个活动会话（D4）。
+   *
+   * resume = 接着这个目录上一次的会话跑；否则起一个新会话。
+   */
+  async start(cwd: string, options?: { resume?: boolean }): Promise<void> {
+    await this.stop()
+
+    const agentDir = getAgentDir()
+
+    // 工厂由 runtime 持有，换会话时会被再次调用，所以事件订阅在这里重绑
+    const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd, agentDir, sessionManager }) => {
+      const services = await createAgentSessionServices({
+        cwd,
+        agentDir,
+        // 扩展与宿主之间的唯一通道（PLAN.md D6）
+        resourceLoaderOptions: { eventBus: this.bus }
+      })
+      const { session, extensionsResult, modelFallbackMessage } = await createAgentSessionFromServices({
+        services,
+        sessionManager
+      })
+      this.bind(session)
+      return { session, extensionsResult, modelFallbackMessage, services, diagnostics: services.diagnostics }
+    }
+
+    this.runtime = await createAgentSessionRuntime(createRuntime, {
+      cwd,
+      agentDir,
+      sessionManager: options?.resume ? SessionManager.continueRecent(cwd) : SessionManager.create(cwd)
+    })
+  }
+
+  /** 切到另一个目录下的会话（跨项目） */
+  async switchSession(sessionPath: string, cwdOverride?: string): Promise<void> {
+    if (!this.runtime) throw new Error('runtime 尚未启动')
+    await this.runtime.switchSession(sessionPath, { cwdOverride })
+  }
+
+  /** 在当前目录开一个新会话 */
+  async newSession(): Promise<void> {
+    if (!this.runtime) throw new Error('runtime 尚未启动')
+    await this.runtime.newSession()
+  }
+
+  /** 往当前会话发一条用户消息 */
+  async prompt(text: string): Promise<void> {
+    if (!this.runtime) throw new Error('runtime 尚未启动')
+    await this.runtime.session.prompt(text)
+  }
+
+  async stop(): Promise<void> {
+    this.unbind?.()
+    this.unbind = null
+    this.sessionId = null
+    const runtime = this.runtime
+    this.runtime = null
+    if (runtime) await runtime.dispose()
+  }
+
+  /**
+   * 读当前会话已经说过的话（R1 R5）。
+   *
+   * 持久态不用另存 —— Pi 的会话文件就是权威，这里只是把它读出来。
+   * 取的是**当前分支**（getBranch）：压缩前的旧话也要在，压缩是为了给模型看，
+   * 不是为了让人忘掉。
+   */
+  readEntries(): StreamItem[] {
+    const sessionManager = this.runtime?.session.sessionManager
+    if (!sessionManager) return []
+    const branch = sessionManager.getBranch()
+    const entries = branch.length > 0 ? branch : sessionManager.getEntries()
+    return entriesToItems(entries)
+  }
+
+  /** 列出某个目录下的会话 */
+  static async listConversations(cwd: string): Promise<ConversationInfo[]> {
+    const sessions = await SessionManager.list(cwd)
+    return sessions
+      .map((info) => ({
+        id: info.id,
+        path: info.path,
+        title: pickTitle(info.name, info.firstMessage),
+        modified: new Date(info.modified).toISOString(),
+        messageCount: info.messageCount,
+        cwd: info.cwd
+      }))
+      .sort((a, b) => b.modified.localeCompare(a.modified))
+  }
+}
+
+function pickTitle(name: string | undefined, firstMessage: string | undefined): string {
+  // 会话名优先；没有名字（或空名字）就退回首条用户消息
+  const raw = (name?.trim() ? name : (firstMessage ?? '')).trim()
+  if (!raw) return '未命名对话'
+  const oneLine = raw.replace(/\s+/g, ' ')
+  return oneLine.length > 60 ? `${oneLine.slice(0, 60)}…` : oneLine
+}
