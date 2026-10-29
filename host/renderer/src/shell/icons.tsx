@@ -54,6 +54,13 @@ export const IconTerminal = () => (
   </Icon>
 )
 
+export const IconPanelLeft = () => (
+  <Icon>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <path d="M9 4v16" />
+  </Icon>
+)
+
 export const IconPanelRight = () => (
   <Icon>
     <rect x="3" y="4" width="18" height="16" rx="2.5" />

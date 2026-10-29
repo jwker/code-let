@@ -30,12 +30,19 @@ export function App() {
   const theme = useStore((s) => s.theme)
   const sessionId = useStore((s) => s.snapshot.session.sessionId)
   const inspectorOpen = useStore((s) => s.inspectorOpen)
+  const sidebarOpen = useStore((s) => s.sidebarOpen)
+  const toggleSidebar = useStore((s) => s.toggleSidebar)
 
   const shellRef = useRef<HTMLDivElement>(null)
   const [sideWidth, setSideWidth] = useState(loadSidebarWidth)
   const [inspWidth, setInspWidth] = useState(loadInspectorWidth)
   // 拖拽时宽度只写 DOM、不动 state，所以窗口 resize 的回调要从这里读最新值
-  const layoutRef = useRef({ side: sideWidth, insp: inspWidth, open: inspectorOpen })
+  const layoutRef = useRef({
+    side: sideWidth,
+    insp: inspWidth,
+    sideOpen: sidebarOpen,
+    inspOpen: inspectorOpen
+  })
 
   useEffect(() => {
     // macOS 的红绿灯压在导航轨顶上，躲开它
@@ -73,20 +80,31 @@ export function App() {
 
   // 宽度写在 shell 的 CSS 变量上，标题栏和下方三列共用同一份（见 .shell）
   useLayoutEffect(() => {
-    layoutRef.current = { side: sideWidth, insp: inspWidth, open: inspectorOpen }
+    layoutRef.current = { side: sideWidth, insp: inspWidth, sideOpen: sidebarOpen, inspOpen: inspectorOpen }
     const el = shellRef.current
     if (!el) return
     el.style.setProperty('--side-w', `${sideWidth}px`)
     el.style.setProperty('--insp-w', `${inspWidth}px`)
-  }, [sideWidth, inspWidth, inspectorOpen])
+  }, [sideWidth, inspWidth, sidebarOpen, inspectorOpen])
 
-  // 窗口变窄：把两栏收回上限之内，别把主区挤没
+  // ⌘B / Ctrl+B：跟编辑器一致，侧栏收放的快捷键
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key.toLowerCase() !== 'b' || !(event.metaKey || event.ctrlKey)) return
+      event.preventDefault()
+      toggleSidebar()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [toggleSidebar])
+
+  // 窗口变窄：把两栏收回上限之内，别把主区挤没（收起的那一栏不占宽度）
   useEffect(() => {
     function fitToWindow(): void {
-      const { side, insp, open } = layoutRef.current
+      const { side, insp, sideOpen, inspOpen } = layoutRef.current
       const width = window.innerWidth
-      const nextInsp = clampInspector(insp, side, width)
-      const nextSide = clampSidebar(side, open ? nextInsp : 0, width)
+      const nextInsp = clampInspector(insp, sideOpen ? side : 0, width)
+      const nextSide = clampSidebar(side, inspOpen ? nextInsp : 0, width)
       if (nextInsp !== insp) setInspWidth(nextInsp)
       if (nextSide !== side) setSideWidth(nextSide)
     }
@@ -96,8 +114,16 @@ export function App() {
     return () => window.removeEventListener('resize', fitToWindow)
   }, [])
 
+  const shellClass = [
+    'shell',
+    inspectorOpen ? '' : 'is-insp-hidden',
+    sidebarOpen ? '' : 'is-side-hidden'
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <div ref={shellRef} className={inspectorOpen ? 'shell' : 'shell is-insp-hidden'}>
+    <div ref={shellRef} className={shellClass}>
       <TitleBar />
       <Rail />
       <Sidebar />
@@ -112,8 +138,8 @@ export function App() {
         min={SIDEBAR_MIN}
         defaultWidth={SIDEBAR_DEFAULT}
         ceiling={() => {
-          const { insp, open } = layoutRef.current
-          return sidebarCeiling(open ? insp : 0, window.innerWidth)
+          const { insp, inspOpen } = layoutRef.current
+          return sidebarCeiling(inspOpen ? insp : 0, window.innerWidth)
         }}
         onDrag={(next) => shellRef.current?.style.setProperty('--side-w', `${next}px`)}
         onCommit={(next) => {
@@ -128,7 +154,10 @@ export function App() {
         width={inspWidth}
         min={INSPECTOR_MIN}
         defaultWidth={INSPECTOR_DEFAULT}
-        ceiling={() => inspectorCeiling(layoutRef.current.side, window.innerWidth)}
+        ceiling={() => {
+          const { side, sideOpen } = layoutRef.current
+          return inspectorCeiling(sideOpen ? side : 0, window.innerWidth)
+        }}
         onDrag={(next) => shellRef.current?.style.setProperty('--insp-w', `${next}px`)}
         onCommit={(next) => {
           setInspWidth(next)

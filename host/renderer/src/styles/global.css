@@ -104,10 +104,18 @@
   initial-value: 300px;
 }
 
+/* 左侧栏同一个套路：--side-w 是设计宽度，--side-track 是占位宽度 */
+@property --side-track {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 264px;
+}
+
 .shell {
   /* 三栏宽度只在这里定义；拖拽时 App 往 shell 上写同样的变量，标题栏跟着走 */
   --rail-w: 56px;
   --side-w: 264px;
+  --side-track: var(--side-w);
   --insp-w: 300px;
   --insp-track: var(--insp-w);
   /* 侧栏左上角的圆角；分隔线按这个半径拐弯，改大改小只要动这里 */
@@ -115,7 +123,7 @@
 
   position: relative;
   display: grid;
-  grid-template-columns: var(--rail-w) var(--side-w) minmax(0, 1fr) var(--insp-track);
+  grid-template-columns: var(--rail-w) var(--side-track) minmax(0, 1fr) var(--insp-track);
   grid-template-rows: var(--titlebar-h) minmax(0, 1fr) var(--statusbar-h);
   grid-template-areas:
     'title title title title'
@@ -123,12 +131,19 @@
     'rail side bar bar';
   height: 100vh;
   background: var(--canvas);
-  transition: --insp-track 180ms ease;
+  transition:
+    --side-track 180ms ease,
+    --insp-track 180ms ease;
 }
 
 /* 收起检视器：只改占位宽度，面板自己滑出去（见 .shell-insp） */
 .shell.is-insp-hidden {
   --insp-track: 0px;
+}
+
+/* 收起左侧栏：同上，面板从右边裁掉（见 .side-panel） */
+.shell.is-side-hidden {
+  --side-track: 0px;
 }
 
 /* 拖拽中不要 180ms 过渡，否则宽度跟不上鼠标 */
@@ -145,7 +160,7 @@
   position: relative;
   z-index: 30;
   display: grid;
-  grid-template-columns: calc(var(--rail-w) + var(--side-w)) minmax(0, 1fr) var(--insp-track);
+  grid-template-columns: calc(var(--rail-w) + var(--side-track)) minmax(0, 1fr) var(--insp-track);
 }
 /*
  * 打通导航轨：底边线不从窗口左上角画起，而是从轨道右边开始，
@@ -179,6 +194,25 @@
   border-top-left-radius: var(--panel-radius);
   pointer-events: none;
   z-index: 1;
+}
+/*
+ * 侧栏收起后那个圆角不存在了：横线一路画到轨道边、轨道竖线顶到标题栏，
+ * 变成和右侧检视器一样的直角接缝。
+ *
+ * 三处都延后 180ms 再换 —— 收起过程中面板的圆角还在原位，
+ * 提前把弧线抽掉会留下一个「有圆角、没弧线」的空档；等面板滑完一起换。
+ */
+.shell.is-side-hidden .shell-title::before {
+  opacity: 0;
+  transition: opacity 0s linear 180ms;
+}
+.shell.is-side-hidden .shell-title::after {
+  left: calc(var(--rail-w) - 1px);
+  transition: left 0s linear 180ms;
+}
+.shell.is-side-hidden .shell-rail::after {
+  top: 0;
+  transition: top 0s linear 180ms;
 }
 .titlebar-left {
   min-width: 0;
@@ -250,8 +284,28 @@
 
 .shell-side {
   grid-area: side;
-  /* 面板底色向内收 1px，正好贴在弧线内侧 */
+  /* 收起时列宽归零，面板按 --side-w 排版后从右边裁掉 */
+  min-width: 0;
+  overflow: hidden;
+}
+/*
+ * 面板本体：宽度固定成设计宽度，收起过程中只被裁、不重排 ——
+ * 和检视器一样，滑出去的是整块面板，而不是每帧重新折行。
+ */
+.side-panel {
+  display: flex;
+  width: var(--side-w);
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  border-right: 1px solid var(--hairline);
   border-top-left-radius: calc(var(--panel-radius) - 1px);
+  background: var(--panel);
+}
+.shell.is-side-hidden .shell-side {
+  visibility: hidden;
+  /* 收起时延后隐藏，让滑出动画看得见；展开时立刻显示 */
+  transition: visibility 0s linear 180ms;
 }
 .shell-main {
   grid-area: main;
@@ -330,13 +384,14 @@
   outline: none;
 }
 .shell-grip-left {
-  left: calc(var(--rail-w) + var(--side-w));
+  left: calc(var(--rail-w) + var(--side-track));
 }
 .shell-grip-right {
   left: calc(100% - var(--insp-track));
 }
-/* 检视器收起时不占位，也就没有可拖的缝 */
-.shell.is-insp-hidden .shell-grip-right {
+/* 收起的一侧没有可拖的缝 */
+.shell.is-insp-hidden .shell-grip-right,
+.shell.is-side-hidden .shell-grip-left {
   display: none;
 }
 /* 悬停时把原有那条细线加粗一格，不另外画线，免得出现双线 */
