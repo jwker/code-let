@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ModelOption } from '@contract/index'
-import { host } from '../host'
 import { IconCheck } from './icons'
 import { filterModels, formatContext, formatPrice, groupByProvider } from './modelList'
 
@@ -191,18 +190,4 @@ export function ModelPicker({
       </div>
     </div>
   )
-}
-
-/** 把当前模型取成「provider 分组 + 名字」，给状态栏和入口用 */
-export function modelLabel(model: ModelOption | null): string {
-  return model ? model.name : '未选模型'
-}
-
-/** 触发选择器要用的模型清单（宿主那边取不到就返回空） */
-export async function loadModels(): Promise<ModelOption[]> {
-  try {
-    return await host.listModels()
-  } catch {
-    return []
-  }
 }

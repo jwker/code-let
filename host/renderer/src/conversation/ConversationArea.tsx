@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import { host } from '../host'
 import { IconArrowUp } from '../shell/icons'
-import { shortName } from '../shell/modelList'
 import { NormalStream } from './NormalStream'
 import { ScrollJump } from './ScrollJump'
 import { TerminalStream } from './TerminalStream'
@@ -116,11 +115,11 @@ export function ConversationArea() {
                   title={
                     session.model ? `${session.model.provider}/${session.model.id}` : '未选模型'
                   }
-                  className="conv-model flex min-w-0 max-w-[190px] items-center gap-1 rounded-full border border-hairline px-2 py-0.5 text-[10.5px] text-fg-2 transition-colors hover:border-hairline-strong hover:bg-panel hover:text-fg-1 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="conv-model flex min-w-0 max-w-[230px] items-center gap-1 rounded-full border border-hairline px-2 py-0.5 text-[10.5px] text-fg-2 transition-colors hover:border-hairline-strong hover:bg-panel hover:text-fg-1 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="flex-none text-fg-3">◇</span>
                   <span className="min-w-0 truncate font-mono">
-                    {session.model ? shortName(session.model.name) : '未选模型'}
+                    {session.model ? session.model.name : '未选模型'}
                   </span>
                   <span className="flex-none text-fg-3">▾</span>
                 </button>

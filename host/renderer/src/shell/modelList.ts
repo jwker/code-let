@@ -33,16 +33,6 @@ export function filterModels(models: readonly ModelOption[], query: string): Mod
   })
 }
 
-/**
- * 窄位置用的短标签。
- *
- * 输入框那一行放不下完整名字（`MiniMax-M3.1-Flash`），只留最后一段。
- */
-export function shortName(name: string): string {
-  const tail = name.split(/[/\s]+/).pop() ?? name
-  return tail.length > 22 ? `${tail.slice(0, 21)}…` : tail
-}
-
 /** 上下文窗口：200000 → 200k */
 export function formatContext(tokens: number): string {
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`

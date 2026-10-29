@@ -121,13 +121,20 @@ const FAKE_ITEMS: StreamItem[] = [
   { kind: 'message', role: 'user', text: '好，那就这样。把改动整理成一条提交信息给我。' }
 ]
 
-/** 假的可用模型清单：够看出分组、搜索、价格 */
+/**
+ * 假的可用模型清单。
+ *
+ * 名字用真实目录里的写法 —— 有的带空格（`DeepSeek V4.1 Flash`）、
+ * 有的带 provider 前缀（`Qwen/Qwen3-8B`）。早先这些假名字直接用了 id，
+ * 把「显示时把名字截成最后一个词」的 bug 盖住了。
+ */
 const FAKE_MODELS: ModelOption[] = [
   { provider: 'minimax-cn', id: 'MiniMax-M3.1-Flash', name: 'MiniMax-M3.1-Flash', contextWindow: 200_000, reasoning: true, cost: { input: 0.2, output: 1.1 } },
   { provider: 'minimax-cn', id: 'MiniMax-M3', name: 'MiniMax-M3', contextWindow: 200_000, reasoning: true, cost: { input: 0.6, output: 2.4 } },
-  { provider: 'deepseek', id: 'deepseek-flash', name: 'deepseek-flash', contextWindow: 128_000, reasoning: true, cost: { input: 0.1, output: 0.4 } },
-  { provider: 'deepseek', id: 'deepseek-v4-pro', name: 'deepseek-v4-pro', contextWindow: 128_000, reasoning: true, cost: { input: 0.8, output: 3.2 } },
-  { provider: 'anthropic', id: 'claude-sonnet', name: 'claude-sonnet', contextWindow: 200_000, reasoning: true, cost: { input: 3, output: 15 } }
+  { provider: 'minimax-cn-openai', id: 'MiniMax-M3.1-Flash', name: 'MiniMax M3.1 Flash OpenAI', contextWindow: 200_000, reasoning: true, cost: { input: 0.2, output: 1.1 } },
+  { provider: 'deepseek', id: 'deepseek-flash', name: 'DeepSeek V4.1 Flash', contextWindow: 128_000, reasoning: true, cost: { input: 0.1, output: 0.4 } },
+  { provider: 'deepseek', id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', contextWindow: 128_000, reasoning: true, cost: { input: 0.8, output: 3.2 } },
+  { provider: 'siliconflow', id: 'Qwen/Qwen3-8B', name: 'Qwen/Qwen3-8B', contextWindow: 32_000, reasoning: false, cost: { input: 0, output: 0 } }
 ]
 
 /** 假回复：一段带格式的文字，一段段吐出来 */
