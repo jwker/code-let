@@ -101,29 +101,25 @@ export function ConversationArea() {
 
             <div className="mt-1 flex items-center gap-3 px-2">
               {/*
-                模型胶囊：换模型是「准备发下一条」时做的决定，所以放在输入框上。
+                模型：显示与切换的唯一位置（换模型是「准备发下一条」时做的决定）。
                 生成中禁用 —— 本轮的模型已经定了，要换得等这轮结束。
               */}
-              {mode === 'normal' && (
-                <button
-                  type="button"
-                  disabled={streaming || !session.model}
-                  onClick={(event) => {
-                    const rect = event.currentTarget.getBoundingClientRect()
-                    openPicker({ left: rect.left, bottom: window.innerHeight - rect.top + 8 })
-                  }}
-                  title={
-                    session.model ? `${session.model.provider}/${session.model.id}` : '未选模型'
-                  }
-                  className="conv-model flex min-w-0 max-w-[230px] items-center gap-1 rounded-full border border-hairline px-2 py-0.5 text-[10.5px] text-fg-2 transition-colors hover:border-hairline-strong hover:bg-panel hover:text-fg-1 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <span className="flex-none text-fg-3">◇</span>
-                  <span className="min-w-0 truncate font-mono">
-                    {session.model ? session.model.name : '未选模型'}
-                  </span>
-                  <span className="flex-none text-fg-3">▾</span>
-                </button>
-              )}
+              <button
+                type="button"
+                disabled={streaming || !session.model}
+                onClick={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect()
+                  openPicker({ left: rect.left, bottom: window.innerHeight - rect.top + 8 })
+                }}
+                title={session.model ? `${session.model.provider}/${session.model.id}` : '未选模型'}
+                className="conv-model flex min-w-0 max-w-[230px] items-center gap-1 rounded-full border border-hairline px-2 py-0.5 text-[10.5px] text-fg-2 transition-colors hover:border-hairline-strong hover:bg-panel hover:text-fg-1 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span className="flex-none text-fg-3">◇</span>
+                <span className="conv-model-name min-w-0 truncate font-mono">
+                  {session.model ? session.model.name : '未选模型'}
+                </span>
+                <span className="conv-model-caret flex-none text-fg-3">▾</span>
+              </button>
               <span className="conv-hint flex-none text-[11.5px] text-fg-3">⌘↵ 发送</span>
               {session.error && (
                 <span className="min-w-0 flex-1 truncate text-[11.5px] text-danger" title={session.error}>
