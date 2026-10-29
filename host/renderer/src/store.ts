@@ -32,6 +32,25 @@ function saveTheme(theme: Theme): void {
 
 const MODE_KEY = 'codelet:conversation-mode'
 
+const INSPECTOR_KEY = 'codelet:inspector-open'
+
+/** 右侧检视器默认展开 */
+function loadInspectorOpen(): boolean {
+  try {
+    return localStorage.getItem(INSPECTOR_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+function saveInspectorOpen(open: boolean): void {
+  try {
+    localStorage.setItem(INSPECTOR_KEY, open ? '1' : '0')
+  } catch {
+    // 存不下就算了
+  }
+}
+
 type ModeMap = Record<string, ConversationMode>
 
 function loadModes(): ModeMap {
@@ -68,12 +87,16 @@ interface RendererStore {
   streaming: boolean
   /** 工具输出哪些是展开的（callId → 展开与否）。默认收起来，点开才看。 */
   expandedTools: Record<string, boolean>
+  /** 右侧检视器是否展开 */
+  inspectorOpen: boolean
 
   setSnapshot: (snapshot: HostSnapshot) => void
   setNav: (nav: NavEntry) => void
   setMode: (mode: ConversationMode) => void
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
+  /** 展开 / 收起右侧检视器 */
+  toggleInspector: () => void
   bumpEvents: (count: number) => void
   /** 换会话时整体替换内容流（R5） */
   setItems: (items: StreamItem[]) => void
@@ -92,6 +115,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   items: [],
   streaming: false,
   expandedTools: {},
+  inspectorOpen: loadInspectorOpen(),
 
   setSnapshot: (snapshot) => {
     const previousSessionId = get().snapshot.session.sessionId
@@ -150,5 +174,11 @@ export const useStore = create<RendererStore>((set, get) => ({
     const next: Theme = get().theme === 'dark' ? 'light' : 'dark'
     saveTheme(next)
     set({ theme: next })
+  },
+
+  toggleInspector: () => {
+    const next = !get().inspectorOpen
+    saveInspectorOpen(next)
+    set({ inspectorOpen: next })
   }
 }))

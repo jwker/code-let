@@ -42,19 +42,19 @@ export function ConversationList() {
 
   if (conversations.length === 0) {
     return (
-      <div className="px-3 py-6 text-center text-[12px] text-fg-3">
+      <div className="px-4 py-8 text-center text-[12.5px] text-fg-3">
         这个项目还没有对话
         <br />
-        点上面的 + 开一个
+        点上面的新建对话开一个
       </div>
     )
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-2 py-2">
+    <div className="flex-1 overflow-y-auto px-2 pb-4 pt-1">
       {GROUP_ORDER.filter((key) => groups.has(key)).map((key) => (
         <div key={key} className="mb-3">
-          <div className="px-2 py-1 text-[10px] tracking-[0.07em] text-fg-3 uppercase">{key}</div>
+          <div className="px-3 pb-1 pt-2 text-[11.5px] text-fg-3">{key}</div>
           {groups.get(key)?.map((conversation) => {
             const active = conversation.id === activeSessionId
             return (
@@ -63,12 +63,19 @@ export function ConversationList() {
                 type="button"
                 onClick={() => void host.switchConversation(conversation.path)}
                 className={[
-                  'flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left transition-colors',
-                  active ? 'bg-accent-wash text-accent' : 'text-fg-2 hover:bg-sunken'
+                  'group flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors',
+                  active ? 'bg-accent-wash text-fg-1' : 'text-fg-2 hover:bg-sunken'
                 ].join(' ')}
               >
-                <span className="min-w-0 flex-1 truncate text-[12.5px]">{conversation.title}</span>
-                <span className="flex-none font-mono text-[10px] text-fg-3">
+                <span
+                  className={[
+                    'min-w-0 flex-1 truncate text-[13.5px]',
+                    active ? 'font-medium' : ''
+                  ].join(' ')}
+                >
+                  {conversation.title}
+                </span>
+                <span className="flex-none font-mono text-[10px] text-fg-3 opacity-0 transition-opacity group-hover:opacity-100">
                   {relativeTime(conversation.modified)}
                 </span>
               </button>

@@ -5,6 +5,7 @@ import { MainArea } from './shell/MainArea'
 import { Rail } from './shell/Rail'
 import { Sidebar } from './shell/Sidebar'
 import { StatusBar } from './shell/StatusBar'
+import { TitleBar } from './shell/TitleBar'
 import { useStore } from './store'
 
 export function App() {
@@ -13,6 +14,7 @@ export function App() {
   const setItems = useStore((s) => s.setItems)
   const theme = useStore((s) => s.theme)
   const sessionId = useStore((s) => s.snapshot.session.sessionId)
+  const inspectorOpen = useStore((s) => s.inspectorOpen)
 
   useEffect(() => {
     // macOS 的红绿灯压在导航轨顶上，躲开它
@@ -49,7 +51,8 @@ export function App() {
   }, [sessionId, setItems])
 
   return (
-    <div className="shell">
+    <div className={inspectorOpen ? 'shell' : 'shell is-insp-hidden'}>
+      <TitleBar />
       <Rail />
       <Sidebar />
       <MainArea />

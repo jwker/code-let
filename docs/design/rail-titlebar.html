@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>导航条 × 顶栏 · 打通方案</title>
+    <style>
+      :root {
+        --canvas: #f4f4f5;
+        --panel: #fbfbfb;
+        --surface: #ffffff;
+        --raised: #ffffff;
+        --sunken: #f1f1f3;
+        --hairline: #ececee;
+        --hairline-strong: #dedee2;
+        --fg1: #1b1b19;
+        --fg2: #5c5c56;
+        --fg3: #94948c;
+        --wash: #eeeef0;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 48px 32px 80px;
+        background: #f7f7f8;
+        color: var(--fg1);
+        font:
+          14px/1.6 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei',
+          system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .page {
+        max-width: 900px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        margin: 0 0 6px;
+      }
+      .lead {
+        margin: 0 0 36px;
+        color: var(--fg2);
+        font-size: 13.5px;
+        max-width: 640px;
+      }
+      .option {
+        margin: 0 0 40px;
+      }
+      .option-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0 0 4px;
+      }
+      .tag {
+        flex: none;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 2px 7px;
+        border-radius: 6px;
+        background: var(--wash);
+        color: var(--fg2);
+      }
+      .option h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .desc {
+        margin: 0 0 12px 0;
+        font-size: 12.5px;
+        color: var(--fg2);
+        max-width: 660px;
+      }
+      .desc b {
+        color: var(--fg1);
+        font-weight: 600;
+      }
+      .note {
+        margin: 10px 0 0;
+        font-size: 12px;
+        color: var(--fg3);
+      }
+
+      /* ---------------- mock frame ---------------- */
+      .frame {
+        position: relative;
+        width: 760px;
+        height: 300px;
+        overflow: hidden;
+        border: 1px solid var(--hairline);
+        border-radius: 12px;
+        background: var(--canvas);
+        box-shadow: 0 10px 30px -18px rgba(20, 20, 16, 0.28);
+      }
+      /* 顶栏 */
+      .bar {
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 52px;
+        background: var(--canvas);
+        z-index: 3;
+      }
+      .bar::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 1px;
+        background: var(--hairline);
+      }
+      /* 打通：底边线从轨道右侧开始 */
+      .merged .bar::after {
+        left: 56px;
+      }
+      /* 导航条 */
+      .rail {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 56px;
+        background: var(--canvas);
+        z-index: 2;
+      }
+      .rail::after {
+        content: '';
+        position: absolute;
+        left: 55px;
+        bottom: 0;
+        height: calc(100% - 52px);
+        width: 1px;
+        background: var(--hairline);
+      }
+      .no-merge .rail::after {
+        top: 0;
+        height: 100%;
+      }
+      /* 侧栏 */
+      .side {
+        position: absolute;
+        left: 56px;
+        top: 52px;
+        right: 0;
+        bottom: 0;
+        background: var(--panel);
+      }
+      /* 主区 */
+      .main {
+        position: absolute;
+        left: 320px;
+        top: 52px;
+        right: 0;
+        bottom: 0;
+        background: var(--surface);
+      }
+
+      /* 红绿灯 */
+      .lights {
+        position: absolute;
+        left: 18px;
+        top: 18px;
+        display: flex;
+        gap: 9px;
+        z-index: 6;
+      }
+      .lights i {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: block;
+      }
+      .lights i:nth-child(1) {
+        background: #ff5f57;
+      }
+      .lights i:nth-child(2) {
+        background: #febc2e;
+      }
+      .lights i:nth-child(3) {
+        background: #28c840;
+      }
+
+      /* 顶栏标题 */
+      .bar-title {
+        position: absolute;
+        left: 336px;
+        top: 0;
+        height: 52px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--fg1);
+        z-index: 5;
+      }
+      .bar-title svg {
+        color: var(--fg3);
+      }
+      .bar-more {
+        position: absolute;
+        right: 16px;
+        top: 12px;
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        color: var(--fg2);
+        z-index: 5;
+      }
+
+      /* 轨道图标 */
+      .icon {
+        position: absolute;
+        left: 12px;
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        color: #8d8d87;
+      }
+      .icon.active {
+        background: var(--wash);
+        color: var(--fg1);
+      }
+      .logo {
+        position: absolute;
+        width: 30px;
+        height: 30px;
+        border-radius: 10px;
+        background: #1b1b19;
+        color: #fff;
+        display: grid;
+        place-items: center;
+        font-size: 14px;
+        font-weight: 600;
+        z-index: 4;
+      }
+
+      /* 侧栏内容 */
+      .side-head {
+        position: absolute;
+        left: 10px;
+        right: 10px;
+        top: 12px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 6px;
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--fg1);
+      }
+      .side-head .chev {
+        margin-left: auto;
+        color: var(--fg3);
+      }
+      .side-new {
+        position: absolute;
+        left: 10px;
+        right: 10px;
+        top: 52px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 6px;
+        font-size: 13px;
+        color: var(--fg1);
+      }
+      .side-new svg,
+      .side-head svg {
+        color: var(--fg2);
+      }
+      .side-group {
+        position: absolute;
+        left: 18px;
+        top: 98px;
+        font-size: 11px;
+        color: var(--fg3);
+      }
+      .side-item {
+        position: absolute;
+        left: 10px;
+        right: 10px;
+        height: 30px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        padding: 0 9px;
+        font-size: 12.5px;
+        color: var(--fg2);
+      }
+      .side-item.active {
+        background: var(--wash);
+        color: var(--fg1);
+        font-weight: 500;
+      }
+      .side-item.muted {
+        color: #6f6f69;
+      }
+      /* 主区内容 */
+      .bubble {
+        position: absolute;
+        right: 16px;
+        top: 16px;
+        max-width: 300px;
+        padding: 10px 14px;
+        border-radius: 14px;
+        background: var(--canvas);
+        font-size: 12.5px;
+        color: var(--fg1);
+      }
+      .para {
+        position: absolute;
+        left: 16px;
+        top: 76px;
+        font-size: 12.5px;
+        color: var(--fg1);
+      }
+      .para.two {
+        top: 112px;
+        color: var(--fg2);
+      }
+      .toolrow {
+        position: absolute;
+        left: 16px;
+        top: 148px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--fg3);
+      }
+      .toolrow i {
+        width: 12px;
+        height: 12px;
+        border: 1px solid var(--hairline-strong);
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        font-size: 7px;
+        font-style: normal;
+      }
+
+      /* ---- 各方案差异 ---- */
+      .opt-a .logo {
+        top: 62px;
+        left: 13px;
+      }
+      .opt-b .logo {
+        top: 16px;
+        left: 76px;
+        width: 20px;
+        height: 20px;
+        border-radius: 7px;
+        font-size: 11px;
+      }
+      .brand-inline {
+        display: inline-grid;
+        place-items: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        background: #1b1b19;
+        color: #fff;
+        font-size: 10px;
+        font-weight: 600;
+      }
+      .opt-d .logo {
+        top: 232px;
+        left: 13px;
+        opacity: 0.55;
+      }
+      .rail-theme {
+        position: absolute;
+        left: 12px;
+        top: 272px;
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        color: #8d8d87;
+      }
+      .footer {
+        margin-top: 48px;
+        padding-top: 20px;
+        border-top: 1px solid var(--hairline-strong);
+      }
+      .footer h3 {
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      .footer p {
+        margin: 0 0 6px;
+        font-size: 13px;
+        color: var(--fg2);
+      }
+      .footer b {
+        color: var(--fg1);
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        background: var(--sunken);
+        padding: 1px 5px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>导航条 × 顶栏打通 · π logo 的 5 种摆法</h1>
+      <p class="lead">
+        每张图都是左上角的真实比例裁切（轨道 56px、侧栏 264px、顶栏 52px）。除了第 0 张是现状，其余都做了「打通」：顶栏底边线只画到轨道右侧，轨道那一竖条从窗口顶端一路到底，红色绿色黄色三个窗口钮浮在上面。
+      </p>
+
+      <!-- 0 现状 -->
+      <section class="option no-merge">
+        <div class="option-head"><span class="tag">现状</span><h2>顶栏底边线横穿轨道</h2></div>
+        <p class="desc">轨道从顶栏下沿才开始，左上角被一条横线切成两层，π 像贴在下面一块板上。</p>
+        <div class="frame">
+          <div class="rail">
+            <div class="logo" style="top: 62px; left: 13px">π</div>
+            <div class="icon" style="top: 106px">💬</div>
+          </div>
+          <div class="side">
+            <div class="side-head">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z"/></svg>
+              codelet
+              <span class="chev">⌄</span>
+            </div>
+          </div>
+          <div class="main"></div>
+          <div class="bar"><div class="lights"><i></i><i></i><i></i></div></div>
+        </div>
+      </section>
+
+      <!-- A -->
+      <section class="option merged opt-a">
+        <div class="option-head"><span class="tag">方案 A</span><h2>只断线，logo 原位不动</h2></div>
+        <p class="desc">
+          改动最小：把顶栏底边线在 x=56 处截断，轨道通顶，π 继续待在轨道第一个位置（y≈62），只是头顶那条横线没了。
+          <b>好处</b>是几乎不动现有结构，红绿灯位置也不用碰。
+        </p>
+        <div class="frame merged">
+          <div class="rail">
+            <div class="logo" style="top: 62px; left: 13px">π</div>
+          </div>
+          <div class="side"></div>
+          <div class="main"></div>
+          <div class="bar"><div class="lights"><i></i><i></i><i></i></div></div>
+        </div>
+      </section>
+
+      <!-- B -->
+      <section class="option merged opt-b">
+        <div class="option-head"><span class="tag">方案 B</span><h2>轨道纯图标，π 缩到顶栏左侧</h2></div>
+        <p class="desc">
+          轨道只放导航图标，品牌标记升到顶栏、坐在红绿灯右边（x≈76，20px）。轨道视觉上变成一条纯功能栏，
+          <b>代价</b>是 π 和右侧的会话标题相隔很远，中间空一段。
+        </p>
+        <div class="frame merged">
+          <div class="rail">
+            <div class="icon active" style="top: 64px">💬</div>
+            <div class="icon" style="top: 104px">▤</div>
+            <div class="icon" style="top: 144px">◇</div>
+          </div>
+          <div class="side"></div>
+          <div class="main"></div>
+          <div class="bar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="logo" style="top: 16px; left: 76px; width: 20px; height: 20px; border-radius: 7px; font-size: 11px">π</div>
+            <div class="bar-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              记忆索引重构
+            </div>
+            <div class="bar-more">···</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- C -->
+      <section class="option merged opt-c">
+        <div class="option-head"><span class="tag">方案 C</span><h2>π 并进侧栏标题行</h2></div>
+        <p class="desc">
+          轨道完全不放品牌，π 缩成 18px 的方块贴在侧栏标题「codelet」前面，和项目名排成一行。品牌只出现一次、位置又靠近内容，
+          <b>顶栏和轨道都最干净</b>。
+        </p>
+        <div class="frame merged">
+          <div class="rail">
+            <div class="icon active" style="top: 64px">💬</div>
+            <div class="icon" style="top: 104px">▤</div>
+            <div class="icon" style="top: 144px">◇</div>
+          </div>
+          <div class="side">
+            <div class="side-head">
+              <span class="brand-inline">π</span>
+              codelet
+              <span class="chev">⌄</span>
+            </div>
+            <div class="side-new">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+              新建对话
+            </div>
+            <div class="side-group">对话 3</div>
+            <div class="side-item active" style="top: 118px">记忆索引重构</div>
+            <div class="side-item" style="top: 150px">类型声明生成</div>
+            <div class="side-group" style="top: 190px">昨天</div>
+            <div class="side-item muted" style="top: 208px">扫描依赖关系</div>
+          </div>
+          <div class="main">
+            <div class="bubble">把记忆索引改成增量更新，顺便把 tokens.ts 的导出整理一下。</div>
+            <div class="para">好的。我先读了现有的索引实现，索引写入是全量重建。</div>
+            <div class="para two">在 12k 条记忆上约 1.8s。</div>
+            <div class="toolrow"><i>✓</i> read · src/memory/index.ts</div>
+          </div>
+          <div class="bar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="bar-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              记忆索引重构
+            </div>
+            <div class="bar-more">···</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- D -->
+      <section class="option merged opt-d">
+        <div class="option-head"><span class="tag">方案 D</span><h2>π 沉到轨道底部</h2></div>
+        <p class="desc">
+          轨道顶部彻底留白，π 变成底部的品牌水印（放在主题 / 设置按钮上方，降低不透明度）。上面全是高频入口，品牌只在收尾处出现，<b>最克制</b>。
+        </p>
+        <div class="frame merged">
+          <div class="rail">
+            <div class="icon active" style="top: 64px">💬</div>
+            <div class="icon" style="top: 104px">▤</div>
+            <div class="icon" style="top: 144px">◇</div>
+            <div class="logo" style="top: 232px; left: 13px; opacity: 0.5">π</div>
+            <div class="rail-theme">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+            </div>
+          </div>
+          <div class="side"></div>
+          <div class="main"></div>
+          <div class="bar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="bar-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              记忆索引重构
+            </div>
+            <div class="bar-more">···</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- E -->
+      <section class="option merged opt-e">
+        <div class="option-head"><span class="tag">方案 E</span><h2>干脆不要品牌标记</h2></div>
+        <p class="desc">
+          轨道只保留功能图标，产品名继续放在侧栏的「codelet」上。角上只剩红绿灯，<b>最像系统原生控件</b>，也省掉一处需要跟着主题调色的元素。
+        </p>
+        <div class="frame merged">
+          <div class="rail">
+            <div class="icon active" style="top: 64px">💬</div>
+            <div class="icon" style="top: 104px">▤</div>
+            <div class="icon" style="top: 144px">◇</div>
+            <div class="icon" style="top: 184px">&lt;/&gt;</div>
+            <div class="icon" style="top: 224px">&gt;_</div>
+          </div>
+          <div class="side">
+            <div class="side-head">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z"/></svg>
+              codelet
+              <span class="chev">⌄</span>
+            </div>
+          </div>
+          <div class="main"></div>
+          <div class="bar">
+            <div class="lights"><i></i><i></i><i></i></div>
+            <div class="bar-title">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              记忆索引重构
+            </div>
+            <div class="bar-more">···</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="footer">
+        <h3>我的建议</h3>
+        <p>
+          <b>C</b> 最稳妥：品牌只出现一次，轨道和顶栏都干净，而且不受 macOS 红绿灯位置影响（红绿灯只占 0–70px，都在顶栏那条带里）。实现上就是现在侧栏标题前的文件夹图标换成 π 方块，一个 class 的事。
+        </p>
+        <p>
+          <b>A</b> 最省事，但 π 悬在红绿灯正下方 10px 处，视觉上会跟红绿灯抢那块角落，窄窗口下更明显。
+        </p>
+        <p>
+          实现「打通」本身只要一句 CSS：顶栏底边线改成 <code>.shell-title::after { left: var(--rail-w) }</code>，轨道右边的竖线从 <code>top: 0</code> 改成 <code>top: var(--titlebar-h)</code>。上面 5 个方案都要这步。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
