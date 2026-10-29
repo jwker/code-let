@@ -22,6 +22,7 @@ const api: CodeletApi = {
   switchConversation: (path) => ipcRenderer.invoke(IPC.conversationsSwitch, { path }) as Promise<HostSnapshot>,
   getSessionEntries: () => ipcRenderer.invoke(IPC.sessionEntries) as Promise<StreamItem[]>,
   prompt: (text) => ipcRenderer.invoke(IPC.promptSend, { text }) as Promise<void>,
+  copyText: (text) => ipcRenderer.invoke(IPC.clipboardWrite, { text }) as Promise<void>,
 
   onSnapshot: (listener) => {
     const handler = (_event: unknown, snapshot: HostSnapshot): void => listener(snapshot)

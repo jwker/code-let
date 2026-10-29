@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react'
 
 /** 24×24 描边图标，统一 currentColor */
-export function Icon({ children }: { children: ReactNode }) {
+export function Icon({ children, size = 18 }: { children: ReactNode; size?: number }) {
   return (
     <svg
-      width="18"
-      height="18"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -140,5 +140,20 @@ export const IconSun = () => (
 export const IconMoon = () => (
   <Icon>
     <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+  </Icon>
+)
+
+/** 复制：两张叠着的纸 */
+export const IconCopy = () => (
+  <Icon size={12}>
+    <rect x="9" y="9" width="13" height="13" rx="2" />
+    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+  </Icon>
+)
+
+/** 复制成功：打勾 */
+export const IconCheck = () => (
+  <Icon size={12}>
+    <polyline points="20 6 9 17 4 12" />
   </Icon>
 )

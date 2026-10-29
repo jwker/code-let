@@ -11,7 +11,7 @@
  * 传过来的已经是普通 JSON —— 这里只按结构认字段。
  */
 
-import type { StreamItem } from './index'
+import type { ReplyStats, StreamItem } from './index'
 
 // ---------------------------------------------------------------------------
 // 最小结构：只声明用到的字段，不 import Pi
@@ -30,6 +30,19 @@ interface RawMessage {
   content?: unknown
   toolCallId?: string
   isError?: boolean
+  /** token 用量（Pi 的 usage） */
+  usage?: RawUsage
+  /** 这次回复的耗时（毫秒） */
+  durationMs?: number
+  /** 请求发出的时刻（Unix 毫秒） */
+  timestamp?: number
+}
+
+interface RawUsage {
+  input?: number
+  output?: number
+  cacheRead?: number
+  cacheWrite?: number
 }
 
 interface RawEntry {
@@ -70,6 +83,27 @@ function toolLabel(args: unknown): string | undefined {
   if (!args || typeof args !== 'object') return undefined
   const command = (args as { command?: unknown }).command
   return typeof command === 'string' && command ? command : undefined
+}
+
+/**
+ * 取助手消息的 token 与耗时 —— 两条来源给的是同一份（历史 jsonl 与实时事件）。
+ *
+ * token 与耗时各管各的：有的模型只报耗时不报 token，
+ * 所以 usage 缺失也要留下这一项（不然耗时也跟着丢了）。
+ */
+function statsOf(message: RawMessage): ReplyStats | undefined {
+  const usage = message.usage
+  const durationMs = typeof message.durationMs === 'number' ? message.durationMs : undefined
+  if (!usage && durationMs === undefined) return undefined
+  const result: ReplyStats = {
+    input: usage?.input ?? 0,
+    output: usage?.output ?? 0,
+    cacheRead: usage?.cacheRead ?? 0,
+    cacheWrite: usage?.cacheWrite ?? 0
+  }
+  if (durationMs !== undefined) result.durationMs = durationMs
+  if (typeof message.timestamp === 'number') result.startedAt = message.timestamp
+  return result
 }
 
 /** 造一个工具项（摘要有就带上） */
@@ -173,6 +207,10 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
 
     if (message.role === 'assistant') {
       const blocks = Array.isArray(message.content) ? (message.content as RawBlock[]) : []
+      const stats = statsOf(message)
+      // 一条助手消息可能拆成好几项（正文与工具交替）——
+      // 计量挂在它产生的**第一项**正文上（后面由渲染层按轮聚合）
+      const start = items.length
       let buffer = ''
       const flush = (): void => {
         if (!buffer) return
@@ -192,6 +230,16 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
         // thinking 这一轮不显示
       }
       flush()
+      // 这一条消息产生的第一项正文 —— 计量挂上去
+      if (stats) {
+        for (let i = start; i < items.length; i += 1) {
+          const item = items[i]
+          if (item.kind === 'message' && item.role === 'assistant') {
+            items[i] = { ...item, stats }
+            break
+          }
+        }
+      }
       continue
     }
 
@@ -264,7 +312,9 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
       }
       // 用户消息在 start 时内容就是全的；助手消息是空壳，靠 delta 一点点长出来
       const text = role === 'assistant' ? '' : textOf(message.content)
-      return [...items, { kind: 'message', role, text }]
+      // 助手消息先挂一份空用量 —— 回复结束时再换真的
+      const stats = role === 'assistant' ? statsOf(message) : undefined
+      return [...items, { kind: 'message', role, text, ...(stats ? { stats } : {}) }]
     }
 
     case 'message_update': {
@@ -293,6 +343,7 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
       if (role === 'assistant') {
         const text = assistantText(message)
         const calls = toolCallsOf(message)
+        const stats = statsOf(message)
         // 工具调用在这里落地成独立的 tool 项 —— 跟历史那条路同一个来源（R3）
         const toolItems: StreamItem[] = calls.map((call) =>
           toolItem(call.id ?? '', call.name ?? 'tool', 'running', call.arguments)
@@ -305,14 +356,14 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
             : findLastAssistantIndex(items)
         if (index < 0) {
           // 没有对应的助手消息项（没走到 message_start）—— 工具项照建
-          const created: StreamItem[] = text ? [{ kind: 'message', role, text }] : []
+          const created: StreamItem[] = text ? [{ kind: 'message', role, text, ...(stats ? { stats } : {}) }] : []
           return [...items, ...created, ...toolItems]
         }
         const current = items[index]
         if (current.kind !== 'message') return items
         const next = items.slice()
         if (text) {
-          next[index] = { ...current, text }
+          next[index] = { ...current, text, ...(stats ? { stats } : {}) }
           next.splice(index + 1, 0, ...toolItems)
         } else {
           // 只有工具调用、没有文本的助手消息不留空气泡

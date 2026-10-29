@@ -29,7 +29,9 @@ export const IPC = {
   /** 读当前会话的内容流（历史） */
   sessionEntries: 'host:session:entries',
   /** 往当前会话发一条用户消息 */
-  promptSend: 'host:prompt:send'
+  promptSend: 'host:prompt:send',
+  /** 把一段文字写入系统剪贴板 */
+  clipboardWrite: 'host:clipboard:write'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -124,6 +126,29 @@ export interface SessionEvent {
 // ---------------------------------------------------------------------------
 
 /**
+ * 一条助手回复的计量：token 与耗时。
+ *
+ * 数字直接取自 Pi 的助手消息（usage / durationMs / timestamp）——
+ * 历史 jsonl 与实时事件给的是同一份，所以两条来源收敛（R3）。
+ *
+ * token 为 0 表示「这一家没报这个数」—— 不是「真的没用」。
+ */
+export interface ReplyStats {
+  /** 输入 token（未命中缓存的那部分） */
+  input: number
+  /** 输出 token */
+  output: number
+  /** 缓存命中的 token */
+  cacheRead: number
+  /** 写入缓存的 token */
+  cacheWrite: number
+  /** 本次请求的耗时（毫秒）—— 回复结束才有 */
+  durationMs?: number
+  /** 请求发出的时刻（Unix 毫秒）—— 流式期间用来算已用时间 */
+  startedAt?: number
+}
+
+/**
  * 对话区内容流里的一行。
  *
  * 普通模式和终端模式读的是**同一个数组**，只是画法不同（R3）。
@@ -139,6 +164,12 @@ export type StreamItem =
        * 用来把「工具跑到一半的输出」和「工具跑完的最终输出」对上同一项 —— R4。
        */
       callId?: string
+      /**
+       * 这条助手回复的计量（只有助手消息有）。
+       *
+       * 工具调用那一轮没有正文，就没有这一项 —— 两条来源一致。
+       */
+      stats?: ReplyStats
     }
   | {
       kind: 'tool'
@@ -178,6 +209,8 @@ export interface CodeletApi {
   getSessionEntries(): Promise<StreamItem[]>
   /** 往当前会话发一条消息 */
   prompt(text: string): Promise<void>
+  /** 把一段文字写入系统剪贴板（复制回复正文） */
+  copyText(text: string): Promise<void>
   /** 订阅快照推送，返回取消订阅的函数 */
   onSnapshot(listener: (snapshot: HostSnapshot) => void): () => void
   /** 订阅会话流增量事件 */

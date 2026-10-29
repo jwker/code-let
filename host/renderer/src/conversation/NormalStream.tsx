@@ -4,6 +4,8 @@ import { useStore } from '../store'
 import { AnsiText } from './AnsiText'
 import { Markdown } from './Markdown'
 import { useToolOutputs } from './useToolOutputs'
+import { ReplyMeta } from './ReplyMeta'
+import { summarizeTurn } from './turnMeta'
 
 /**
  * 普通模式 · 聊天流。
@@ -17,6 +19,7 @@ import { useToolOutputs } from './useToolOutputs'
 
 type MessageItem = Extract<StreamItem, { kind: 'message' }>
 type ToolItem = Extract<StreamItem, { kind: 'tool' }>
+type AssistantItem = Extract<StreamItem, { kind: 'message' }> & { role: 'assistant' }
 
 const TOOL_LOOK: Record<ToolItem['status'], { icon: string; color: string }> = {
   running: { icon: '◐', color: 'var(--fg-3)' },
@@ -39,6 +42,23 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
 
   const rows: ReactNode[] = []
   let index = 0
+  // 这一轮里带正文的助手消息 —— 轮末聚合成一行元信息
+  let turnAssistants: AssistantItem[] = []
+  // 这一轮从哪开始（当成 key 用，流式时不重挂）
+  let turnStart = 0
+
+  /** 一轮结束：把它的元信息行补在轮末（真实会话里一轮会有几十条助手消息） */
+  const flushTurn = (isLastTurn: boolean): void => {
+    const meta = summarizeTurn(turnAssistants)
+    turnAssistants = []
+    if (!meta) return
+    // 紧贴本轮末行，而不是与下一轮等距 —— 负 margin 把 flex 的 gap 抵掉一部分
+    rows.push(
+      <div key={`meta-${turnStart}`} className="-mt-4 flex">
+        <ReplyMeta meta={meta} streaming={streaming && isLastTurn} />
+      </div>
+    )
+  }
 
   while (index < items.length) {
     const item = items[index]
@@ -56,6 +76,14 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
       }
       index += 1
       continue
+    }
+
+    // 又一条用户消息 —— 上一轮到这里收尾
+    if (item.role === 'user') {
+      flushTurn(false)
+      turnStart = index
+    } else {
+      turnAssistants.push(item as AssistantItem)
     }
 
     const tools: ToolItem[] = []
@@ -78,6 +106,9 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
     )
     index = look
   }
+
+  // 最后一轮
+  flushTurn(true)
 
   return (
     <div className="conv-stream mx-auto flex flex-col gap-7 py-12">
