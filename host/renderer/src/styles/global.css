@@ -471,11 +471,15 @@ body.is-pane-resizing * {
 }
 
 /*
- * 再窄下去（主区可到 160）模型胶囊也会被挤成一条缝 —— 不如隐掉。
- * 模型在状态栏里仍然看得到，那儿也能点开同一个选择器。
+ * 再窄下去（主区可到 160）模型名放不下 —— 只收名字，留◇和▾，
+ * 入口不能消失（这是显示与切换的唯一位置）。完整名字在 title 里。
  */
 @container (max-width: 230px) {
   .conv-model {
+    max-width: none;
+  }
+  .conv-model-name,
+  .conv-model-caret {
     display: none;
   }
 }
