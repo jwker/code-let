@@ -335,6 +335,56 @@
   line-height: 1.75;
 }
 
+/* 回到顶部 / 回到底部：挂在输入卡上沿，位置不动，只换方向 */
+.scroll-jump {
+  position: absolute;
+  z-index: 10;
+  /* 相对内容列定位：右边距 16px，底边贴着输入卡顶 + 12px */
+  right: var(--sp-4);
+  bottom: 100%;
+  margin-bottom: 12px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid var(--hairline);
+  background: var(--raised);
+  color: var(--fg-2);
+  box-shadow: var(--sh-md);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    opacity 150ms ease,
+    transform 150ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
+}
+.scroll-jump.is-visible {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.scroll-jump:hover {
+  background: var(--sunken);
+  color: var(--fg-1);
+}
+.scroll-jump:active {
+  transform: scale(0.94);
+}
+.scroll-jump svg {
+  width: 15px;
+  height: 15px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scroll-jump {
+    transform: none;
+    transition: opacity 150ms ease;
+  }
+}
+
 /* 空态占位 */
 .placeholder {
   height: 100%;

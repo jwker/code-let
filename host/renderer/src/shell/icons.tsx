@@ -98,6 +98,23 @@ export const IconArrowUp = () => (
   </Icon>
 )
 
+/** 跳到顶部 / 底部用「箭头 + 横线」—— 别跟发送那个光箭头长一样 */
+export const IconArrowUpToLine = () => (
+  <Icon>
+    <path d="M5 4h14" />
+    <path d="M12 20V9.5" />
+    <path d="m6.5 14 5.5-5.5 5.5 5.5" />
+  </Icon>
+)
+
+export const IconArrowDownToLine = () => (
+  <Icon>
+    <path d="M5 20h14" />
+    <path d="M12 4v10.5" />
+    <path d="m6.5 10 5.5 5.5 5.5-5.5" />
+  </Icon>
+)
+
 export const IconMore = () => (
   <Icon>
     <circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none" />

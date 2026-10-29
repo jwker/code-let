@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>对话区 · 回到顶部 / 回到底部 按钮方案</title>
+    <style>
+      :root {
+        --canvas: #f4f4f5;
+        --panel: #fbfbfb;
+        --surface: #ffffff;
+        --insp: #fafafa;
+        --raised: #ffffff;
+        --sunken: #f1f1f3;
+        --hairline: #ececee;
+        --hairline-strong: #dedee2;
+        --fg1: #1b1b19;
+        --fg2: #5c5c56;
+        --fg3: #94948c;
+        --wash: #eeeef0;
+        --sh-md: 0 8px 24px -8px rgba(20, 20, 16, 0.12);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 48px 32px 88px;
+        background: #f7f7f8;
+        color: var(--fg1);
+        font:
+          14px/1.6 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei',
+          system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .page {
+        max-width: 880px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        margin: 0 0 6px;
+      }
+      .lead {
+        margin: 0 0 28px;
+        color: var(--fg2);
+        font-size: 13.5px;
+        max-width: 680px;
+      }
+
+      /* ---------- 通用信息块 ---------- */
+      .note {
+        border: 1px solid var(--hairline);
+        border-radius: 12px;
+        background: #fff;
+        padding: 14px 16px;
+        margin: 0 0 40px;
+        font-size: 12.5px;
+        color: var(--fg2);
+      }
+      .note h3 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--fg1);
+        letter-spacing: 0.02em;
+      }
+      .note ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .note li + li {
+        margin-top: 4px;
+      }
+      .note b {
+        color: var(--fg1);
+        font-weight: 600;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+        background: var(--sunken);
+        padding: 1px 5px;
+        border-radius: 5px;
+        color: var(--fg1);
+      }
+
+      /* ---------- 方案 ---------- */
+      .option {
+        margin: 0 0 44px;
+      }
+      .option-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0 0 4px;
+      }
+      .tag {
+        flex: none;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 2px 7px;
+        border-radius: 6px;
+        background: var(--wash);
+        color: var(--fg2);
+      }
+      .tag.rec {
+        background: var(--fg1);
+        color: #fff;
+      }
+      .option h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .desc {
+        margin: 0 0 14px;
+        font-size: 12.5px;
+        color: var(--fg2);
+        max-width: 700px;
+      }
+      .desc b {
+        color: var(--fg1);
+        font-weight: 600;
+      }
+
+      .states {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .state {
+        margin: 0;
+      }
+      .state figcaption {
+        margin-top: 7px;
+        font-size: 11.5px;
+        color: var(--fg3);
+        text-align: center;
+      }
+      .state figcaption b {
+        color: var(--fg2);
+        font-weight: 600;
+      }
+
+      /* ---------- 局部画面：主区右下角 1:1 ---------- */
+      .frame {
+        position: relative;
+        width: 250px;
+        height: 170px;
+        overflow: hidden;
+        border: 1px solid var(--hairline-strong);
+        border-radius: 10px;
+        background: var(--surface);
+        box-shadow: 0 10px 26px -20px rgba(20, 20, 16, 0.4);
+      }
+      /* 内容列右边界（真实界面里没有这条线，这里只作定位参考） */
+      .guide {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 190px;
+        width: 0;
+        border-left: 1px dashed #dcdce1;
+      }
+      .guide::after {
+        content: '内容列 720';
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        font-size: 9px;
+        color: #b9b9c0;
+        white-space: nowrap;
+      }
+      /* 正文示意 */
+      .msg {
+        position: absolute;
+        left: 20px;
+        height: 8px;
+        border-radius: 4px;
+        background: #ededf0;
+      }
+      .msg.w1 { top: 22px; width: 132px; }
+      .msg.w2 { top: 38px; width: 168px; }
+      .msg.w3 { top: 54px; width: 96px; }
+      .msg.tool {
+        top: 78px;
+        width: 58px;
+        height: 6px;
+        background: #f2f2f4;
+      }
+      /* 输入卡（只露出上半截） */
+      .card {
+        position: absolute;
+        left: -60px;
+        right: 60px;
+        top: 112px;
+        bottom: -30px;
+        border: 1px solid var(--hairline);
+        border-radius: 18px;
+        background: var(--raised);
+        box-shadow: var(--sh-md);
+      }
+      .card::after {
+        content: '';
+        position: absolute;
+        left: 14px;
+        top: 18px;
+        width: 76px;
+        height: 7px;
+        border-radius: 4px;
+        background: #e6e6ea;
+      }
+      /* 右侧面板分隔线 */
+      .panel-edge {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        right: 0;
+        width: 10px;
+        border-left: 1px solid var(--hairline);
+        background: var(--insp);
+      }
+
+      /* ---------- 按钮本体 ---------- */
+      .fab {
+        position: absolute;
+        display: grid;
+        place-items: center;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        border: 1px solid var(--hairline);
+        background: var(--raised);
+        color: var(--fg2);
+        box-shadow: var(--sh-md);
+      }
+      .fab svg {
+        width: 15px;
+        height: 15px;
+      }
+      .fab.hidden {
+        opacity: 0;
+      }
+      /* 胶囊变体 */
+      .pill {
+        position: absolute;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 12px 0 10px;
+        border-radius: 999px;
+        border: 1px solid var(--hairline);
+        background: var(--raised);
+        color: var(--fg2);
+        font-size: 11.5px;
+        box-shadow: var(--sh-md);
+        white-space: nowrap;
+      }
+      .pill svg {
+        width: 13px;
+        height: 13px;
+      }
+      .pill.hidden {
+        opacity: 0;
+      }
+
+      /* A：列内右下角，单键换向 */
+      .a-fab { left: 142px; bottom: 70px; }
+      /* B：列内右下角，双键竖排 */
+      .b-top { left: 142px; bottom: 110px; }
+      .b-bottom { left: 142px; bottom: 70px; }
+      /* C：列外贴边 */
+      .c-fab { left: 202px; bottom: 70px; }
+      /* D：输入卡上方居中 */
+      .d-pill { left: 70px; bottom: 66px; }
+
+      /* 方案内的小图例 */
+      .legend {
+        display: flex;
+        gap: 16px;
+        margin: 10px 0 0;
+        font-size: 11px;
+        color: var(--fg3);
+      }
+      .legend span::before {
+        content: '·';
+        margin-right: 5px;
+      }
+
+      /* ---------- 规格表 ---------- */
+      .spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        margin: 8px 0 0;
+      }
+      .spec th,
+      .spec td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--hairline);
+        vertical-align: top;
+      }
+      .spec th {
+        color: var(--fg3);
+        font-weight: 500;
+        width: 120px;
+      }
+      .spec td {
+        color: var(--fg2);
+      }
+      .spec td b {
+        color: var(--fg1);
+      }
+
+      .footer {
+        margin-top: 44px;
+        padding-top: 20px;
+        border-top: 1px solid var(--hairline-strong);
+      }
+      .footer h3 {
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      .footer p {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: var(--fg2);
+      }
+      .footer b {
+        color: var(--fg1);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>对话区 · 回到顶部 / 回到底部</h1>
+      <p class="lead">
+        四个局部方案，都按同一套状态规则来：两个按钮不会每刻同时出现。图里每个小框是主区右下角的 1:1 裁切（内容列 720、右侧留白 50、输入卡圆角 18），虚线是内容列边界，真实界面里没有。
+      </p>
+
+      <div class="note">
+        <h3>共用的状态规则</h3>
+        <ul>
+          <li><b>内容不满一屏</b>（<code>scrollHeight ≤ clientHeight</code>）：两个都不显示。</li>
+          <li><b>在顶部</b>（<code>scrollTop ≤ 8</code>）：只需要「回到底部」。</li>
+          <li><b>在底部</b>（离底 <code>&lt; 80px</code>，跟现有 <code>PIN_THRESHOLD</code> 一致）：只需要「回到顶部」。</li>
+          <li><b>中间</b>：两个方向都成立 —— 各方案的处理方式不同，见下。</li>
+          <li>新消息自动贴底时（<code>pinned</code>），「回到底部」自动消失，别跟自动滚动抢。</li>
+          <li>出现 / 消失：<code>opacity</code> + 4px 位移，150ms；<code>prefers-reduced-motion</code> 时只做透明度。</li>
+        </ul>
+      </div>
+
+      <div class="note" style="border-color: #dedee2; background: #fbfbfb">
+        <h3>已定 · 方案 A（按用户反馈改过一处）</h3>
+        <ul>
+          <li><b>中间按「回到底部」</b>，不是「回到顶部」—— 底部才是最新内容，这个方向用得更多。</li>
+          <li>于是「回到顶部」落在<b>已经在底部</b>的时候：那时「回到底部」是空动作，按钮翻过来正好。</li>
+          <li>隐含结果：只要内容超过一屏，按钮几乎<b>常在</b>；隐藏态只剩「不满一屏」一种。</li>
+          <li>图标用<b>箭头 + 横线</b>（到顶 / 到底），跟发送那颗光箭头区分开，别在同一个角落出现两个 ↑。</li>
+        </ul>
+      </div>
+
+      <!-- ============ A ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag rec">方案 A · 推荐</span><h2>列内右下角，单键换向</h2></div>
+        <p class="desc">
+          一个 32px 圆钮钉在内容列右下角（距输入卡 12px、距列右边界 16px）。<b>位置永远不动</b>，只有图标和提示在换：顶部时是 ↓，离开顶部后变 ↑，滚到底部淡出。
+          只占一个洞，不会有「两个按钮谁在上面」的纠结。<b>代价</b>是图标含义要读一眼 —— 靠 <code>title</code> / <code>aria-label</code> 补足，悬停时显示「回到顶部 / 回到底部」。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="fab a-fab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+              </div>
+            </div>
+            <figcaption><b>在顶部</b> · 只有「回到底部」</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="fab a-fab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+              </div>
+            </div>
+            <figcaption><b>在中间</b> · 同一位置换成「回到顶部」</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="fab a-fab hidden">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+              </div>
+            </div>
+            <figcaption><b>在底部</b> · 两个都没必要，淡出</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ B ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 B</span><h2>列内右下角，双键竖排</h2></div>
+        <p class="desc">
+          同一个角落放两个 32px 圆钮，间距 8px。<b>顶部</b>只留下面那颗 ↓；<b>中间</b>两颗都在；<b>底部</b>只留上面那颗 ↑，再到底部整组淡出。
+          好处是<b>不用认图标方向</b>，箭头永远指向上 / 下两个固定位置。<b>代价</b>是中间态占竖高 72px，且下面那颗的存在/消失会让上边那颗跟着上下跳 —— 要把容器高度固定住才不会动。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="fab b-bottom">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+              </div>
+            </div>
+            <figcaption><b>在顶部</b> · 只有 ↓</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="fab b-top">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+              </div>
+              <div class="fab b-bottom">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+              </div>
+            </div>
+            <figcaption><b>在中间</b> · 两颗都在</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="fab b-top">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+              </div>
+            </div>
+            <figcaption><b>在底部</b> · 只剩 ↑</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ C ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 C</span><h2>列外贴边，单键换向</h2></div>
+        <p class="desc">
+          跟 A 同一套逻辑，但把按钮放到<b>内容列外面</b>（列右边界 + 12px），彻底不压正文，读长回答时不会被圆钮挡住半个字。
+          这块留白在窗口 1440、检视器展开时正好 50px；检视器收起后留白变宽，按钮跟着列边走，仍然贴在内容旁边。
+          <b>代价</b>是主区窄于约 800px 时留白不够 44px，按钮会贴到面板分隔线上，得退回 A 的位置（用容器查询或 820px 断点切换）。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="fab c-fab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+              </div>
+            </div>
+            <figcaption><b>在顶部</b> · ↓ 在列外</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="fab c-fab">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+              </div>
+            </div>
+            <figcaption><b>在中间</b> · 换成 ↑</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="fab c-fab hidden">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+              </div>
+            </div>
+            <figcaption><b>在底部</b> · 淡出</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ D ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 D</span><h2>输入卡上方居中，胶囊</h2></div>
+        <p class="desc">
+          位置以输入卡为锚：浮在输入卡上沿 8px、水平居中的一颗胶囊，带文字（「回到底部」「回到顶部」）。
+          这是 ChatGPT 那种「jump to latest」的做法，<b>方向自解释、不用猜图标</b>，而且正好落在你输入时视线所在的位置。
+          <b>代价</b>是横向居中会压住正文最后一行的一部分，滚动停住时容易误挡。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="pill d-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+                回到底部
+              </div>
+            </div>
+            <figcaption><b>在顶部</b> · 「回到底部」</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="pill d-pill">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+                回到顶部
+              </div>
+            </div>
+            <figcaption><b>在中间</b> · 「回到顶部」</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="guide"></div>
+              <div class="msg w1"></div><div class="msg w2"></div><div class="msg w3"></div>
+              <div class="msg tool"></div>
+              <div class="card"></div>
+              <div class="panel-edge"></div>
+              <div class="pill d-pill hidden">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+                回到顶部
+              </div>
+            </div>
+            <figcaption><b>在底部</b> · 淡出</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <div class="footer">
+        <h3>按钮规格（四个方案共用）</h3>
+        <table class="spec">
+          <tr><th>尺寸</th><td>圆钮 <b>32×32</b>，图标 15px、1.8 描边；胶囊高 <b>28</b>，字号 11.5</td></tr>
+          <tr><th>配色</th><td>底 <code>--raised</code>，描边 <code>--hairline</code>，图标 <code>--fg-2</code>，阴影 <code>--sh-md</code>；悬停底色 <code>--sunken</code></td></tr>
+          <tr><th>动效</th><td>150ms <code>opacity</code> + 4px 位移；滚动用 <code>scrollTo({ behavior: 'smooth' })</code></td></tr>
+          <tr><th>无障碍</th><td><code>aria-label</code> 写全「回到顶部 / 回到底部」，<code>title</code> 同文案；按钮之间不抢 Tab 焦点（隐藏即 <code>tabIndex=-1</code>）</td></tr>
+        </table>
+
+        <h3 style="margin-top: 22px">实现备注</h3>
+        <p>
+          现有 <code>useAutoScroll</code> 已经知道「是否贴底」（<code>pinnedRef</code>），但目前只存在 ref 里、不触发渲染。
+          要出按钮得把它提成 state，顺便加一个 <code>atTop</code>：同一个 scroll 监听里算 <code>scrollTop ≤ 8</code>，
+          再暴露 <code>scrollToTop() / scrollToBottom()</code> 两个函数即可，DOM 结构不用动。
+        </p>
+
+        <h3 style="margin-top: 22px">我的建议</h3>
+        <p>
+          <b>A</b>：改动最小、位置最稳，一个按钮一套状态机，不会有间距和跳动问题。先做 A，不够用再说。
+        </p>
+        <p>
+          <b>C</b> 是最不打扰阅读的，但要处理窄窗口（主区 &lt; 800px）时退化成 A 的规则，多一层响应式分支。
+        </p>
+        <p>
+          <b>B / D</b> 我不太推荐：B 的中间态两个按钮竖着占 72px，还会因为条件渲染上下跳；D 的胶囊会压住正文最后一行，且和输入卡抢注意力。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

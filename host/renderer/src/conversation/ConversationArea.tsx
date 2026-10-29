@@ -3,6 +3,7 @@ import { useStore } from '../store'
 import { host } from '../host'
 import { IconArrowUp } from '../shell/icons'
 import { NormalStream } from './NormalStream'
+import { ScrollJump } from './ScrollJump'
 import { TerminalStream } from './TerminalStream'
 import { useAutoScroll } from './useAutoScroll'
 
@@ -20,7 +21,11 @@ export function ConversationArea() {
   const [draft, setDraft] = useState('')
 
   // 实时流往下长 —— 视图要跟着走，不然用户看不到刚出来的内容（R2）
-  const { setRef, scrollToBottom } = useAutoScroll(items, streaming, session.sessionId)
+  const { setRef, scrollToBottom, jumpTo, scrollable, atBottom } = useAutoScroll(
+    items,
+    streaming,
+    session.sessionId
+  )
 
   async function send(): Promise<void> {
     const text = draft.trim()
@@ -72,7 +77,12 @@ export function ConversationArea() {
       </div>
 
       <footer className="flex-none px-6 pb-5 pt-2">
-        <div className="mx-auto w-full max-w-[var(--content-max)]">
+        <div className="relative mx-auto w-full max-w-[var(--content-max)]">
+          {/* 现阶段只有普通模式有这个钮（PLAN.md D14）；钉在内容列右下角、输入卡上方 */}
+          {mode === 'normal' && (
+            <ScrollJump scrollable={scrollable} atBottom={atBottom} onJump={jumpTo} />
+          )}
+
           <div className="rounded-[18px] border border-hairline bg-raised p-3 shadow-[var(--sh-md)] transition-colors focus-within:border-hairline-strong">
             <textarea
               value={draft}
