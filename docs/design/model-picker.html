@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>模型选择 · 入口与选择器</title>
+<style>
+:root{
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px; --r-full:999px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px;
+  --dur:160ms; --ease:cubic-bezier(.4,0,.2,1);
+  --titlebar-h:52px; --statusbar-h:24px; --rail-w:56px;
+}
+[data-theme="light"]{
+  --canvas:#F4F4F5; --panel:#FBFBFB; --surface:#FFFFFF; --insp:#FAFAFA; --raised:#FFFFFF; --sunken:#F1F1F3;
+  --hairline:#ECECEE; --hairline-strong:#DEDEE2;
+  --fg-1:#1B1B19; --fg-2:#5C5C56; --fg-3:#94948C;
+  --accent:#1F1F1D; --accent-hover:#000000; --accent-fg:#FFFFFF; --accent-wash:#EEEEF0; --accent-line:#DCDCE1;
+  --ok:#2E7D53; --ok-wash:#E8F5EE; --warn:#9C6B15; --warn-wash:#FBF2DF; --danger:#B8342A; --danger-wash:#FCEAEA;
+  --info:#2563A8; --info-wash:#E9F1FA;
+  --bubble:#262625; --bubble-fg:#FAFAF9;
+  --sh-sm:0 1px 2px rgba(20,20,16,.04); --sh-md:0 8px 24px -8px rgba(20,20,16,.10); --sh-lg:0 24px 60px -20px rgba(20,20,16,.18);
+}
+[data-theme="dark"]{
+  --canvas:#131312; --panel:#181817; --surface:#1C1C1B; --insp:#191918; --raised:#242423; --sunken:#2A2A29;
+  --hairline:#2B2B29; --hairline-strong:#3B3B38;
+  --fg-1:#EDEDEB; --fg-2:#B4B4AD; --fg-3:#7D7D76;
+  --accent:#F0F0EC; --accent-hover:#FFFFFF; --accent-fg:#151513; --accent-wash:#2A2A2C; --accent-line:#343430;
+  --ok:#5BD69A; --ok-wash:#10261D; --warn:#E5B75C; --warn-wash:#2A2113; --danger:#F2776B; --danger-wash:#2C1717;
+  --info:#6FAEF0; --info-wash:#111F2E;
+  --bubble:#F0F0EE; --bubble-fg:#171715;
+  --sh-sm:0 1px 2px rgba(0,0,0,.5); --sh-md:0 12px 30px -12px rgba(0,0,0,.65); --sh-lg:0 30px 72px -26px rgba(0,0,0,.8);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--canvas);color:var(--fg-1);font-family:var(--font-sans);font-size:13px;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+code{font-family:var(--font-mono);font-size:12px;background:var(--accent-wash);padding:1px 5px;border-radius:var(--r-xs);color:var(--fg-2)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+kbd{font-family:var(--font-mono);font-size:10.5px;border:1px solid var(--hairline-strong);border-bottom-width:2px;border-radius:var(--r-xs);padding:1px 4px;color:var(--fg-2);background:var(--surface)}
+
+.page{max-width:1060px;margin:0 auto;padding:0 28px 140px}
+.topbar{
+  position:sticky;top:0;z-index:50;height:52px;display:flex;align-items:center;gap:14px;
+  background:var(--panel);border-bottom:1px solid var(--hairline);margin:0 -28px;padding:0 28px;
+}
+.brand{font-weight:600;letter-spacing:-.015em}
+.brand span{color:var(--fg-3);font-weight:400}
+.topbar .spacer{flex:1}
+.ghost-btn{height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--hairline);color:var(--fg-2);font-size:12px;transition:all var(--dur) var(--ease)}
+.ghost-btn:hover{color:var(--fg-1);border-color:var(--hairline-strong);background:var(--surface)}
+
+.head{padding:36px 0 8px}
+.head h1{font-size:23px;margin-bottom:10px;line-height:1.35}
+.head p{color:var(--fg-2);max-width:74ch}
+.head p + p{margin-top:10px}
+
+.facts{margin:26px 0 0;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);padding:16px 18px;max-width:900px}
+.facts h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:10px}
+.facts ul{margin:0;padding-left:18px;color:var(--fg-2)}
+.facts li{margin-bottom:7px}
+.facts li:last-child{margin-bottom:0}
+.facts b{color:var(--fg-1);font-weight:600}
+
+.terms{margin:22px 0 0;max-width:900px}
+.terms h3{font-size:13px;margin-bottom:8px}
+.terms dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:12.5px;color:var(--fg-2)}
+.terms dt{color:var(--fg-1);font-weight:600;white-space:nowrap}
+.terms dd{margin:0}
+
+.option{margin-top:30px;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+.option-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--hairline);background:var(--panel)}
+.option-head .tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--fg-3);border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:2px 8px;white-space:nowrap}
+.option-head .tag.rec{color:var(--ok);border-color:var(--ok)}
+.option-head h2{font-size:14.5px}
+.desc{padding:16px 18px 0;color:var(--fg-2);font-size:12.5px;max-width:82ch}
+.desc b{color:var(--fg-1)}
+.frame{padding:18px}
+
+/* —— 应用外壳示意：顶栏 / 三栏 / 状态栏 —— */
+.shell{
+  border:1px solid var(--hairline-strong);border-radius:var(--r-lg);overflow:hidden;background:var(--canvas);
+  display:grid;grid-template-columns:var(--rail-w) 180px minmax(0,1fr);grid-template-rows:38px 130px var(--statusbar-h);
+  grid-template-areas:"title title title" "rail side main" "rail side bar";
+  height:auto;
+}
+.shell-title{grid-area:title;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--panel);border-bottom:1px solid var(--hairline);font-size:11.5px;color:var(--fg-2)}
+.shell-title .spacer{flex:1}
+.shell-rail{grid-area:rail;background:var(--canvas);border-right:1px solid var(--hairline);display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:8px}
+.shell-rail i{display:block;width:16px;height:16px;border:1.5px solid var(--fg-3);border-radius:4px;opacity:.5}
+.shell-side{grid-area:side;background:var(--panel);border-right:1px solid var(--hairline);padding:8px 10px;font-size:11px;color:var(--fg-3)}
+.shell-side .conv{padding:5px 7px;border-radius:var(--r-sm);margin-bottom:2px;display:flex;gap:6px;align-items:center}
+.shell-side .conv.on{background:var(--sunken);color:var(--fg-1)}
+.shell-side .conv .m{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3)}
+.shell-main{grid-area:main;background:var(--surface);padding:10px 14px;overflow:hidden}
+.shell-main .line{height:7px;border-radius:3px;background:var(--sunken);margin-bottom:7px}
+.shell-main .line.w1{width:62%} .shell-main .line.w2{width:88%} .shell-main .line.w3{width:44%}
+.shell-bar{grid-area:bar;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--surface);border-top:1px solid var(--hairline);font-size:9.5px;color:var(--fg-3);font-family:var(--font-mono)}
+
+/* 高亮某个区域 */
+.hot{outline:2px solid var(--ok);outline-offset:-2px;position:relative}
+.hot::after{
+  content:attr(data-hot);position:absolute;top:-9px;right:4px;background:var(--ok);color:#fff;
+  font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 5px;border-radius:3px;
+}
+
+/* —— 选择器（浮层）—— */
+.picker{
+  width:420px;max-width:100%;border:1px solid var(--hairline-strong);border-radius:var(--r-lg);
+  background:var(--raised);box-shadow:var(--sh-lg);overflow:hidden;
+}
+.picker-search{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--hairline)}
+.picker-search .ico{color:var(--fg-3);font-size:12px}
+.picker-search .ph{color:var(--fg-3);font-size:12px;flex:1}
+.picker-list{max-height:260px;overflow:auto;padding:5px}
+.picker-group{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);padding:7px 8px 4px}
+.picker-item{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:var(--r-sm);font-size:12.5px;color:var(--fg-1)}
+.picker-item:hover,.picker-item.on{background:var(--sunken)}
+.picker-item .check{width:14px;flex:none;color:var(--ok);font-size:11px}
+.picker-item .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.picker-item .meta{flex:none;font-family:var(--font-mono);font-size:10px;color:var(--fg-3);display:flex;gap:8px}
+.picker-item .tagm{flex:none;font-size:9.5px;color:var(--fg-3);border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:0 5px}
+.picker-foot{display:flex;align-items:center;gap:10px;padding:7px 12px;border-top:1px solid var(--hairline);background:var(--panel);font-size:10.5px;color:var(--fg-3)}
+.picker-foot .spacer{flex:1}
+.picker-foot label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.picker-foot input{margin:0;accent-color:var(--ok)}
+
+/* —— 状态条（底部入口）—— */
+.status-model{display:inline-flex;align-items:center;gap:5px;padding:1px 6px;border-radius:var(--r-xs);color:var(--fg-2);font-family:var(--font-mono)}
+.status-model:hover{background:var(--sunken);color:var(--fg-1)}
+.status-model .dot{width:5px;height:5px;border-radius:50%;background:var(--ok)}
+
+/* —— 输入框入口 —— */
+.composer{border:1px solid var(--hairline);border-radius:14px;background:var(--raised);padding:9px 10px;box-shadow:var(--sh-sm)}
+.composer .box{height:34px;border-radius:8px;background:var(--sunken);margin-bottom:8px}
+.composer .row{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--fg-3)}
+.composer .row .spacer{flex:1}
+.composer .send{width:22px;height:22px;border-radius:50%;background:var(--accent)}
+.chipbtn{display:inline-flex;align-items:center;gap:5px;padding:2px 7px;border-radius:var(--r-full);border:1px solid var(--hairline);color:var(--fg-2);font-size:10.5px}
+.chipbtn:hover{border-color:var(--hairline-strong);color:var(--fg-1);background:var(--panel)}
+
+/* —— 菜单里的二级项 —— */
+.menu{width:190px;border:1px solid var(--hairline-strong);border-radius:var(--r-lg);background:var(--raised);box-shadow:var(--sh-md);padding:5px}
+.menu-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--r-sm);font-size:12px;color:var(--fg-2)}
+.menu-item:hover{background:var(--sunken);color:var(--fg-1)}
+.menu-item .v{margin-left:auto;font-family:var(--font-mono);font-size:10px;color:var(--fg-3)}
+.menu-sep{height:1px;background:var(--hairline);margin:5px 4px}
+
+.rowflex{display:flex;gap:22px;flex-wrap:wrap;align-items:flex-start}
+.stack{display:flex;flex-direction:column;gap:12px}
+
+.verdict{padding:14px 18px;border-top:1px solid var(--hairline);background:var(--panel);font-size:12.5px;color:var(--fg-2)}
+.verdict b{color:var(--fg-1);font-weight:600}
+.verdict .warn{color:var(--fg-1)}
+
+.states{display:flex;gap:10px;flex-wrap:wrap;padding:0 18px 18px}
+.state-item{border:1px dashed var(--hairline-strong);border-radius:var(--r-md);padding:10px 12px;flex:1;min-width:190px}
+.state-item .label{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:7px}
+.state-item .demo{font-size:11.5px;color:var(--fg-2)}
+
+table.spec{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:14px}
+table.spec th,table.spec td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:top}
+table.spec th{color:var(--fg-3);font-weight:600;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
+table.spec td:first-child{font-weight:600;white-space:nowrap}
+.good{color:var(--ok)} .mid{color:var(--fg-2)} .low{color:var(--fg-3)}
+
+h2.sec{font-size:16px;margin:44px 0 6px}
+p.secled{color:var(--fg-2);max-width:76ch;margin-bottom:4px}
+
+.rec-card{margin-top:14px;border:1px solid var(--ok);border-radius:var(--r-lg);background:var(--surface);padding:18px;max-width:940px}
+.rec-card h3{font-size:13.5px;margin-bottom:8px}
+.rec-card p{color:var(--fg-2);font-size:12.5px;margin-bottom:10px}
+.rec-card p:last-child{margin-bottom:0}
+.rec-card b{color:var(--fg-1)}
+.rec-card ol{margin:0 0 10px;padding-left:20px;color:var(--fg-2);font-size:12.5px}
+.rec-card li{margin-bottom:5px}
+
+.api{font-family:var(--font-mono);font-size:11.5px;background:var(--sunken);border-radius:var(--r-md);padding:12px 14px;color:var(--fg-2);overflow-x:auto;line-height:1.75;white-space:pre;margin-top:10px}
+.api b{color:var(--fg-1);font-weight:600}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brand">模型选择 <span>· 入口与选择器</span></div>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="theme">切换明暗</button>
+  </div>
+
+  <div class="head">
+    <h1>会话用哪个模型，在哪看、在哪换</h1>
+    <p>
+      这份稿只做一件事：让用户看见当前会话用的是哪个模型，并且能换。对话区、侧栏列表、检视器的既有结构都不动，
+      新东西是一个<strong>入口</strong>加一个<strong>选择器浮层</strong>。
+    </p>
+    <p>
+      四个入口方案共用同一个选择器，所以先比位置，再定选择器本身的样子。
+    </p>
+  </div>
+
+  <div class="facts">
+    <h3>先摆事实（Pi 侧已核实）</h3>
+    <ul>
+      <li>
+        <b>模型是绑在会话上的。</b>会话 jsonl 里有两类条目能确定模型：<code>model_change</code>（新建会话时写一次，
+        之后每次 <code>setModel()</code> / <code>cycleModel()</code> 追加一条）和助手消息自带的 <code>provider</code> + <code>model</code>。
+      </li>
+      <li>
+        <b>恢复时读会话，不读全局默认。</b><code>createAgentSession()</code> 在调用方没显式传 <code>model</code> 时，
+        用 <code>getBranchSelection(分支)</code> 从分支末尾往前扫，第一个碰到的 <code>model_change</code> 或助手消息决定模型。
+        所以「某个对话选了某个模型，下次进去保持住」成立。
+      </li>
+      <li>
+        <b>恢复失败是静默的。</b>如果那条记录里的 provider 现在没有凭据，会退回全局默认，原因只放进
+        <code>modelFallbackMessage</code>。<b>Codelet 现在把这个字段吃掉了</b> —— <code>runtime.ts</code> 拿到、往后传，
+        但没有任何界面显示它。
+      </li>
+      <li>
+        <b>能拿到的清单是「可用模型」。</b><code>session.modelRuntime.getAvailableSnapshot()</code> 给已配置凭据的模型，
+        每个模型带 <code>name</code> / <code>provider</code> / <code>contextWindow</code> / <code>maxTokens</code> /
+        <code>reasoning</code> / <code>cost</code>。不需要另建目录。
+      </li>
+      <li>
+        <b>Codelet 目前没有任何模型界面。</b><code>host/renderer</code> 里除「模式（mode）」之外不含 model 相关代码，
+        也没有选模型的 IPC 通道。状态栏只显示项目名、会话 id、模式、事件数、Pi 就绪状态。
+      </li>
+    </ul>
+  </div>
+
+  <div class="terms">
+    <h3>这份稿里的四个词</h3>
+    <dl>
+      <dt>当前模型</dt>
+      <dd>当前会话此刻用的模型。跟着会话走，换会话就换。</dd>
+      <dt>默认模型</dt>
+      <dd>新建会话时用的模型，存在全局设置（<code>~/.pi/agent/settings.json</code>）。<code>setModel(model, { persist: true })</code> 才会改它。</dd>
+      <dt>入口</dt>
+      <dd>「看得见当前模型、点了能换」的那个控件 ���— 这份稿比的就是它放哪。</dd>
+      <dt>选择器</dt>
+      <dd>点入口之后弹出来的浮层。四个入口方案共用同一个选择器。</dd>
+    </dl>
+  </div>
+
+  <!-- ============ A ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">A</span>
+      <h2>状态栏：右下角一个可点的模型名</h2>
+    </div>
+    <p class="desc">
+      状态栏本来就在显示「这个会话是什么状态」，模型属于同一类信息。放这里最省地方，
+      而且<b>不占主区的任何位置</b>，也不会跟对话内容抢注意力。
+    </p>
+    <div class="frame">
+      <div class="shell">
+        <div class="shell-title"><span>记忆索引重构</span><span class="spacer"></span><span>⋯</span></div>
+        <div class="shell-rail"><i></i><i></i><i></i></div>
+        <div class="shell-side">
+          <div class="conv on">记忆索引重构<span class="m">M3.1</span></div>
+          <div class="conv">类型声明生成<span class="m">flash</span></div>
+          <div class="conv">扫描依赖关系<span class="m">M3</span></div>
+        </div>
+        <div class="shell-main">
+          <div class="line w1"></div><div class="line w2"></div><div class="line w3"></div>
+        </div>
+        <div class="shell-bar">
+          <span>codelet</span><span>session 01a18731</span>
+          <span class="spacer"></span>
+          <span class="hot" data-hot="入口">● MiniMax-M3.1-Flash</span>
+          <span>普通</span><span>events 214</span><span>Pi 就绪</span>
+        </div>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state-item">
+        <div class="label">常态</div>
+        <div class="demo"><span class="status-model"><span class="dot"></span>MiniMax-M3.1-Flash</span></div>
+      </div>
+      <div class="state-item">
+        <div class="label">恢复失败（降级了）</div>
+        <div class="demo" style="color:var(--warn)">▲ deepseek-flash · 未能恢复 MiniMax-M3</div>
+      </div>
+      <div class="state-item">
+        <div class="label">检视器展开时</div>
+        <div class="demo">被状态栏右侧的其他信息挤，需要给它固定顺序</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：零占用，不打断阅读；状态栏本来就是「会话状态」区，语义合适；改动最小（<code>StatusBar</code> 里加一项 + 一个浮层）。<br>
+      <b>代价</b>：<span class="warn">发现性最差</span>。状态栏一行 10.5px 小字，用户不会主动去那儿找「换模型」。
+      窗口窄的时候还要跟「普通 / events / Pi 就绪」抢位置。
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">B</span>
+      <h2>输入框左下角：紧挨着「⌘↵ 发送」的小胶囊</h2>
+    </div>
+    <p class="desc">
+      换模型是「准备发下一条消息」时做的决定，所以放在输入框上。<b>动手的地方就在眼前</b>，
+      而且胶囊能同时显示模型名和「是不是这一轮最后一次机会」这类上下文。
+    </p>
+    <div class="frame">
+      <div class="shell">
+        <div class="shell-title"><span>记忆索引重构</span><span class="spacer"></span><span>⋯</span></div>
+        <div class="shell-rail"><i></i><i></i><i></i></div>
+        <div class="shell-side">
+          <div class="conv on">记忆索引重构<span class="m">M3.1</span></div>
+          <div class="conv">类型声明生成<span class="m">flash</span></div>
+        </div>
+        <div class="shell-main">
+          <div class="composer">
+            <div class="box"></div>
+            <div class="row">
+              <span class="chipbtn hot" data-hot="入口">◇ MiniMax-M3.1-Flash ▾</span>
+              <span>⌘↵ 发送</span>
+              <span class="spacer"></span>
+              <span class="send"></span>
+            </div>
+          </div>
+        </div>
+        <div class="shell-bar"><span>codelet</span><span>session 01a18731</span><span class="spacer"></span><span>普通</span><span>Pi 就绪</span></div>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state-item">
+        <div class="label">常态</div>
+        <div class="demo">◇ MiniMax-M3.1-Flash ▾</div>
+      </div>
+      <div class="state-item">
+        <div class="label">窄到放不下时</div>
+        <div class="demo">只留模型名，隐藏「⌘↵ 发送」提示（已有规则）</div>
+      </div>
+      <div class="state-item">
+        <div class="label">生成中</div>
+        <div class="demo">禁用（本轮的模型已定，换要等这轮结束）</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="warn">发现性最好</span> —— 每次要说话都会看到它；语义也对（换模型是为了下一条消息）。<br>
+      <b>代价</b>：输入框那一行现在已经有「⌘↵ 发送」、错误提示、发送按钮，再加一个胶囊在窄主区会挤
+      （<code>@container (max-width: 380px)</code> 现在已经在收「⌘↵ 发送」）。<b>多出来的元素会跟发送按钮抢右边</b>，需要定好收缩顺序。
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">C</span>
+      <h2>标题栏「⋯」菜单里的二级菜单</h2>
+    </div>
+    <p class="desc">
+      复用已有的菜单机制（「⋯」→ 二级菜单），不新造控件。<b>所有「设置性质」的动作都收在一个地方</b>，
+      当前模型作为菜单项右侧的值显示。
+    </p>
+    <div class="frame">
+      <div class="rowflex">
+        <div class="menu">
+          <div class="menu-item">复制会话 ID</div>
+          <div class="menu-item">在访达中显示</div>
+          <div class="menu-sep"></div>
+          <div class="menu-item hot" data-hot="入口">模型<span class="v">M3.1-Flash ▸</span></div>
+          <div class="menu-item">思考强度<span class="v">中 ▸</span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item">主题<span class="v">亮 ▸</span></div>
+        </div>
+        <div class="stack" style="font-size:11.5px;color:var(--fg-3);max-width:320px">
+          <div>点「模型」向右展开候选清单，跟现有二级菜单同一套定位逻辑（贴边自动向左展开）。</div>
+          <div>菜单里只放<b style="color:var(--fg-2)">已配置凭据的模型</b>，按 provider 分组；当前那个打勾。</div>
+        </div>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state-item">
+        <div class="label">菜单收起时</div>
+        <div class="demo">只能看到「⋯」，看不到当前模型</div>
+      </div>
+      <div class="state-item">
+        <div class="label">模型很多时</div>
+        <div class="demo">二级菜单要滚动，且没有搜索</div>
+      </div>
+      <div class="state-item">
+        <div class="label">窄窗</div>
+        <div class="demo">已有向左展开逻辑可直接复用</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：改动最小，完全复用现有菜单组件与定位逻辑；「设置都在⋯里」这个心智也成立。<br>
+      <b>代价</b>：<span class="warn">看不见当前模型</span> —— 用户必须点两次才知道现在用的是哪个。
+      菜单不适合放长清单，模型一多就得滚动、也不能搜索。换模型是<strong>高频</strong>动作，塞进低频菜单里不合适。
+    </div>
+  </section>
+
+  <!-- ============ D ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">D</span>
+      <h2>标题栏中段：标题右边一个小标签</h2>
+    </div>
+    <p class="desc">
+      标题栏中段现在是「会话标题 + ⋯」，比较空。模型放在标题右边，<b>跟「这是哪个会话」并列</b>，
+      等于把「哪个会话、用哪个模型」一起说完。
+    </p>
+    <div class="frame">
+      <div class="shell">
+        <div class="shell-title">
+          <span>记忆索引重构</span>
+          <span class="chipbtn hot" data-hot="入口">MiniMax-M3.1-Flash ▾</span>
+          <span class="spacer"></span><span>⋯</span>
+        </div>
+        <div class="shell-rail"><i></i><i></i><i></i></div>
+        <div class="shell-side">
+          <div class="conv on">记忆索引重构<span class="m">M3.1</span></div>
+          <div class="conv">类型声明生成<span class="m">flash</span></div>
+        </div>
+        <div class="shell-main"><div class="line w1"></div><div class="line w2"></div><div class="line w3"></div></div>
+        <div class="shell-bar"><span>codelet</span><span>session 01a18731</span><span class="spacer"></span><span>普通</span><span>Pi 就绪</span></div>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state-item">
+        <div class="label">常态</div>
+        <div class="demo">记忆索引重构 <span class="chipbtn">MiniMax-M3.1-Flash ▾</span></div>
+      </div>
+      <div class="state-item">
+        <div class="label">标题很长时</div>
+        <div class="demo">标题省略号，模型标签不被压缩</div>
+      </div>
+      <div class="state-item">
+        <div class="label">侧栏收起 + 窄窗</div>
+        <div class="demo">标题可能先让位；须确认不与红绿灯/开关重叠</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：位置显眼又不挡内容；和标题并列，「会话 → 模型」一次读完；标题栏中段现在确实有空位。<br>
+      <b>代价</b>：<span class="warn">标题栏是拖动区</span> —— 里面每个可点元素都要 <code>no-drag</code> 并且按 D16 的坑排在最后，
+      否则「画着却点不动」。另外这个位置跟「窗口标题」的直觉有点混，用户可能以为它是全局设置。
+    </div>
+  </section>
+
+  <!-- ============ 选择器 ============ -->
+  <h2 class="sec">选择器本身长什么样</h2>
+  <p class="secled">
+    入口定下来之后，浮层是共用的。下面两种形态，差别在「要不要搜索」和「能不能顺手改默认」。
+  </p>
+
+  <section class="option">
+    <div class="option-head">
+      <span class="tag rec">P1 · 推荐</span>
+      <h2>带搜索的分组清单 + 底部一行「设为新会话默认」</h2>
+    </div>
+    <p class="desc">
+      按 provider 分组，每项右侧给三个最有用的指标（上下文长度、是否支持思考、输出价格），
+      顶部一个搜索框，底部一个「设为新会话默认」勾选框。当前那个打勾。
+    </p>
+    <div class="frame">
+      <div class="rowflex">
+        <div class="picker">
+          <div class="picker-search"><span class="ico">⌕</span><span class="ph">搜索模型…</span><kbd>Esc</kbd></div>
+          <div class="picker-list">
+            <div class="picker-group">minimax-cn</div>
+            <div class="picker-item on"><span class="check">✓</span><span class="nm">MiniMax-M3.1-Flash</span><span class="meta"><span>200k</span><span>思考</span></span></div>
+            <div class="picker-item"><span class="check"></span><span class="nm">MiniMax-M3</span><span class="meta"><span>200k</span><span>思考</span></span></div>
+            <div class="picker-group">deepseek</div>
+            <div class="picker-item"><span class="check"></span><span class="nm">deepseek-flash</span><span class="meta"><span>128k</span><span>思考</span></span></div>
+            <div class="picker-item"><span class="check"></span><span class="nm">deepseek-v4-pro</span><span class="meta"><span>128k</span><span>思考</span></span></div>
+            <div class="picker-group">anthropic</div>
+            <div class="picker-item"><span class="check"></span><span class="nm">claude-sonnet</span><span class="meta"><span>200k</span><span>思考</span></span></div>
+          </div>
+          <div class="picker-foot">
+            <label><input type="checkbox"> 设为新会话默认</label>
+            <span class="spacer"></span>
+            <span><kbd>↑</kbd><kbd>↓</kbd> 选择 <kbd>↵</kbd> 确认</span>
+          </div>
+        </div>
+        <div class="stack" style="font-size:11.5px;color:var(--fg-3);max-width:300px">
+          <div>只列<b style="color:var(--fg-2)">已配置凭据</b>的模型 —— 没凭据的选了也是报错，不如不列。</div>
+          <div>搜索同时匹配模型名和 provider 名，输入 <code>deepseek</code> 只剩那一组。</div>
+          <div>底部勾选框默认不勾：换模型只影响这个会话。勾上才写全局默认（Pi 的 <code>persist: true</code>）。</div>
+        </div>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state-item">
+        <div class="label">搜不到</div>
+        <div class="demo">没有匹配的模型。<br>只列已配置凭据的模型。</div>
+      </div>
+      <div class="state-item">
+        <div class="label">一个可用模型都没有</div>
+        <div class="demo">没有已配置凭据的模型。先去 pi 里登录或配置 API key。</div>
+      </div>
+      <div class="state-item">
+        <div class="label">切换中</div>
+        <div class="demo">选中项右侧转圈，整列禁用，直到成功或失败</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：模型多的时候还能用；三个指标回答「该选哪个」；「设为默认」把会话级与全局级的关系摆到明面上，不会让人误以为换一次就永久生效。<br>
+      <b>代价</b>：比纯列表多一个搜索框、一个勾选框、一组键盘操作。价格要格式化（每百万 token 的输入/输出），暗色下数字颜色要压住。
+    </div>
+  </section>
+
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">P2</span>
+      <h2>不带搜索的短清单</h2>
+    </div>
+    <p class="desc">
+      只有分组、勾选、模型名。适合「可用模型通常不超过 6 个」的用法，代码量最小。
+    </p>
+    <div class="frame">
+      <div class="picker" style="width:280px">
+        <div class="picker-list">
+          <div class="picker-group">minimax-cn</div>
+          <div class="picker-item on"><span class="check">✓</span><span class="nm">MiniMax-M3.1-Flash</span></div>
+          <div class="picker-item"><span class="check"></span><span class="nm">MiniMax-M3</span></div>
+          <div class="picker-group">deepseek</div>
+          <div class="picker-item"><span class="check"></span><span class="nm">deepseek-flash</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：最少的代码和状态，一眼看完。<br>
+      <b>代价</b>：<span class="warn">模型一多就没法用</span>（滚动找名字）；也没有「设为默认」的入口，
+      用户会默认以为换模型是永久的。
+    </div>
+  </section>
+
+  <!-- ============ 对比 ============ -->
+  <h2 class="sec">四个入口放在一起比</h2>
+  <p class="secled">按「看不看得见」「有多容易点到」「会不会挤到别的控件」「要动多少东西」四轴排。</p>
+  <table class="spec">
+    <thead><tr><th>入口</th><th>看得见当前模型</th><th>点到它</th><th>挤不挤</th><th>改动量</th></tr></thead>
+    <tbody>
+      <tr><td>A 状态栏</td><td class="good">是（但 10.5px 小字）</td><td class="low">要想到去那儿找</td><td class="good">不挤</td><td>小</td></tr>
+      <tr><td>B 输入框</td><td class="good">是</td><td class="good">每次说话都看到</td><td class="low">挤（与发送键抢位置）</td><td>小</td></tr>
+      <tr><td>C ⋯ 菜单</td><td class="low">否（要点两次）</td><td class="low">点两次</td><td class="good">不挤</td><td>最小</td></tr>
+      <tr><td>D 标题栏</td><td class="good">是</td><td class="good">一直可见</td><td class="mid">中（拖动区有坑）</td><td>中</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rec-card">
+    <h3>推荐：A 状态栏显示 + B 输入框入口，共用一个选择器（P1）</h3>
+    <p>
+      两个位置各干一件事，不重复：
+    </p>
+    <ol>
+      <li><b>状态栏</b>只做<b>指示</b>：随时能看到当前会话用的是哪个模型，不占主区位置。</li>
+      <li><b>输入框左下角</b>做<b>操作</b>：要换的时候就在这里点，位置就在「准备发消息」的地方。</li>
+    </ol>
+    <p>
+      两处点开的都是同一个 P1 选择器。这样「看得见」和「好点到」两个目标都满足，而且不用在狭窄的输入框行里
+      塞一个长模型名 —— 输入框那个胶囊只显示简称（<code>M3.1-Flash</code>），完整名字在状态栏和浮层里。
+    </p>
+    <p>
+      不选 C 的理由：换模型是高频动作，塞进低频菜单里，用户每次都要点两次、而且看不见当前值。
+      不选 D 的理由：标题栏是拖动区，<code>-webkit-app-region</code> 的坑（D16 记过两条）会让可点元素很脆；
+      而且标题栏表示「这是哪个会话」，放一个看起来像全局设置的东西容易误解。
+    </p>
+  </div>
+
+  <!-- ============ 数据与接口 ============ -->
+  <h2 class="sec">要动的东西</h2>
+  <p class="secled">
+    渲染进程不 import Pi（边界 1），所以模型清单必须由主进程取好、经 IPC 下来。现有 <code>HostSnapshot</code> 加两项，
+    再加两个通道。
+  </p>
+  <div class="api"><b>contract/index.ts</b>
+interface SessionState {
+  …
+  <b>model</b>: { provider: string; id: string; name: string } | null
+  <b>modelFallback</b>: string | null      // 恢复失败的说明，直接上屏
+}
+
+interface ModelOption {
+  provider: string
+  id: string
+  name: string
+  contextWindow: number
+  reasoning: boolean
+  cost: { input: number; output: number }   // 每百万 token
+}
+
+IPC.modelsList   = 'host:models:list'      // → ModelOption[] + 当前
+IPC.modelsSelect = 'host:models:select'    // { provider, id, persist } → 新快照</div>
+  <p class="secled" style="margin-top:14px">
+    主进程侧只需要三句 Pi 调用：<code>session.modelRuntime.getAvailableSnapshot()</code> 取清单、
+    <code>session.setModel(model, { persist })</code> 切换、<code>session.model</code> 读当前。
+    切换成功后 Pi 会发 <code>model_select</code> 事件（已有透传通道），快照也要跟着推一次。
+  </p>
+
+  <!-- ============ 不做 ============ -->
+  <h2 class="sec">这一轮不做</h2>
+  <table class="spec">
+    <thead><tr><th>项</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td>思考强度（thinking level）切换</td><td>和模型是两件事，规则也不同（切模型时会重新 clamp）。先只做模型，等这块稳了再说。</td></tr>
+      <tr><td>会话列表里显示每个会话的模型</td><td>看着有用，但列表项已经很密；而且模型是「进去之后才关心」的信息。</td></tr>
+      <tr><td>模型对比 / 成本统计</td><td>那是会话统计页的事，不是选择器。</td></tr>
+      <tr><td>在 Codelet 里配置 API key / 登录</td><td>凭据沿用 <code>~/.pi/agent</code>（D9），登录仍在 pi 里做。选择器只列已配置的。</td></tr>
+      <tr><td>按任务自动选模型</td><td>不可预测，也不可解释。用户自己选。</td></tr>
+      <tr><td>改终端 / HTML 模式的界面</td><td>普通模式优先（D14）。这两档这次不动。</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============ 验收 ============ -->
+  <h2 class="sec">怎么算做对了</h2>
+  <p class="secled">拿两个都聊过的会话交替切，逐条看。</p>
+  <table class="spec">
+    <thead><tr><th>#</th><th>标准</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>会话 A 选了模型 X、会话 B 选了模型 Y；在 A / B 之间来回切，状态栏与输入框始终显示各自的模型。</td></tr>
+      <tr><td>2</td><td>在 A 里换模型，B 不受影响；重启应用后 A 仍是新换的那个。</td></tr>
+      <tr><td>3</td><td>勾了「设为新会话默认」再换，新建的会话用新默认；旧会话不变。</td></tr>
+      <tr><td>4</td><td>恢复失败时（撤销该 provider 的凭据），状态栏显示警告并说明「未能恢复 X」，而不是静默换成别的。</td></tr>
+      <tr><td>5</td><td>清单里只出现已配置凭据的模型；一个都没有时给出可执行的提示。</td></tr>
+      <tr><td>6</td><td>生成中入口禁用并说明原因；切换过程中不重复触发。</td></tr>
+      <tr><td>7</td><td>主区被压到 160px 时，输入框那一行不出现横向滚动条（收缩顺序：先隐藏「⌘↵ 发送」，再缩模型简称）。</td></tr>
+      <tr><td>8</td><td>亮暗两套主题下浮层、勾选、价格数字都读得清。</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.getElementById('theme').addEventListener('click', () => {
+    const root = document.documentElement
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'
+  })
+</script>
+</body>
+</html>
