@@ -2,10 +2,12 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { AnsiText } from './AnsiText'
+import { groupBody } from './groupBody'
 import { Markdown } from './Markdown'
 import { ReplyMeta } from './ReplyMeta'
 import { summarizeTurn, type TurnSummary } from './turnMeta'
 import { useToolOutputs } from './useToolOutputs'
+import { formatDuration } from './usageFormat'
 
 /**
  * 普通模式 · 聊天流。
@@ -260,12 +262,13 @@ function ProcessBlock({
   )
 }
 
-/** 摘要行右边的字：步数 · 耗时 */
+/** 摘要行右边的字：工具次数 · 叙述段数 · 耗时 */
 function describe(summary: TurnSummary): string {
   const parts: string[] = []
-  if (summary.steps > 0) parts.push(`${summary.steps} 步`)
+  if (summary.toolCalls > 0) parts.push(`${summary.toolCalls} 次工具`)
+  if (summary.segments > 0) parts.push(`${summary.segments} 段`)
   if (summary.processDurationMs !== undefined) {
-    parts.push(`${(summary.processDurationMs / 1000).toFixed(1)}s`)
+    parts.push(formatDuration(summary.processDurationMs))
   }
   return parts.join(' · ')
 }
@@ -294,47 +297,38 @@ function Body({
   streaming: boolean
 }) {
   const rows: ReactNode[] = []
-  let index = 0
+  const groups = groupBody(items, toolIds)
 
-  while (index < items.length) {
-    const item = items[index]
-
-    // 工具项跟在消息后面 —— 归到那条消息下面
-    if (item.kind === 'tool') {
-      index += 1
+  for (const [i, row] of groups.entries()) {
+    const isLastRow = i === groups.length - 1
+    if (row.kind === 'output') {
+      rows.push(<ToolOutput key={`out-${i}`} text={row.text} />)
       continue
     }
 
-    // 工具输出：归它的工具行
-    if (item.role === 'toolResult') {
-      if (!item.callId || !toolIds.has(item.callId)) {
-        rows.push(<ToolOutput key={`out-${index}`} text={item.text} />)
-      }
-      index += 1
-      continue
-    }
-
-    const tools: ToolItem[] = []
-    let look = index + 1
-    while (look < items.length && items[look].kind === 'tool') {
-      tools.push(items[look] as ToolItem)
-      look += 1
-    }
-
-    rows.push(
-      <div key={`msg-${index}`} className={variant === 'process' ? 'mb-3 last:mb-0' : 'min-w-0'}>
-        <div className={variant === 'process' ? 'md-process' : 'text-[14.5px] leading-[1.9] text-fg-1'}>
-          <Markdown text={item.text} variant="normal" />
-          {streaming && look >= items.length && <span className="cursor" />}
+    if (row.kind === 'tools') {
+      rows.push(
+        <div key={`tools-${i}`} className="mb-3 last:mb-0 flex flex-col gap-1">
+          <ToolList tools={row.tools} outputs={outputs} isExpanded={isExpanded} onToggle={onToggle} />
         </div>
-        {tools.length > 0 && (
+      )
+      continue
+    }
+
+    const last = isLastRow
+    rows.push(
+      <div key={`msg-${i}`} className={variant === 'process' ? 'mb-3 last:mb-0' : 'min-w-0'}>
+        <div className={variant === 'process' ? 'md-process' : 'text-[14.5px] leading-[1.9] text-fg-1'}>
+          <Markdown text={row.item.text} variant="normal" />
+          {streaming && last && <span className="cursor" />}
+        </div>
+        {row.tools.length > 0 && (
           <div className="mt-1.5 flex flex-col gap-1">
-            <ToolList tools={tools} outputs={outputs} isExpanded={isExpanded} onToggle={onToggle} />
+            <ToolList tools={row.tools} outputs={outputs} isExpanded={isExpanded} onToggle={onToggle} />
           </div>
         )}
       </div>
     )
-    index = look
   }
 
   return <>{rows}</>
