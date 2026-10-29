@@ -1,11 +1,11 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { AnsiText } from './AnsiText'
 import { Markdown } from './Markdown'
-import { useToolOutputs } from './useToolOutputs'
 import { ReplyMeta } from './ReplyMeta'
-import { summarizeTurn } from './turnMeta'
+import { summarizeTurn, type TurnSummary } from './turnMeta'
+import { useToolOutputs } from './useToolOutputs'
 
 /**
  * 普通模式 · 聊天流。
@@ -14,17 +14,52 @@ import { summarizeTurn } from './turnMeta'
  * 这里只决定怎么画：用户消息右气泡，助手消息直接铺在内容列上，
  * 工具收成一条灰线（名 + 状态 + 命令）。
  *
+ * 一轮里的主次（docs/design/turn-emphasis.html）：
+ * - **过程**（中间叙述 + 工具行）默认收成一行「过程 · 4 步 · 12.4s」，点开才展开；
+ *   展开后缩进并压一条左侧细线，字号降一级、颜色暗一档
+ * - **最终答案**顶格、正文原样，不加任何装饰
+ * - 元信息行（复制 / token / 用时）挂在轮末，视觉上归属答案
+ *
  * 工具输出默认收起来，点那一行才展开 —— 输出往往很长，全铺开会把对话区撑爆。
  */
 
 type MessageItem = Extract<StreamItem, { kind: 'message' }>
 type ToolItem = Extract<StreamItem, { kind: 'tool' }>
-type AssistantItem = Extract<StreamItem, { kind: 'message' }> & { role: 'assistant' }
 
 const TOOL_LOOK: Record<ToolItem['status'], { icon: string; color: string }> = {
   running: { icon: '◐', color: 'var(--fg-3)' },
   ok: { icon: '✓', color: 'var(--fg-3)' },
   error: { icon: '✗', color: 'var(--danger)' }
+}
+
+/** 一轮对话：一条用户消息 + 它后面跟着的全部内容 */
+interface Turn {
+  key: string
+  user: MessageItem | null
+  body: StreamItem[]
+}
+
+/** 按用户消息切轮 —— 用户消息是唯一的分轮依据 */
+function splitTurns(items: readonly StreamItem[]): Turn[] {
+  const turns: Turn[] = []
+  let current: Turn | null = null
+
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i]
+    if (item.kind === 'message' && item.role === 'user') {
+      current = { key: `turn-${i}`, user: item, body: [] }
+      turns.push(current)
+      continue
+    }
+    if (!current) {
+      // 会话开头没有用户消息（扩展注入之类）—— 自己起一轮
+      current = { key: `turn-${i}`, user: null, body: [] }
+      turns.push(current)
+    }
+    current.body.push(item)
+  }
+
+  return turns
 }
 
 export function NormalStream({ items, streaming }: { items: StreamItem[]; streaming: boolean }) {
@@ -40,25 +75,226 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
     return set
   }, [items])
 
-  const rows: ReactNode[] = []
-  let index = 0
-  // 这一轮里带正文的助手消息 —— 轮末聚合成一行元信息
-  let turnAssistants: AssistantItem[] = []
-  // 这一轮从哪开始（当成 key 用，流式时不重挂）
-  let turnStart = 0
+  const turns = useMemo(() => splitTurns(items), [items])
 
-  /** 一轮结束：把它的元信息行补在轮末（真实会话里一轮会有几十条助手消息） */
-  const flushTurn = (isLastTurn: boolean): void => {
-    const meta = summarizeTurn(turnAssistants)
-    turnAssistants = []
-    if (!meta) return
-    // 紧贴本轮末行，而不是与下一轮等距 —— 负 margin 把 flex 的 gap 抵掉一部分
-    rows.push(
-      <div key={`meta-${turnStart}`} className="-mt-4 flex">
-        <ReplyMeta meta={meta} streaming={streaming && isLastTurn} />
+  return (
+    <div className="conv-stream mx-auto flex flex-col gap-7 py-12">
+      {turns.map((turn, index) => (
+        <TurnRow
+          key={turn.key}
+          turn={turn}
+          outputs={outputs}
+          isExpanded={isExpanded}
+          onToggle={(callId, expanded) => setToolExpanded(callId, expanded)}
+          toolIds={toolIds}
+          streaming={streaming && index === turns.length - 1}
+        />
+      ))}
+    </div>
+  )
+}
+
+/** 一轮：用户气泡 → 过程（可折起）→ 最终答案 → 元信息行 */
+function TurnRow({
+  turn,
+  outputs,
+  isExpanded,
+  onToggle,
+  toolIds,
+  streaming
+}: {
+  turn: Turn
+  outputs: Map<string, string>
+  isExpanded: (callId: string, running: boolean) => boolean
+  onToggle: (callId: string, expanded: boolean) => void
+  toolIds: Set<string>
+  streaming: boolean
+}) {
+  const summary = useMemo(() => summarizeTurn(turn.body), [turn.body])
+
+  // 认不出答案（这一轮没有助手正文）—— 原样铺开，不做主次分层
+  if (!summary) {
+    return (
+      <div className="flex flex-col gap-2">
+        <UserBubble item={turn.user} />
+        <Body
+          items={turn.body}
+          outputs={outputs}
+          isExpanded={isExpanded}
+          onToggle={onToggle}
+          toolIds={toolIds}
+          variant="process"
+          streaming={streaming}
+        />
       </div>
     )
   }
+
+  const processItems = turn.body.slice(0, summary.answerIndex)
+  const answerItem = turn.body[summary.answerIndex]
+  const restItems = turn.body.slice(summary.answerIndex + 1)
+
+  return (
+    <div className="flex flex-col gap-2">
+      <UserBubble item={turn.user} />
+
+      {processItems.length > 0 && (
+        <ProcessBlock
+          summary={summary}
+          items={processItems}
+          outputs={outputs}
+          isExpanded={isExpanded}
+          onToggle={onToggle}
+          toolIds={toolIds}
+          streaming={streaming}
+        />
+      )}
+
+      <div className="min-w-0">
+        {answerItem.kind === 'message' && (
+          <div className="text-[14.5px] leading-[1.9] text-fg-1">
+            <Markdown text={answerItem.text} variant="normal" />
+            {streaming && restItems.length === 0 && <span className="cursor" />}
+          </div>
+        )}
+
+        {restItems.length > 0 && (
+          <Body
+            items={restItems}
+            outputs={outputs}
+            isExpanded={isExpanded}
+            onToggle={onToggle}
+            toolIds={toolIds}
+            variant="process"
+            streaming={streaming}
+          />
+        )}
+
+        <ReplyMeta summary={summary} streaming={streaming} />
+      </div>
+    </div>
+  )
+}
+
+/** 用户气泡（反相深底）—— 没有用户消息时什么也不画 */
+function UserBubble({ item }: { item: MessageItem | null }) {
+  if (!item) return null
+  return (
+    <div className="flex flex-col items-start">
+      <div className="md-bubble is-inverse max-w-[70%] rounded-[14px] bg-bubble px-3.5 py-2.5 text-[14.5px] leading-[1.65] text-bubble-fg">
+        <Markdown text={item.text} variant="normal" />
+      </div>
+    </div>
+  )
+}
+
+/**
+ * 过程：默认收成一行，点开才展开。
+ *
+ * 生成中默认展开 —— 实时工具输出要看得见（R4）；一轮结束后自动收起，
+ * 让答案落到顶格位置。用户点过就听用户的，不再自动收。
+ */
+function ProcessBlock({
+  summary,
+  items,
+  outputs,
+  isExpanded,
+  onToggle,
+  toolIds,
+  streaming
+}: {
+  summary: TurnSummary
+  items: StreamItem[]
+  outputs: Map<string, string>
+  isExpanded: (callId: string, running: boolean) => boolean
+  onToggle: (callId: string, expanded: boolean) => void
+  toolIds: Set<string>
+  streaming: boolean
+}) {
+  const [open, setOpen] = useState(streaming)
+  const touched = useRef(false)
+
+  // 生成结束 → 自动收起（用户手动点过就不插手）
+  useEffect(() => {
+    if (!streaming && !touched.current) setOpen(false)
+  }, [streaming])
+
+  function toggle(): void {
+    touched.current = true
+    setOpen((value) => !value)
+  }
+
+  return (
+    <div className="flex flex-col">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={toggle}
+        className="flex h-7 w-fit max-w-full items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-sunken"
+        title={open ? '收起过程' : '展开过程'}
+      >
+        <span className="w-2 flex-none text-[9px] text-fg-3">{open ? '▾' : '▸'}</span>
+        {streaming ? (
+          <span className="h-1.5 w-1.5 flex-none animate-pulse rounded-full bg-info" />
+        ) : (
+          <span className="h-1.5 w-1.5 flex-none rounded-full bg-fg-3 opacity-50" />
+        )}
+        <span className="flex-none text-[11.5px] font-medium text-fg-2">过程</span>
+        <span className="min-w-0 truncate font-mono text-[11px] text-fg-3">{describe(summary)}</span>
+      </button>
+
+      {open && (
+        <div className="mt-1 border-l-2 border-hairline-strong pl-3">
+          <Body
+            items={items}
+            outputs={outputs}
+            isExpanded={isExpanded}
+            onToggle={onToggle}
+            toolIds={toolIds}
+            variant="process"
+            streaming={streaming}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 摘要行右边的字：步数 · 耗时 */
+function describe(summary: TurnSummary): string {
+  const parts: string[] = []
+  if (summary.steps > 0) parts.push(`${summary.steps} 步`)
+  if (summary.processDurationMs !== undefined) {
+    parts.push(`${(summary.processDurationMs / 1000).toFixed(1)}s`)
+  }
+  return parts.join(' · ')
+}
+
+/**
+ * 一段内容的画法。
+ *
+ * variant 决定叙述的排版：`process` 是缩进块里的小一号灰字，
+ * `answer` 是正文原样。工具行两处一样。
+ */
+function Body({
+  items,
+  outputs,
+  isExpanded,
+  onToggle,
+  toolIds,
+  variant,
+  streaming
+}: {
+  items: StreamItem[]
+  outputs: Map<string, string>
+  isExpanded: (callId: string, running: boolean) => boolean
+  onToggle: (callId: string, expanded: boolean) => void
+  toolIds: Set<string>
+  variant: 'process' | 'answer'
+  streaming: boolean
+}) {
+  const rows: ReactNode[] = []
+  let index = 0
 
   while (index < items.length) {
     const item = items[index]
@@ -78,14 +314,6 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
       continue
     }
 
-    // 又一条用户消息 —— 上一轮到这里收尾
-    if (item.role === 'user') {
-      flushTurn(false)
-      turnStart = index
-    } else {
-      turnAssistants.push(item as AssistantItem)
-    }
-
     const tools: ToolItem[] = []
     let look = index + 1
     while (look < items.length && items[look].kind === 'tool') {
@@ -94,77 +322,22 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
     }
 
     rows.push(
-      <MessageRow
-        key={`msg-${index}`}
-        item={item}
-        tools={tools}
-        outputs={outputs}
-        isExpanded={isExpanded}
-        onToggle={(callId, expanded) => setToolExpanded(callId, expanded)}
-        streaming={streaming && look >= items.length}
-      />
-    )
-    index = look
-  }
-
-  // 最后一轮
-  flushTurn(true)
-
-  return (
-    <div className="conv-stream mx-auto flex flex-col gap-7 py-12">
-      {rows}
-    </div>
-  )
-}
-
-function MessageRow({
-  item,
-  tools,
-  outputs,
-  isExpanded,
-  onToggle,
-  streaming
-}: {
-  item: MessageItem
-  tools: ToolItem[]
-  outputs: Map<string, string>
-  isExpanded: (callId: string, running: boolean) => boolean
-  onToggle: (callId: string, expanded: boolean) => void
-  streaming: boolean
-}) {
-  if (item.role === 'user') {
-    return (
-      <div className="flex flex-col items-start gap-2">
-        <div className="md-bubble is-inverse max-w-[70%] rounded-[14px] bg-bubble px-3.5 py-2.5 text-[14.5px] leading-[1.65] text-bubble-fg">
+      <div key={`msg-${index}`} className={variant === 'process' ? 'mb-3 last:mb-0' : 'min-w-0'}>
+        <div className={variant === 'process' ? 'md-process' : 'text-[14.5px] leading-[1.9] text-fg-1'}>
           <Markdown text={item.text} variant="normal" />
+          {streaming && look >= items.length && <span className="cursor" />}
         </div>
         {tools.length > 0 && (
-          <div className="flex w-full flex-col gap-1">
-            <ToolList
-              tools={tools}
-              outputs={outputs}
-              isExpanded={isExpanded}
-              onToggle={onToggle}
-            />
+          <div className="mt-1.5 flex flex-col gap-1">
+            <ToolList tools={tools} outputs={outputs} isExpanded={isExpanded} onToggle={onToggle} />
           </div>
         )}
       </div>
     )
+    index = look
   }
 
-  return (
-    <div className="min-w-0">
-      <div className="text-[14.5px] leading-[1.9] text-fg-1">
-        <Markdown text={item.text} variant="normal" />
-        {streaming && <span className="cursor" />}
-      </div>
-      {tools.length > 0 && (
-        <div className="mt-3 flex flex-col gap-1">
-          <ToolList tools={tools} outputs={outputs} isExpanded={isExpanded} onToggle={onToggle} />
-        </div>
-      )}
-    </div>
-  )
+  return <>{rows}</>
 }
 
 function ToolList({

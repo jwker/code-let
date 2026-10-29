@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>一轮对话里的主次 · 最终答案压过过程</title>
+<style>
+/* 令牌与 app 的 tokens.css 同一套值，亮暗一一对应 */
+:root{
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px; --r-full:999px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px;
+  --dur:160ms; --ease:cubic-bezier(.4,0,.2,1);
+}
+[data-theme="light"]{
+  --canvas:#F4F4F5; --panel:#FBFBFB; --surface:#FFFFFF; --sunken:#F1F1F3;
+  --hairline:#ECECEE; --hairline-strong:#DEDEE2;
+  --fg-1:#1B1B19; --fg-2:#5C5C56; --fg-3:#94948C;
+  --accent:#1F1F1D; --accent-fg:#FFFFFF; --accent-wash:#EEEEF0; --accent-line:#DCDCE1;
+  --ok:#2E7D53; --info:#2563A8; --bubble:#262625; --bubble-fg:#FAFAF9;
+  --sh-sm:0 1px 2px rgba(20,20,16,.04); --sh-md:0 8px 24px -8px rgba(20,20,16,.10);
+}
+[data-theme="dark"]{
+  --canvas:#131312; --panel:#181817; --surface:#1C1C1B; --sunken:#2A2A29;
+  --hairline:#2B2B29; --hairline-strong:#3B3B38;
+  --fg-1:#EDEDEB; --fg-2:#B4B4AD; --fg-3:#7D7D76;
+  --accent:#F0F0EC; --accent-fg:#151513; --accent-wash:#2A2A2C; --accent-line:#343430;
+  --ok:#5BD69A; --info:#6FAEF0; --bubble:#F0F0EE; --bubble-fg:#171715;
+  --sh-sm:0 1px 2px rgba(0,0,0,.5); --sh-md:0 12px 30px -12px rgba(0,0,0,.65);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--canvas); color:var(--fg-1);
+  font-family:var(--font-sans); font-size:13px; line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+code{font-family:var(--font-mono);font-size:12px;background:var(--accent-wash);padding:1px 5px;border-radius:var(--r-xs);color:var(--fg-2)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+
+.page{max-width:1000px;margin:0 auto;padding:0 28px 140px}
+
+/* 顶栏 */
+.topbar{
+  position:sticky;top:0;z-index:50;height:52px;display:flex;align-items:center;gap:14px;
+  background:var(--panel);border-bottom:1px solid var(--hairline);
+  margin:0 -28px;padding:0 28px;
+}
+.brand{font-weight:600;letter-spacing:-.015em}
+.brand span{color:var(--fg-3);font-weight:400}
+.topbar .spacer{flex:1}
+.ghost-btn{
+  height:28px;padding:0 10px;border-radius:var(--r-sm);
+  border:1px solid var(--hairline);color:var(--fg-2);font-size:12px;
+  transition:all var(--dur) var(--ease);
+}
+.ghost-btn:hover{color:var(--fg-1);border-color:var(--hairline-strong);background:var(--surface)}
+
+.head{padding:36px 0 8px}
+.head h1{font-size:23px;margin-bottom:10px;line-height:1.35}
+.head p{color:var(--fg-2);max-width:72ch}
+.head p + p{margin-top:10px}
+
+/* 事实清单 */
+.facts{
+  margin:26px 0 0;border:1px solid var(--hairline);border-radius:var(--r-lg);
+  background:var(--surface);padding:16px 18px;max-width:860px;
+}
+.facts h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:10px}
+.facts ul{margin:0;padding-left:18px;color:var(--fg-2)}
+.facts li{margin-bottom:6px}
+.facts li:last-child{margin-bottom:0}
+.facts b{color:var(--fg-1);font-weight:600}
+
+/* 术语 */
+.terms{margin:22px 0 0;max-width:860px}
+.terms h3{font-size:13px;margin-bottom:8px}
+.terms dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:12.5px;color:var(--fg-2)}
+.terms dt{color:var(--fg-1);font-weight:600;white-space:nowrap}
+.terms dd{margin:0}
+
+/* 方案卡 */
+.option{
+  margin-top:30px;border:1px solid var(--hairline);border-radius:var(--r-lg);
+  background:var(--surface);overflow:hidden;max-width:1000px;
+}
+.option-head{
+  display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  padding:14px 18px;border-bottom:1px solid var(--hairline);background:var(--panel);
+}
+.option-head .tag{
+  font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;
+  color:var(--fg-3);border:1px solid var(--hairline-strong);border-radius:var(--r-full);
+  padding:2px 8px;white-space:nowrap;
+}
+.option-head .tag.rec{color:var(--ok);border-color:var(--ok)}
+.option-head h2{font-size:14.5px}
+.desc{padding:16px 18px 0;color:var(--fg-2);font-size:12.5px;max-width:78ch}
+.desc b{color:var(--fg-1)}
+
+/* 演示区：模拟主区内容列（最宽 720） */
+.frame{padding:18px}
+.strip{
+  max-width:620px;padding:20px 22px;border-radius:var(--r-md);
+  border:1px solid var(--hairline);background:var(--surface);
+}
+.strip + .strip{margin-top:12px}
+.strip-label{
+  font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);
+  margin-bottom:10px;
+}
+
+/* 用户气泡（app 里是反相深底，这里同款） */
+.ubub{
+  width:fit-content;max-width:70%;margin-left:auto;
+  background:var(--bubble);color:var(--bubble-fg);
+  border-radius:14px;padding:8px 13px;font-size:14px;line-height:1.6;
+}
+.turn-body{margin-top:14px}
+
+/* —— 现状：三种内容同权重 —— */
+.now-proc,.now-ans{font-size:14.5px;line-height:1.9;color:var(--fg-1);margin:0 0 10px}
+.tool{
+  display:flex;align-items:center;gap:7px;height:26px;padding:0 5px;
+  font-size:11.5px;color:var(--fg-2);margin:0 0 2px;
+}
+.tool .mark{
+  display:grid;place-items:center;width:15px;height:15px;flex:none;
+  border:1px solid var(--hairline);border-radius:var(--r-full);
+  font-size:9px;color:var(--fg-3);
+}
+.tool .name{font-weight:600;flex:none}
+.tool .cmd{
+  font-family:var(--font-mono);font-size:11px;color:var(--fg-3);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;
+}
+.proc-tools{margin:0 0 10px;display:flex;flex-direction:column;gap:1px}
+
+/* —— 元信息行（胶囊，按轮挂在末尾）—— */
+.meta{
+  display:flex;width:fit-content;max-width:100%;flex-wrap:wrap;align-items:center;gap:8px;
+  margin-top:12px;border:1px solid var(--hairline);border-radius:var(--r-full);
+  background:var(--panel);padding:4px 12px 4px 4px;
+}
+.meta .copy{
+  display:flex;flex:none;align-items:center;gap:6px;white-space:nowrap;
+  font-size:11.5px;color:var(--fg-2);padding:2px 8px;border-radius:var(--r-full);
+}
+.meta .sep{width:1px;height:12px;flex:none;background:var(--hairline-strong)}
+.meta .num{font-family:var(--font-mono);font-size:11.5px;color:var(--fg-3)}
+
+/* —— A · 字号分级 —— */
+.a-proc{font-size:13px;line-height:1.7;color:var(--fg-3);margin:0 0 9px}
+.a-ans{font-size:14.5px;line-height:1.9;color:var(--fg-1);margin:0}
+
+/* —— C · 装订线 —— */
+.c-proc{
+  margin:0 0 12px;padding-left:12px;border-left:2px solid var(--hairline-strong);
+}
+.c-proc p{font-size:13px;line-height:1.7;color:var(--fg-2);margin:0 0 8px}
+.c-proc p:last-child{margin-bottom:0}
+.c-proc .proc-tools{margin:8px 0 0}
+.c-ans{font-size:14.5px;line-height:1.9;color:var(--fg-1);margin:0}
+
+/* —— D · 底色分带 —— */
+.d-proc{
+  background:var(--sunken);border-radius:var(--r-md);padding:12px 14px;margin:0 0 14px;
+}
+.d-proc p{font-size:13px;line-height:1.7;color:var(--fg-2);margin:0 0 8px}
+.d-proc p:last-child{margin-bottom:0}
+.d-proc .proc-tools{margin:8px 0 0}
+.d-ans{font-size:14.5px;line-height:1.9;color:var(--fg-1);margin:0}
+
+/* —— B · 过程收纳（可折叠摘要行）—— */
+.fold{margin:0 0 12px}
+.fold-btn{
+  display:flex;align-items:center;gap:8px;height:28px;padding:0 6px;
+  border-radius:var(--r-sm);font-size:11.5px;color:var(--fg-2);
+  transition:background var(--dur) var(--ease),color var(--dur) var(--ease);
+}
+.fold-btn:hover{background:var(--sunken);color:var(--fg-1)}
+.fold-btn .tri{font-size:9px;color:var(--fg-3);flex:none;width:9px}
+.fold-btn .dot{width:5px;height:5px;border-radius:50%;background:var(--fg-3);flex:none}
+.fold-btn .label{font-weight:600}
+.fold-btn .stat{font-family:var(--font-mono);color:var(--fg-3);font-size:11px}
+.fold-panel{
+  margin:6px 0 0;padding-left:14px;border-left:2px solid var(--hairline);
+}
+.fold-panel[hidden]{display:none}
+.fold-panel p{font-size:13px;line-height:1.7;color:var(--fg-2);margin:0 0 8px}
+.fold-panel p:last-child{margin-bottom:0}
+.b-ans{font-size:14.5px;line-height:1.9;color:var(--fg-1);margin:0}
+
+/* 状态小样 */
+.states{display:flex;gap:10px;flex-wrap:wrap;padding:0 18px 18px}
+.state-item{
+  border:1px dashed var(--hairline-strong);border-radius:var(--r-md);
+  padding:10px 12px;min-width:180px;flex:1;min-width:200px;
+}
+.state-item .label{
+  font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--fg-3);margin-bottom:6px;
+}
+.state-item .demo{font-size:12px;color:var(--fg-2)}
+.state-item .demo.mono{font-family:var(--font-mono);font-size:11.5px}
+
+.verdict{
+  padding:14px 18px;border-top:1px solid var(--hairline);background:var(--panel);
+  font-size:12.5px;color:var(--fg-2);max-width:100%;
+}
+.verdict b{color:var(--fg-1);font-weight:600}
+.verdict .warn{color:var(--fg-1)}
+
+/* 表格 */
+table.spec{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:14px}
+table.spec th,table.spec td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:top}
+table.spec th{color:var(--fg-3);font-weight:600;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase}
+table.spec td:first-child{font-weight:600;white-space:nowrap}
+.good{color:var(--ok)}
+.mid{color:var(--fg-2)}
+.low{color:var(--fg-3)}
+
+h2.sec{font-size:16px;margin:44px 0 6px}
+p.secled{color:var(--fg-2);max-width:74ch;margin-bottom:4px}
+
+.rec-card{
+  margin-top:14px;border:1px solid var(--ok);border-radius:var(--r-lg);
+  background:var(--surface);padding:18px;max-width:900px;
+}
+.rec-card h3{font-size:13.5px;margin-bottom:8px}
+.rec-card p{color:var(--fg-2);font-size:12.5px;margin-bottom:10px}
+.rec-card p:last-child{margin-bottom:0}
+.rec-card b{color:var(--fg-1)}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="topbar">
+    <div class="brand">一轮对话里的主次 <span>· 局部方案稿</span></div>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="theme">切换明暗</button>
+  </div>
+
+  <div class="head">
+    <h1>最终答案要压过过程</h1>
+    <p>
+      这份稿只处理普通模式里<strong>一轮对话内部</strong>的主次关系：过程叙述、工具行、最终答案这三样东西怎么排。
+      正文的 markdown 格式、工具行的交互、元信息行（复制 / token / 用时）的样式都不在范围内 ——
+      元信息行已经按轮挂在末尾，它天然属于答案，这次不动它。
+    </p>
+    <p>
+      四个方案共用同一轮对话做上下文，方便横向比较。每个方案后面写它适合什么、代价是什么、以及要动哪一层。
+    </p>
+  </div>
+
+  <div class="facts">
+    <h3>先摆事实</h3>
+    <ul>
+      <li>
+        现在一轮里的三种内容用<strong>同一套排版</strong>：过程叙述和最终答案都是
+        <code>14.5px / 行高 1.9 / fg-1</code>，字号、字重、颜色三项完全一致，读者没有任何线索能分出哪句是结论。
+      </li>
+      <li>
+        真实会话里<strong>过程远比答案多</strong>。量过一段 15 段正文的轮次，只有最后一段是答案，
+        前 14 段都是「我先读一下…」「改成按游标增量…」这类过程话。
+      </li>
+      <li>
+        读者要的是最后那段，但要先扫过前面全部。轮次越长，这个代价越大 ——
+        这也是「回答不突出」的直接原因，不是颜色不够重，而是<strong>主次没有分层</strong>。
+      </li>
+      <li>
+        工具行本来就已经弱化了（<code>11.5px</code> / <code>fg-2</code> / 带状态圆点），
+        所以真正缺的是<strong>过程叙述和最终答案之间的落差</strong>，不是工具行。
+      </li>
+    </ul>
+  </div>
+
+  <div class="terms">
+    <h3>这份稿里的三个词</h3>
+    <dl>
+      <dt>过程</dt>
+      <dd>一轮里除最终答案以外的助手正文，以及它们之间调用的工具行。</dd>
+      <dt>最终答案</dt>
+      <dd>这一轮最后一段有正文的助手消息。判断规则已经定了：取最后一段非空正文。</dd>
+      <dt>视觉重量</dt>
+      <dd>字号、字重、颜色、缩进、底色这几个量的组合。下文说「降一级」就是指这五项里降一档。</dd>
+    </dl>
+  </div>
+
+  <!-- ============ 现状 ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">现在的样子</span>
+      <h2>三段内容和答案一个模样</h2>
+    </div>
+    <p class="desc">
+      过程、工具、答案全部 14.5px / <code>fg-1</code> / 行高 1.9。唯一的区别是答案后面多一个胶囊，
+      但胶囊是<strong>轮末</strong>才出现的，读的时候人还没走到那里。
+    </p>
+    <div class="frame">
+      <div class="strip">
+        <div class="ubub">把记忆索引改成增量更新</div>
+        <div class="turn-body">
+          <p class="now-proc">我先读一下现有实现，确认索引写入的路径。</p>
+          <div class="proc-tools">
+            <div class="tool"><span class="mark">✓</span><span class="name">read</span><span class="cmd">src/memory/index.ts</span></div>
+          </div>
+          <p class="now-proc">全量重建，12k 条要 1.8s。改成按 updatedAt 游标增量。</p>
+          <div class="proc-tools">
+            <div class="tool"><span class="mark">✓</span><span class="name">edit</span><span class="cmd">src/memory/index.ts</span></div>
+            <div class="tool"><span class="mark">✓</span><span class="name">bash</span><span class="cmd">npm test -- --run</span></div>
+          </div>
+          <p class="now-ans">改完了。索引写入从全量重建改成按游标增量：12k 条从 1.8s 降到 120ms。迁移脚本按 updatedAt 重算游标、删掉旧索引、写版本号三段做，任一段失败整轮重来。</p>
+          <div class="meta">
+            <span class="copy">⧉ 复制</span><span class="sep"></span>
+            <span class="num">1.2k out · 44.1k cache · 1m12s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>问题</b>：答案没有落点。读者扫完三段才知道哪段是结论，长轮次里这个过程会拖到几十行。
+    </div>
+  </section>
+
+  <!-- ============ A ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">A</span>
+      <h2>只降字号和颜色：过程 13px / fg-3，答案不动</h2>
+    </div>
+    <p class="desc">
+      改动最小的一档。过程从 <code>14.5px / fg-1</code> 降到 <code>13px / fg-3</code>、行高 1.9 → 1.7，
+      答案保持正文原样。<b>靠字号和明度做出「注释 vs 正文」的落差</b>，结构一点不动。
+    </p>
+    <div class="frame">
+      <div class="strip">
+        <div class="ubub">把记忆索引改成增量更新</div>
+        <div class="turn-body">
+          <p class="a-proc">我先读一下现有实现，确认索引写入的路径。</p>
+          <div class="proc-tools">
+            <div class="tool"><span class="mark">✓</span><span class="name">read</span><span class="cmd">src/memory/index.ts</span></div>
+          </div>
+          <p class="a-proc">全量重建，12k 条要 1.8s。改成按 updatedAt 游标增量。</p>
+          <div class="proc-tools">
+            <div class="tool"><span class="mark">✓</span><span class="name">edit</span><span class="cmd">src/memory/index.ts</span></div>
+            <div class="tool"><span class="mark">✓</span><span class="name">bash</span><span class="cmd">npm test -- --run</span></div>
+          </div>
+          <p class="a-ans">改完了。索引写入从全量重建改成按游标增量：12k 条从 1.8s 降到 120ms。迁移脚本按 updatedAt 重算游标、删掉旧索引、写版本号三段做，任一段失败整轮重来。</p>
+          <div class="meta">
+            <span class="copy">⧉ 复制</span><span class="sep"></span>
+            <span class="num">1.2k out · 44.1k cache · 1m12s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state-item">
+        <div class="label">过程字号</div>
+        <div class="demo mono">14.5px → 13px（−10%）</div>
+      </div>
+      <div class="state-item">
+        <div class="label">过程颜色</div>
+        <div class="demo mono">fg-1 → fg-3（对比度约 1.9:1）</div>
+      </div>
+      <div class="state-item">
+        <div class="label">答案</div>
+        <div class="demo mono">14.5px / fg-1 / 行高 1.9（不变）</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：改两个 class，零新交互、零新状态，亮暗都自动成立。<br>
+      <b>代价</b>：<span class="warn">1.5px 的落差在长文里很弱</span>。过程本身还是一大段连续文字，
+      眼睛仍会先读到它 —— 只是读得慢一点。<code>fg-3</code> 在暗色下（<code>#7D7D76</code>）压得比较狠，
+      过程可能变得费劲。
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">B</span>
+      <h2>过程收进一条摘要行：默认折起，点开才看</h2>
+    </div>
+    <p class="desc">
+      过程和工具一起收进一条 <code>过程 · 4 步 · 12.4s</code> 的折叠行，默认收起。
+      <b>答案独占正文区</b>，页面上第一眼只有结论。点摘要行还原完整过程（就是现在的样子）。
+    </p>
+    <div class="frame">
+      <div class="strip">
+        <div class="ubub">把记忆索引改成增量更新</div>
+        <div class="turn-body">
+          <div class="fold">
+            <button class="fold-btn" data-fold="b1" aria-expanded="false">
+              <span class="tri">▸</span><span class="dot"></span>
+              <span class="label">过程</span>
+              <span class="stat">4 步 · 12.4s</span>
+            </button>
+            <div class="fold-panel" id="b1" hidden>
+              <p>我先读一下现有实现，确认索引写入的路径。</p>
+              <div class="proc-tools">
+                <div class="tool"><span class="mark">✓</span><span class="name">read</span><span class="cmd">src/memory/index.ts</span></div>
+              </div>
+              <p>全量重建，12k 条要 1.8s。改成按 updatedAt 游标增量。</p>
+              <div class="proc-tools">
+                <div class="tool"><span class="mark">✓</span><span class="name">edit</span><span class="cmd">src/memory/index.ts</span></div>
+                <div class="tool"><span class="mark">✓</span><span class="name">bash</span><span class="cmd">npm test -- --run</span></div>
+              </div>
+            </div>
+          </div>
+          <p class="b-ans">改完了。索引写入从全量重建改成按游标增量：12k 条从 1.8s 降到 120ms。迁移脚本按 updatedAt 重算游标、删掉旧索引、写版本号三段做，任一段失败整轮重来。</p>
+          <div class="meta">
+            <span class="copy">⧉ 复制</span><span class="sep"></span>
+            <span class="num">1.2k out · 44.1k cache · 1m12s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state-item">
+        <div class="label">收起（默认）</div>
+        <div class="demo mono">▸ 过程 · 4 步 · 12.4s</div>
+      </div>
+      <div class="state-item">
+        <div class="label">展开</div>
+        <div class="demo">点一下还原完整过程与工具行</div>
+      </div>
+      <div class="state-item">
+        <div class="label">生成中</div>
+        <div class="demo mono">◐ 过程 · 3 步 · 8.1s（强制展开、不可收）</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：答案的突出度最高，长轮次里页面最干净。滚动扫读时基本只看答案。
+      <br>
+      <b>代价</b>：<span class="warn">默认看不到过程</span>。盯工具输出的用法（「它到底跑了什么命令」）
+      要多点一次；跑的时候还得强制展开，否则实时输出看不见。
+      另外要新增一份「这一轮有哪些步」的统计，折叠状态也得存。
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag rec">C · 推荐</span>
+      <h2>装订线：过程缩进 + 左侧细线，答案顶格</h2>
+    </div>
+    <p class="desc">
+      过程整块缩进 12px、左边压一条 2px 的竖线、字号降到 13px；
+      <b>答案顶格、无任何装饰</b>。靠位置和结构分主次，颜色只用 <code>fg-2</code>，不压到看不清。
+    </p>
+    <div class="frame">
+      <div class="strip">
+        <div class="ubub">把记忆索引改成增量更新</div>
+        <div class="turn-body">
+          <div class="c-proc">
+            <p>我先读一下现有实现，确认索引写入的路径。</p>
+            <div class="proc-tools">
+              <div class="tool"><span class="mark">✓</span><span class="name">read</span><span class="cmd">src/memory/index.ts</span></div>
+            </div>
+            <p>全量重建，12k 条要 1.8s。改成按 updatedAt 游标增量。</p>
+            <div class="proc-tools">
+              <div class="tool"><span class="mark">✓</span><span class="name">edit</span><span class="cmd">src/memory/index.ts</span></div>
+              <div class="tool"><span class="mark">✓</span><span class="name">bash</span><span class="cmd">npm test -- --run</span></div>
+            </div>
+          </div>
+          <p class="c-ans">改完了。索引写入从全量重建改成按游标增量：12k 条从 1.8s 降到 120ms。迁移脚本按 updatedAt 重算游标、删掉旧索引、写版本号三段做，任一段失败整轮重来。</p>
+          <div class="meta">
+            <span class="copy">⧉ 复制</span><span class="sep"></span>
+            <span class="num">1.2k out · 44.1k cache · 1m12s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state-item">
+        <div class="label">过程</div>
+        <div class="demo mono">缩进 12px · 左线 2px · 13px / fg-2</div>
+      </div>
+      <div class="state-item">
+        <div class="label">答案</div>
+        <div class="demo mono">顶格 · 14.5px / fg-1 · 无装饰</div>
+      </div>
+      <div class="state-item">
+        <div class="label">窄列（主区 160px）</div>
+        <div class="demo">缩进跟着收到 8px，竖线保留</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：过程和答案形成两个<strong>结构层</strong>，不是靠把字调淡。过程仍然完整可读，
+      盯工具的用法不受影响。答案顶格又无标记，视觉上自然是最重的一块 —— 元信息行也跟着落在答案下面，
+      归属清楚。<br>
+      <b>代价</b>：占 14px 横向空间，主区被压到 160px 时要跟着收（缩进降到 8px）。
+      缩进规则要跟 markdown 的列表、代码块共存，得确认嵌套后不乱。
+    </div>
+  </section>
+
+  <!-- ============ D ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">D</span>
+      <h2>底色分带：过程铺在一块浅灰上</h2>
+    </div>
+    <p class="desc">
+      过程整块放进 <code>sunken</code> 底色的圆角块，<b>靠底色划分区域</b>；答案留在 <code>surface</code> 上。
+      和工具输出现在的处理方式一致（工具输出本来就在浅底块里）。
+    </p>
+    <div class="frame">
+      <div class="strip">
+        <div class="ubub">把记忆索引改成增量更新</div>
+        <div class="turn-body">
+          <div class="d-proc">
+            <p>我先读一下现有实现，确认索引写入的路径。</p>
+            <div class="proc-tools">
+              <div class="tool"><span class="mark">✓</span><span class="name">read</span><span class="cmd">src/memory/index.ts</span></div>
+            </div>
+            <p>全量重建，12k 条要 1.8s。改成按 updatedAt 游标增量。</p>
+            <div class="proc-tools">
+              <div class="tool"><span class="mark">✓</span><span class="name">edit</span><span class="cmd">src/memory/index.ts</span></div>
+              <div class="tool"><span class="mark">✓</span><span class="name">bash</span><span class="cmd">npm test -- --run</span></div>
+            </div>
+          </div>
+          <p class="d-ans">改完了。索引写入从全量重建改成按游标增量：12k 条从 1.8s 降到 120ms。迁移脚本按 updatedAt 重算游标、删掉旧索引、写版本号三段做，任一段失败整轮重来。</p>
+          <div class="meta">
+            <span class="copy">⧉ 复制</span><span class="sep"></span>
+            <span class="num">1.2k out · 44.1k cache · 1m12s</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="states">
+      <div class="state-item">
+        <div class="label">过程</div>
+        <div class="demo mono">sunken 底 · r-md · 内边距 12/14</div>
+      </div>
+      <div class="state-item">
+        <div class="label">答案</div>
+        <div class="demo mono">surface 底 · 无边框</div>
+      </div>
+      <div class="state-item">
+        <div class="label">亮暗</div>
+        <div class="demo mono">sunken 与 surface 差 1.06:1（亮）</div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：区域边界最硬，一眼分两区。和工具输出块的处理方式天然一致。
+      <br>
+      <b>代价</b>：<span class="warn">长会话里每轮都挂一块灰底</span>，页面会碎 —— 和之前元信息行胶囊被否掉的理由一样。
+      暗色下 <code>sunken</code>(<code>#2A2A29</code>) 与 <code>surface</code>(<code>#1C1C1B</code>) 只差 1.06:1，
+      边界要靠圆角才看得出来。
+    </div>
+  </section>
+
+  <!-- ============ 对比 ============ -->
+  <h2 class="sec">四个方案放在一起比</h2>
+  <p class="secled">按「答案有多容易扫到」「过程是否还完整可读」「长轮次里的表现」「要动多少东西」四轴排。</p>
+  <table class="spec">
+    <thead>
+      <tr><th>方案</th><th>答案突出度</th><th>过程可读性</th><th>长轮次</th><th>改动量</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>A 字号分级</td><td class="low">弱（1.5px 落差）</td><td class="good">好</td><td class="low">会变淡但仍旧长</td><td>小</td></tr>
+      <tr><td>B 过程收纳</td><td class="good">最强</td><td class="mid">要点开</td><td class="good">最好</td><td>中</td></tr>
+      <tr><td>C 装订线</td><td class="good">强（结构分层）</td><td class="good">好</td><td class="good">好</td><td>小</td></tr>
+      <tr><td>D 底色分带</td><td class="mid">中</td><td class="good">好</td><td class="low">页面变碎</td><td>小</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rec-card">
+    <h3>推荐：C 的骨架 + A 的字号</h3>
+    <p>
+      过程缩进 12px、左侧 2px 竖线、字号 13px、颜色 <code>fg-2</code>、行高 1.7；
+      答案顶格、14.5px、<code>fg-1</code>、行高 1.9、不加任何装饰。
+      也就是把 C 和 A 叠起来用 —— 结构给主次，字号补足落差。
+    </p>
+    <p>
+      不选 B 作为默认形态的理由：它把过程藏起来，改动最大，还要新增折叠状态与「这一轮几步」的统计。
+      但它确实是长轮次的最优解，<b>建议留作第二期的一个开关</b>（「过程默认折起」），
+      而不是这一轮的默认行为。
+    </p>
+    <p>
+      不选 D 的理由和上次否掉元信息胶囊一样：每轮挂一块灰底，长会话里页面会碎。
+      而且暗色下那两级底色只差 1.06:1，边界本来就要靠圆角撑，收益不划算。
+    </p>
+  </div>
+
+  <!-- ============ 不做 ============ -->
+  <h2 class="sec">这一轮不做</h2>
+  <table class="spec">
+    <thead><tr><th>项</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td>答案加边框 / 卡片 / 底色</td><td>会给正文再加一层容器，长答案里滚动成本变高；靠「过程弱化」就能让答案显出来，不必再加重答案。</td></tr>
+      <tr><td>过程默认折起</td><td>就是上面的 B，留作二期开关。这一轮先不改变「默认看得到过程」这个前提。</td></tr>
+      <tr><td>按内容判断哪句是结论</td><td>判断规则已经定了：一轮最后一段非空正文。不做语义分析，那条路不可靠也不可测。</td></tr>
+      <tr><td>thinking / 思考块显示</td><td>它不是这一轮的内容流，属于另一件事。</td></tr>
+      <tr><td>改终端模式</td><td>普通模式优先（D14）。终端那档的排版这次不动。</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============ 验收 ============ -->
+  <h2 class="sec">怎么算做对了</h2>
+  <p class="secled">拿一段真实会话（至少三轮、每轮五段以上过程）逐条看。</p>
+  <table class="spec">
+    <thead><tr><th>#</th><th>标准</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>每一轮里，最终答案能在不看完全文的情况下被认出来 —— 眼睛先落在答案上。</td></tr>
+      <tr><td>2</td><td>过程仍然完整可读，不需要点任何东西就能看到工具跑了什么。</td></tr>
+      <tr><td>3</td><td>元信息行（复制 / token / 用时）在视觉上属于答案，不属于过程。</td></tr>
+      <tr><td>4</td><td>主区被压到 160px 时不出现横向滚动条，缩进与竖线跟着收。</td></tr>
+      <tr><td>5</td><td>亮暗两套主题下，过程与答案的落差都成立（暗色里过程不能糊成一片）。</td></tr>
+      <tr><td>6</td><td>过程里的列表、代码块、表格在缩进之后不错位。</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.getElementById('theme').addEventListener('click', () => {
+    const root = document.documentElement
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'
+  })
+
+  for (const btn of document.querySelectorAll('.fold-btn')) {
+    btn.addEventListener('click', () => {
+      const panel = document.getElementById(btn.dataset.fold)
+      const open = panel.hidden
+      panel.hidden = !open
+      btn.setAttribute('aria-expanded', String(open))
+      btn.querySelector('.tri').textContent = open ? '▾' : '▸'
+    })
+  }
+</script>
+</body>
+</html>

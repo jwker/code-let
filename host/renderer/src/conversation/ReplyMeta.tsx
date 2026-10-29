@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { host } from '../host'
 import { IconCheck, IconCopy } from '../shell/icons'
-import type { TurnMeta } from './turnMeta'
+import type { TurnSummary } from './turnMeta'
 import { formatDuration, formatTokens } from './usageFormat'
 
 /** 复制成功后回到「复制」的间隔 */
@@ -15,7 +15,7 @@ const COPIED_MS = 1500
  * 复制的是**这一轮的最终答案**，过程里的叙述不进去 —— 用户要的是
  * 「AI 最后说了什么」，不是「它一路念叨了什么」。
  */
-export function ReplyMeta({ meta, streaming }: { meta: TurnMeta; streaming: boolean }) {
+export function ReplyMeta({ summary, streaming }: { summary: TurnSummary; streaming: boolean }) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -27,9 +27,9 @@ export function ReplyMeta({ meta, streaming }: { meta: TurnMeta; streaming: bool
 
   async function copy(): Promise<void> {
     // 还在生成时答案不完整，不让复制 —— 否则拿到半截
-    if (streaming || !meta.answer) return
+    if (streaming || !summary.answer) return
     try {
-      await host.copyText(meta.answer)
+      await host.copyText(summary.answer)
     } catch {
       // 剪贴板写不进去（没焦点之类）—— 不当作错误，UI 照旧
       return
@@ -55,14 +55,16 @@ export function ReplyMeta({ meta, streaming }: { meta: TurnMeta; streaming: bool
         {copied ? <IconCheck /> : <IconCopy />}
         {copied ? '已复制' : '复制'}
       </button>
-      <Stats meta={meta} streaming={streaming} />
+      <Stats summary={summary} streaming={streaming} />
     </div>
   )
 }
 
 /** 胶囊右边那行字：生成中是走过的耗时，结束后是 out · cache · 耗时 */
-function Stats({ meta, streaming }: { meta: TurnMeta; streaming: boolean }) {
-  const { stats } = meta
+function Stats({ summary, streaming }: { summary: TurnSummary; streaming: boolean }) {
+  const stats = summary.stats
+  // 没有计量数据（老会话没存 usage）—— 胶囊里只留复制
+  if (!stats) return null
 
   // 耗时还没到 —— 这一轮还在跑，只看走过的秒
   if (stats.durationMs === undefined && streaming) return <Elapsed stats={stats} />
@@ -84,7 +86,7 @@ function Stats({ meta, streaming }: { meta: TurnMeta; streaming: boolean }) {
 }
 
 /** 生成中的耗时：按秒走，不按毫秒跳 */
-function Elapsed({ stats }: { stats: TurnMeta['stats'] }) {
+function Elapsed({ stats }: { stats: NonNullable<TurnSummary['stats']> }) {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
