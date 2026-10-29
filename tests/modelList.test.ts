@@ -4,8 +4,7 @@ import {
   filterModels,
   formatContext,
   formatPrice,
-  groupByProvider,
-  shortName
+  groupByProvider
 } from '../host/renderer/src/shell/modelList'
 
 /**
@@ -70,12 +69,6 @@ describe('搜索', () => {
 })
 
 describe('显示格式', () => {
-  it('短名只留最后一段，太长就省略', () => {
-    expect(shortName('MiniMax-M3.1-Flash')).toBe('MiniMax-M3.1-Flash')
-    expect(shortName('anthropic/claude-sonnet')).toBe('claude-sonnet')
-    expect(shortName('a'.repeat(40))).toBe(`${'a'.repeat(21)}…`)
-  })
-
   it('上下文长度走 k / M', () => {
     expect(formatContext(200_000)).toBe('200k')
     expect(formatContext(1_000_000)).toBe('1.0M')

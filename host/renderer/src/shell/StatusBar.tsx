@@ -1,6 +1,5 @@
 import { isPreview } from '../host'
 import { useStore } from '../store'
-import { shortName } from './modelList'
 
 const MODE_LABEL = { normal: '普通', terminal: '终端', html: 'HTML' } as const
 
@@ -39,10 +38,10 @@ export function StatusBar() {
             openPicker({ left: rect.left, bottom: window.innerHeight - rect.top + 8 })
           }}
           title={model ? `${model.provider}/${model.id}` : '未选模型'}
-          className="flex min-w-0 max-w-[220px] items-center gap-1.5 rounded px-1.5 py-0.5 font-mono text-fg-2 transition-colors hover:bg-sunken hover:text-fg-1"
+          className="flex min-w-0 max-w-[300px] items-center gap-1.5 rounded px-1.5 py-0.5 font-mono text-fg-2 transition-colors hover:bg-sunken hover:text-fg-1"
         >
           <span className="h-1.5 w-1.5 flex-none rounded-full bg-ok" />
-          <span className="min-w-0 truncate">{model ? shortName(model.name) : '未选模型'}</span>
+          <span className="min-w-0 truncate">{model ? model.name : '未选模型'}</span>
         </button>
         <span>{MODE_LABEL[mode]}</span>
         <span className="font-mono">events {eventCount}</span>
