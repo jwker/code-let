@@ -14,7 +14,9 @@ export interface TurnSummary {
   /** 最终答案在这一轮里的下标 —— 渲染层据此切成「过程 / 答案」 */
   answerIndex: number
   /** 过程里的工具调用次数 */
-  steps: number
+  toolCalls: number
+  /** 过程里有多少段叙述（有正文的助手消息）—— 展开后大概会看到多少块文字 */
+  segments: number
   /** 过程耗时：最后一次过程请求说完 − 第一次请求发出 */
   processDurationMs?: number
   /** 整轮聚合的计量（老会话可能没有 usage，那就没有这一项） */
@@ -48,16 +50,19 @@ export function summarizeTurn(body: readonly StreamItem[]): TurnSummary | undefi
   if (answerItem.kind !== 'message') return undefined
 
   // 过程：答案之前的部分
-  let steps = 0
+  let toolCalls = 0
+  let segments = 0
   let processStart: number | undefined
   let processEnd: number | undefined
   for (let i = 0; i < answerIndex; i += 1) {
     const item = body[i]
     if (item.kind === 'tool') {
-      steps += 1
+      toolCalls += 1
       continue
     }
-    if (item.kind !== 'message' || item.role !== 'assistant' || !item.stats) continue
+    if (item.kind !== 'message' || item.role !== 'assistant') continue
+    if (item.text.trim().length > 0) segments += 1
+    if (!item.stats) continue
     if (processStart === undefined && item.stats.startedAt !== undefined) {
       processStart = item.stats.startedAt
     }
@@ -69,7 +74,8 @@ export function summarizeTurn(body: readonly StreamItem[]): TurnSummary | undefi
   const summary: TurnSummary = {
     answer: answerItem.text,
     answerIndex,
-    steps
+    toolCalls,
+    segments
   }
 
   if (processStart !== undefined && processEnd !== undefined) {

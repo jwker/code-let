@@ -72,7 +72,19 @@ describe('过程的统计', () => {
       say('最终答案', { output: 1, cacheRead: 1 }),
       tool('t-after')
     ])
-    expect(summary?.steps).toBe(3)
+    expect(summary?.toolCalls).toBe(3)
+    // 过程里两段叙述（答案不算）
+    expect(summary?.segments).toBe(2)
+  })
+
+  it('段数只数过程里真正有正文的，空正文不算', () => {
+    const summary = summarizeTurn([
+      say('过程一', { output: 1, cacheRead: 1 }),
+      say('', { output: 1, cacheRead: 1 }),
+      say('过程二', { output: 1, cacheRead: 1 }),
+      say('最终答案', { output: 1, cacheRead: 1 })
+    ])
+    expect(summary?.segments).toBe(2)
   })
 
   it('过程耗时是最后一次过程请求说完 − 第一次请求发出', () => {
@@ -88,8 +100,8 @@ describe('过程的统计', () => {
   it('没有过程时就没有工具次数和过程耗时', () => {
     const summary = summarizeTurn([say('只有答案', { output: 1, cacheRead: 1, durationMs: 900, startedAt: 5000 })])
     expect(summary?.answerIndex).toBe(0)
-    expect(summary?.steps).toBe(0)
-    
+    expect(summary?.toolCalls).toBe(0)
+    expect(summary?.segments).toBe(0)
     expect(summary?.processDurationMs).toBeUndefined()
   })
 })
