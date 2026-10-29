@@ -16,12 +16,41 @@ import { entriesToItems } from '@contract/stream'
 export type PiEventListener = (event: { type: string; data: unknown }) => void
 
 /**
+ * 宿主状态用到的运行时能力（PLAN.md D7）。
+ *
+ * 单独拎出来是为了让宿主状态能拿假实现跑测试 ——
+ * 真实运行时要模型、要凭据，测不动。
+ */
+export interface PiRuntimePort {
+  /** runtime 起来了吗 */
+  readonly ready: boolean
+  /** 当前 runtime 所在的目录 */
+  readonly cwd: string | null
+  /** 当前会话的 id */
+  readonly currentSessionId: string | null
+  /** 订阅会话流事件，返回退订函数 */
+  onEvent(listener: PiEventListener): () => void
+  /** 在某个目录上起（或重起）runtime */
+  start(cwd: string, options?: { resume?: boolean }): Promise<void>
+  /** 在当前目录开一个新会话 */
+  newSession(): Promise<void>
+  /** 切到另一个会话 */
+  switchSession(sessionPath: string): Promise<void>
+  /** 往当前会话发一条用户消息 */
+  prompt(text: string): Promise<void>
+  /** 当前会话已经说过的话 */
+  readEntries(): StreamItem[]
+  /** 收摊 */
+  stop(): Promise<void>
+}
+
+/**
  * Pi 运行时的宿主封装。
  *
  * 只做三件事：把 runtime 起在某个 cwd 上、把会话流事件转出去、把会话列表读出来。
  * Pi 自己的 API 一律不外泄到渲染进程（D5 / 边界 1）。
  */
-export class PiRuntime {
+export class PiRuntime implements PiRuntimePort {
   /** 扩展与宿主之间的唯一通道（PLAN.md D6） */
   readonly bus: EventBus = createEventBus()
 

@@ -1,7 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { normalize } from 'node:path'
 import type { ConversationInfo, HostSnapshot, ProjectInfo, SessionState, StreamItem } from '@contract/index'
-import { PiRuntime } from './pi/runtime'
+import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
+import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
 
 /**
@@ -10,15 +11,22 @@ import { ProjectStore } from './projects'
  * 渲染进程只是它的投影：状态变化从这里推快照，不从渲染进程回写。
  */
 export class HostState extends EventEmitter {
-  readonly pi = new PiRuntime()
+  readonly pi: PiRuntimePort
   private readonly store: ProjectStore
   private currentProject: ProjectInfo | null = null
   private conversations: ConversationInfo[] = []
   private session: SessionState = { ready: false, cwd: null, sessionId: null, error: null }
+  /** 去抖刷新：把一轮里的多次刷新合成一次 */
+  private readonly conversationsRefresh: DebouncedRefresh
+  /** 刷新的序号：只认最后一次发起的 */
+  private refreshToken = 0
 
-  constructor(store?: ProjectStore) {
+  /** 运行时和项目存储都能塞进来 —— 真跑要用模型，测不动 */
+  constructor(store?: ProjectStore, pi?: PiRuntimePort) {
     super()
     this.store = store ?? new ProjectStore()
+    this.pi = pi ?? new PiRuntime()
+    this.conversationsRefresh = new DebouncedRefresh(() => this.refreshConversations())
   }
 
   // ---------------------------------------------------------------------
@@ -46,9 +54,9 @@ export class HostState extends EventEmitter {
     // 会话流事件：转发给渲染进程
     this.pi.onEvent((event) => {
       this.emit('session-event', event)
-      // 会话有新增/改名时，对话列表要跟着变
-      if (event.type === 'entry_appended' || event.type === 'session_info_changed') {
-        void this.refreshConversations()
+      // 会话文件变了，对话列表要跟着变
+      if (affectsConversationList(event)) {
+        this.conversationsRefresh.schedule()
       }
     })
 
@@ -105,6 +113,12 @@ export class HostState extends EventEmitter {
   // 对话
   // ---------------------------------------------------------------------
 
+  /**
+   * 重读对话列表（磁盘上的会话文件是权威）。
+   *
+   * 刷新是异步的（要读盘），两次刷新可能交错返回。
+   * 只认最后一次发起的 —— 早发起的那次数据更旧，别让它盖掉新的。
+   */
   async refreshConversations(): Promise<void> {
     const cwd = this.currentProject?.path
     if (!cwd) {
@@ -112,9 +126,15 @@ export class HostState extends EventEmitter {
       this.push()
       return
     }
+    // 刷新是异步的（要读盘），两次刷新可能交错返回。
+    // 只认最后一次发起的 —— 早发起的那次数据更旧，别让它盖掉新的。
+    const token = ++this.refreshToken
     try {
-      this.conversations = await PiRuntime.listConversations(cwd)
+      const list = await PiRuntime.listConversations(cwd)
+      if (token !== this.refreshToken) return
+      this.conversations = list
     } catch {
+      if (token !== this.refreshToken) return
       this.conversations = []
     }
     this.push()
@@ -155,6 +175,7 @@ export class HostState extends EventEmitter {
   }
 
   async dispose(): Promise<void> {
+    this.conversationsRefresh.dispose()
     await this.pi.stop()
   }
 }
