@@ -219,7 +219,15 @@
   padding-left: 16px;
 }
 [data-platform='darwin'] .titlebar-left {
-  padding-left: 84px;
+  padding-left: var(--traffic-light-gutter);
+}
+/*
+ * 侧栏收起后主栏顶到导航轨右边，标题会钻到红绿灯底下。
+ * 把交通灯占的那一段让回来：轨道之外剩下的部分再加一个间距。
+ * 让左边距跟着收放一起过渡 —— 不然收起末尾标题会突然往右跳一格。
+ */
+[data-platform='darwin'] .shell.is-side-hidden .titlebar-content {
+  padding-left: calc(var(--traffic-light-gutter) - var(--rail-w) + var(--sp-3));
 }
 .titlebar-main {
   min-width: 0;
@@ -236,7 +244,9 @@
   min-width: 0;
   height: 100%;
   padding: 0 16px;
-  transition: padding-right 180ms ease;
+  transition:
+    padding-right 180ms ease,
+    padding-left 180ms ease;
 }
 /* 检视器收起后主栏铺到窗口右边，给右上角的开关按钮让出位置，别跟「…」挤在一起 */
 .shell.is-insp-hidden .titlebar-content {

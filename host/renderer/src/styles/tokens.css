@@ -34,6 +34,8 @@
   --content-max: 720px;
   --titlebar-h: 52px;
   --statusbar-h: 24px;
+  /* macOS 红绿灯占掉的那一段 —— 标题栏内容从这里起 */
+  --traffic-light-gutter: 84px;
 
   --dur: 160ms;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
