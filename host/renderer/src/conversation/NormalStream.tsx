@@ -103,8 +103,8 @@ function MessageRow({
 }) {
   if (item.role === 'user') {
     return (
-      <div className="flex flex-col items-end gap-2">
-        <div className="md-bubble max-w-[70%] rounded-[14px] bg-bubble px-3.5 py-2.5 text-[14.5px] leading-[1.65] text-fg-1">
+      <div className="flex flex-col items-start gap-2">
+        <div className="md-bubble is-inverse max-w-[70%] rounded-[14px] bg-bubble px-3.5 py-2.5 text-[14.5px] leading-[1.65] text-bubble-fg">
           <Markdown text={item.text} variant="normal" />
         </div>
         {tools.length > 0 && (
