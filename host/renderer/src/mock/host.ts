@@ -81,7 +81,41 @@ const FAKE_ITEMS: StreamItem[] = [
     kind: 'message',
     role: 'assistant',
     text: '已改为按 updatedAt 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。'
-  }
+  },
+  { kind: 'message', role: 'user', text: '再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。' },
+  {
+    kind: 'message',
+    role: 'assistant',
+    text:
+      '迁移脚本在 `scripts/migrate-index.ts`，做三件事：先按 `updatedAt` 重算一遍游标，' +
+      '再删掉 `legacy.ts` 留下的那份全量索引文件，最后写一个新版本号。\n\n' +
+      '**幂等**：跑第二遍时游标已经是最新的、旧索引文件也不在，直接跳过，输出 `nothing to do`。\n\n' +
+      '**失败回滚**：重算完成之前不动旧文件 —— 中途失败就还是旧索引在服务，不会出现两边都没有的空档。'
+  },
+  { kind: 'tool', callId: 'c5', name: 'bash', status: 'ok', label: 'node scripts/migrate-index.ts --dry-run' },
+  {
+    kind: 'message',
+    role: 'toolResult',
+    callId: 'c5',
+    text:
+      '\u001b[32m✓\u001b[0m reindexed 12480 memories\n' +
+      '  would remove ~/.codelet/index/legacy.bin (3.2 MB)\n' +
+      '\u001b[32m✓\u001b[0m validated manifest\n\n' +
+      '\u001b[1mdry run · nothing written\u001b[0m'
+  },
+  {
+    kind: 'message',
+    role: 'assistant',
+    text:
+      '试运行没问题，接着把正式迁移和清理也做完了。现在的顺序是这样：\n\n' +
+      '1. 读 `manifest.json`，确认版本号比当前代码要求的低\n' +
+      '2. 按 `updatedAt` 重算游标，写进 `cursor.json`（先写临时文件再 rename，断电也不会半截）\n' +
+      '3. 删 `legacy.bin`，删掉 `legacy.ts` 里的三条老接口\n' +
+      '4. 最后一步才把版本号推到 3，前一步失败就整轮重来\n\n' +
+      '顺手把 `tokens.ts` 的导出收成了两个：`tokens` 和 `themeVars`。原来散着的十几个具名导出没别的地方在用，' +
+      '清单我放在下面，命名和顺序都没动，只是从「到处 import 单个变量」变成「import 一个对象」。'
+  },
+  { kind: 'message', role: 'user', text: '好，那就这样。把改动整理成一条提交信息给我。' }
 ]
 
 /** 假回复：一段带格式的文字，一段段吐出来 */
