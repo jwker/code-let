@@ -27,6 +27,7 @@
   --color-fg-2: var(--fg-2);
   --color-fg-3: var(--fg-3);
   --color-bubble: var(--bubble);
+  --color-bubble-fg: var(--bubble-fg);
 
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
@@ -320,6 +321,38 @@
 .conv-normal {
   display: flex;
   flex-direction: column;
+}
+
+/* 反相气泡里的 markdown 要跟着换色，不然行内代码 / 加粗会在深底上糊掉 */
+.md-bubble.is-inverse .md,
+.md-bubble.is-inverse .md-h,
+.md-bubble.is-inverse .md strong {
+  color: inherit;
+}
+.md-bubble.is-inverse .md-code,
+.md-bubble.is-inverse .md-pre {
+  background: var(--bubble-code);
+  color: inherit;
+}
+.md-bubble.is-inverse .md-pre code {
+  color: inherit;
+}
+.md-bubble.is-inverse .md-quote {
+  border-left-color: var(--bubble-line);
+  color: inherit;
+  opacity: 0.75;
+}
+.md-bubble.is-inverse .md-rule,
+.md-bubble.is-inverse .md-table th,
+.md-bubble.is-inverse .md-table td {
+  border-color: var(--bubble-line);
+}
+.md-bubble.is-inverse .md-table td {
+  color: inherit;
+}
+.md-bubble.is-inverse .md-list li::marker {
+  color: inherit;
+  opacity: 0.6;
 }
 
 .conv-terminal {

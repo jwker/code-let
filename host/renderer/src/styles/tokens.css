@@ -57,7 +57,11 @@
   --accent-fg: #151513;
   --accent-wash: #2a2a2c;
   --accent-line: #343430;
-  --bubble: #272726;
+  /* 暗色里反相过来：浅底深字 */
+  --bubble: #f0f0ee;
+  --bubble-fg: #171715;
+  --bubble-line: rgba(0, 0, 0, 0.1);
+  --bubble-code: rgba(0, 0, 0, 0.07);
   --ok: #5bd69a;
   --ok-wash: #10261d;
   --ok-line: #1e4a37;
@@ -112,7 +116,11 @@
   --accent-fg: #ffffff;
   --accent-wash: #eeeef0;
   --accent-line: #dcdce1;
-  --bubble: #f4f4f5;
+  /* 用户气泡反相：深底浅字，是「我问了什么」的锚点 */
+  --bubble: #262625;
+  --bubble-fg: #fafaf9;
+  --bubble-line: rgba(255, 255, 255, 0.1);
+  --bubble-code: rgba(255, 255, 255, 0.14);
   --ok: #2e7d53;
   --ok-wash: #e8f5ee;
   --ok-line: #bfe3d0;

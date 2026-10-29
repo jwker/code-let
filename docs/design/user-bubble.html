@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>用户气泡 · 可辨识度优化方向</title>
+    <style>
+      :root {
+        --surface: #ffffff;
+        --raised: #ffffff;
+        --sunken: #f1f1f3;
+        --hairline: #ececee;
+        --hairline-strong: #dedee2;
+        --fg1: #1b1b19;
+        --fg2: #5c5c56;
+        --fg3: #94948c;
+        --wash: #eeeef0;
+        --accent: #1f1f1d;
+        --sh-md: 0 8px 24px -8px rgba(20, 20, 16, 0.1);
+        --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 48px 32px 96px;
+        background: #f7f7f8;
+        color: var(--fg1);
+        font:
+          14px/1.6 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei',
+          system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .page {
+        max-width: 900px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        margin: 0 0 6px;
+      }
+      .lead {
+        margin: 0 0 26px;
+        color: var(--fg2);
+        font-size: 13.5px;
+        max-width: 700px;
+      }
+
+      .note {
+        border: 1px solid var(--hairline);
+        border-radius: 12px;
+        background: #fff;
+        padding: 14px 16px;
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        color: var(--fg2);
+      }
+      .note h3 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--fg1);
+        letter-spacing: 0.02em;
+      }
+      .note ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .note li + li {
+        margin-top: 5px;
+      }
+      .note b {
+        color: var(--fg1);
+        font-weight: 600;
+      }
+      code {
+        font-family: var(--mono);
+        font-size: 11.5px;
+        background: var(--sunken);
+        padding: 1px 5px;
+        border-radius: 5px;
+        color: var(--fg1);
+      }
+
+      /* ---------- 方案 ---------- */
+      .option {
+        margin: 34px 0 0;
+      }
+      .option-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0 0 4px;
+      }
+      .tag {
+        flex: none;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 2px 7px;
+        border-radius: 6px;
+        background: var(--wash);
+        color: var(--fg2);
+      }
+      .tag.rec {
+        background: var(--fg1);
+        color: #fff;
+      }
+      .option h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .desc {
+        margin: 0 0 12px;
+        font-size: 12.5px;
+        color: var(--fg2);
+        max-width: 720px;
+      }
+      .desc b {
+        color: var(--fg1);
+        font-weight: 600;
+      }
+      .verdict {
+        margin: 10px 0 0;
+        font-size: 12.5px;
+        color: var(--fg2);
+        max-width: 720px;
+      }
+      .verdict b {
+        color: var(--fg1);
+      }
+
+      /* ---------- 1:1 画面（主区 760 宽，内容列 712） ---------- */
+      .frame {
+        width: 760px;
+        border: 1px solid var(--hairline-strong);
+        border-radius: 10px;
+        background: var(--surface);
+        overflow: hidden;
+        box-shadow: 0 10px 26px -22px rgba(20, 20, 16, 0.5);
+      }
+      .strip {
+        position: relative;
+        padding: 26px 24px 26px 24px;
+        font-size: 14.5px;
+        color: var(--fg1);
+      }
+      .a { /* 助手正文 */
+        margin: 0 0 22px;
+        line-height: 1.9;
+      }
+      .a.tight {
+        margin-bottom: 14px;
+      }
+      .a code {
+        background: #f4f4f6;
+      }
+      .tool {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin: 10px 0 22px;
+        font-size: 12.5px;
+        color: var(--fg3);
+      }
+      .tool code {
+        background: transparent;
+        padding: 0;
+        font-size: 12px;
+        color: var(--fg2);
+      }
+
+      /* 现在的样子 */
+      .bubble-now,
+      .bubble-a {
+        width: 70%;
+        margin-left: auto;
+        border-radius: 14px;
+        padding: 10px 14px;
+        line-height: 1.65;
+      }
+      .bubble-now {
+        background: #f4f4f5;
+      }
+      .bubble-a {
+        background: #e6e6ea;
+        box-shadow: inset 0 0 0 1px #dcdce1;
+      }
+
+      /* B：深色实心 */
+      .bubble-b {
+        width: 70%;
+        margin-left: auto;
+        border-radius: 14px;
+        padding: 10px 14px;
+        line-height: 1.65;
+        background: #26262a;
+        color: #fafaf9;
+      }
+      .bubble-b code {
+        background: #3a3a3f;
+        color: #f2f2f0;
+      }
+
+      /* C：装订线刻度 —— 内容整体右移 44px，刻度在左槽 */
+      .strip.gutter {
+        padding-left: 68px;
+      }
+      .tick {
+        position: absolute;
+        left: 24px;
+        width: 3px;
+        height: 20px;
+        border-radius: 2px;
+        background: #b9b9c2;
+      }
+      .bubble-c {
+        width: 70%;
+        margin-left: auto;
+        border-radius: 14px;
+        padding: 10px 14px;
+        line-height: 1.65;
+        background: #eeeeeF;
+      }
+
+      /* D：全宽带 */
+      .band {
+        margin: 0 0 26px;
+        padding: 13px 16px;
+        border-radius: 12px;
+        background: #f2f2f5;
+        border-left: 2px solid #c9c9d1;
+        line-height: 1.75;
+      }
+      .band-label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 10.5px;
+        letter-spacing: 0.08em;
+        color: var(--fg3);
+      }
+
+      /* E：右侧刻度轨 */
+      .strip.rail {
+        padding-right: 40px;
+      }
+      .rail-edge {
+        position: absolute;
+        right: 12px;
+        top: 26px;
+        bottom: 26px;
+        width: 3px;
+        border-radius: 2px;
+        background: #ededeF;
+      }
+      .rail-tick {
+        position: absolute;
+        left: -5px;
+        width: 13px;
+        height: 2px;
+        border-radius: 1px;
+        background: #9c9ca6;
+      }
+      .rail-thumb {
+        position: absolute;
+        left: -3px;
+        width: 9px;
+        height: 40px;
+        border-radius: 5px;
+        background: #d3d3da;
+        box-shadow: 0 0 0 1px #c9c9d1;
+      }
+
+      /* ---------- 表格 ---------- */
+      .spec {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+        margin: 10px 0 0;
+      }
+      .spec th,
+      .spec td {
+        text-align: left;
+        padding: 9px 10px;
+        border-bottom: 1px solid var(--hairline);
+        vertical-align: top;
+      }
+      .spec thead th {
+        color: var(--fg3);
+        font-weight: 500;
+        font-size: 11.5px;
+      }
+      .spec td b {
+        color: var(--fg1);
+      }
+      .spec td:first-child {
+        white-space: nowrap;
+        color: var(--fg1);
+        font-weight: 600;
+      }
+      .footer {
+        margin-top: 44px;
+        padding-top: 20px;
+        border-top: 1px solid var(--hairline-strong);
+      }
+      .footer h3 {
+        font-size: 14px;
+        margin: 0 0 8px;
+      }
+      .footer p {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: var(--fg2);
+      }
+      .footer b {
+        color: var(--fg1);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>用户气泡 · 可辨识度</h1>
+      <p class="lead">
+        现在用户那条是 <code>#F4F4F5</code> 的 70% 宽气泡，页面底色是纯白 —— 两者只差 11 个灰阶，
+        对比度 <b>1.10:1</b>。这不是「不够好看」，是<b>周边视觉根本抓不到</b>：快速滚动时眼睛只扫结构，
+        一块几乎和背景同色的圆角方块不构成结构。五个方向，按「加色 → 加结构 → 加导航」排。
+      </p>
+
+      <div class="note" style="border-color: #dedee2; background: #fbfbfb">
+        <h3>已定 · 最后只留了 B</h3>
+        <ul>
+          <li>气泡反相：亮色 <code>#262625</code> 底 / <code>#FAFAF9</code> 字，暗色反过来 <code>#F0F0EE</code> / <code>#171715</code>。</li>
+          <li>气泡里的行内代码 / 加粗 / 引用跟着换色（<code>--bubble-code</code> / <code>--bubble-line</code>），深底上不糊。</li>
+          <li><b>对齐改成左对齐</b>：用户轮和助行轮共用同一个左边缘，只靠气泡底色区分。</li>
+          <li>C 的装订线刻度<b>做出来又去掉了</b>：左对齐之后气泡本身就是锚点，左边再挂一道线属于重复标记。</li>
+        </ul>
+      </div>
+
+      <div class="note">
+        <h3>先摆事实</h3>
+        <ul>
+          <li>明度差：白 <code>255</code> vs 气泡 <code>244</code>，对比度 <b>1.10:1</b>；而 OS 里「能一眼看见」的浅色块通常在 <b>1.25–1.45</b>。</li>
+          <li>暗色是同一档：<code>#272726</code> 落在 <code>#1c1c1b</code> 上，<b>1.15:1</b> —— 换个主题不会自动变好。</li>
+          <li>形状：气泡只占宽度 70%，右对齐，左边缘是悬空的 —— 眼睛没有一条连续的线可以扫。</li>
+          <li>节奏：助手是一大片文档，用户是一条浅灰，交替出现 → 阅读时整页像「墙、石子、墙」。</li>
+          <li>所以单靠调颜色最多只能修到 1.3 左右，再深就像输入框 / 表单了。<b>要更显眼，得动结构。</b></li>
+        </ul>
+      </div>
+
+      <!-- ============ 0 · 现在 ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">现在的样子</span><h2>70% 宽、右对齐、几乎和背景同色</h2></div>
+        <div class="frame" style="margin-top: 10px">
+          <div class="strip">
+            <p class="a">
+              已改为按 <code>updatedAt</code> 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。
+            </p>
+            <div class="bubble-now">
+              再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。
+            </div>
+            <div class="tool">✓ <code>bash node scripts/migrate-index.ts --dry-run</code></div>
+            <p class="a">
+              试运行没问题，接着把正式迁移和清理也做完了。顺序是先读 manifest 确认版本号，
+              再按 updatedAt 重算游标，写进 cursor.json（先写临时文件再 rename，断电也不会半截），
+              最后才删 legacy.bin。前一步失败就整轮重来。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ A ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">A</span><h2>只加深底色 + 一道极淡的描边</h2></div>
+        <p class="desc">
+          改动最小的那一档：<code>--bubble</code> 从 <code>#F4F4F5</code> 换到 <code>#E6E6EA</code>（对比度 1.10 → 1.25），
+          再压一条 1px 的 <code>#DCDCE1</code> 内描边把边缘「锁住」。描边比再深一档底色更有效 ——
+          人眼找的是<b>边界</b>，不是面积。
+        </p>
+        <div class="frame">
+          <div class="strip">
+            <p class="a">
+              已改为按 <code>updatedAt</code> 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。
+            </p>
+            <div class="bubble-a">再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。</div>
+            <div class="tool">✓ <code>bash node scripts/migrate-index.ts --dry-run</code></div>
+            <p class="a">
+              试运行没问题，接着把正式迁移和清理也做完了。顺序是先读 manifest 确认版本号，
+              再按 updatedAt 重算游标，写进 cursor.json（先写临时文件再 rename，断电也不会半截），
+              最后才删 legacy.bin。前一步失败就整轮重来。
+            </p>
+          </div>
+        </div>
+        <p class="verdict">
+          <b>好处</b>：一个令牌的事，亮暗各调一次就完了，不会跟「极简」的调性打架。
+          <b>代价</b>：只是「更清楚了」，滚动扫读时的绝对寻址能力没变 —— 还是得盯着看。
+        </p>
+      </section>
+
+      <!-- ============ B ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">B</span><h2>反相：深色实心气泡</h2></div>
+        <p class="desc">
+          亮色下直接用 <code>#26262A</code> 黑底白字（对比度 1.10 → 15.6），等于把「我说的」做成整页最重的一块。
+          滚动时几乎不可能漏看。暗色下反过来用 <code>#F0F0EE</code> 浅底深字。
+        </p>
+        <div class="frame">
+          <div class="strip">
+            <p class="a">
+              已改为按 <code>updatedAt</code> 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。
+            </p>
+            <div class="bubble-b">
+              再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。
+            </div>
+            <div class="tool">✓ <code>bash node scripts/migrate-index.ts --dry-run</code></div>
+            <p class="a">
+              试运行没问题，接着把正式迁移和清理也做完了。顺序是先读 manifest 确认版本号，
+              再按 updatedAt 重算游标，写进 cursor.json（先写临时文件再 rename，断电也不会半截），
+              最后才删 legacy.bin。前一步失败就整轮重来。
+            </p>
+          </div>
+        </div>
+        <p class="verdict">
+          <b>好处</b>：最强的一档，一眼一个锚点，长对话里找「我问过什么」最快。
+          <b>代价</b>：用户的话变成了页面上最响的东西 —— 一屏三个黑块会压过正文；也和现在「助手是主体、用户是插话」的调性相反。
+        </p>
+      </section>
+
+      <!-- ============ C ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag rec">C · 推荐</span><h2>装订线刻度：靠结构，不靠颜色</h2></div>
+        <p class="desc">
+          内容列左边留一条 44px 的槽，每条用户消息在槽里给一道 <b>3×20px 的短竖线</b>，跟气泡顶部对齐。
+          气泡只略加深（<code>#EEEEF0</code>），主视觉交给那条线。滚动时沿左缘往下扫 ——
+          <b>有多少道刻度就是我说过多少次话</b>，是一条连续的、可以数的线。
+        </p>
+        <div class="frame">
+          <div class="strip gutter">
+            <p class="a">
+              已改为按 <code>updatedAt</code> 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。
+            </p>
+            <div class="tick" style="top: 108px"></div>
+            <div class="bubble-c">再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。</div>
+            <div class="tool">✓ <code>bash node scripts/migrate-index.ts --dry-run</code></div>
+            <p class="a">
+              试运行没问题，接着把正式迁移和清理也做完了。顺序是先读 manifest 确认版本号，
+              再按 updatedAt 重算游标，写进 cursor.json（先写临时文件再 rename，断电也不会半截），
+              最后才删 legacy.bin。前一步失败就整轮重来。
+            </p>
+          </div>
+        </div>
+        <p class="verdict">
+          <b>好处</b>：不动颜色也能「扫得到」，最贴合这个产品偏文档的读法；顺带把 1440 窗口左右各 50px 的留白用起来了。
+          <b>代价</b>：内容列要整体右移（或把刻度放到列外留白里，窄窗口再退回列内）；刻度只在滚动时才被注意到，静止看是纯装饰。
+        </p>
+      </section>
+
+      <!-- ============ D ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">D</span><h2>全宽分带：一条横线胜过一块圆角</h2></div>
+        <p class="desc">
+          不再做气泡，用户那一轮变成 <b>通栏的一条浅带</b>（712px 满宽、左对齐、左侧 2px 立线），
+          上方留白也比助手轮大一档。眼睛对<b>横向贯通</b>的色块远比对齐的圆角块敏感 ——
+          扫视时横带是「段落分隔线」，圆角块只是「一小片浅灰」。
+        </p>
+        <div class="frame">
+          <div class="strip">
+            <p class="a">
+              已改为按 <code>updatedAt</code> 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。
+            </p>
+            <div class="band">
+              <span class="band-label">你</span>
+              再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。
+            </div>
+            <div class="tool" style="margin-top: -12px">✓ <code>bash node scripts/migrate-index.ts --dry-run</code></div>
+            <p class="a">
+              试运行没问题，接着把正式迁移和清理也做完了。顺序是先读 manifest 确认版本号，
+              再按 updatedAt 重算游标，写进 cursor.json（先写临时文件再 rename，断电也不会半截），
+              最后才删 legacy.bin。前一步失败就整轮重来。
+            </p>
+          </div>
+        </div>
+        <p class="verdict">
+          <b>好处</b>：滚动时存在感最强的一档，长对话直接有了章节感；不用深色也能一眼找到。
+          <b>代价</b>：不再是聊天气泡了，用户的话和助手的话要重新建立区分（靠「你」标签 + 立线 + 通栏宽度）；用户短句会显得空。
+        </p>
+      </section>
+
+      <!-- ============ E ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">E</span><h2>右缘刻度轨：把「我发过什么」做成导航</h2></div>
+        <p class="desc">
+          颜色和结构都不动，另给主区右缘一条 3px 的细轨，<b>每条用户消息一个刻度</b>，再加一个表示当前视口的滑块。
+          点刻度直接跳到那一轮，悬停显示那句话的前 20 字。这是把「找不到」换成「可定位」——
+          滚动时不用眼睛找，位置感直接给出来。
+        </p>
+        <div class="frame">
+          <div class="strip rail">
+            <p class="a">
+              已改为按 <code>updatedAt</code> 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。
+            </p>
+            <div class="bubble-now">再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。</div>
+            <div class="tool">✓ <code>bash node scripts/migrate-index.ts --dry-run</code></div>
+            <p class="a">
+              试运行没问题，接着把正式迁移和清理也做完了。顺序是先读 manifest 确认版本号，
+              再按 updatedAt 重算游标，写进 cursor.json（先写临时文件再 rename，断电也不会半截），
+              最后才删 legacy.bin。前一步失败就整轮重来。
+            </p>
+            <div class="rail-edge">
+              <div class="rail-tick" style="top: 92px"></div>
+              <div class="rail-tick" style="top: 196px"></div>
+              <div class="rail-tick" style="top: 252px"></div>
+              <div class="rail-thumb" style="top: 40px"></div>
+            </div>
+          </div>
+        </div>
+        <p class="verdict">
+          <b>好处</b>：和上述任何一档都能叠加；对话越长收益越大，还能顺手变成「跳到我上一次提问」。
+          <b>代价</b>：代码量最大（要算每条用户消息在内容里的相对位置，还要跟随滚动更新滑块）；主区右边已经有检视器和滚动按钮，这条轨会再加一条竖线。
+        </p>
+      </section>
+
+      <div class="footer">
+        <h3>放在一起比</h3>
+        <table class="spec">
+          <thead>
+            <tr><th>方案</th><th>动了什么</th><th>滚动时的存在感</th><th>风险 / 代价</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>A 加深</td><td>颜色（1 个令牌 + 描边）</td><td>中</td><td>几乎无，但只能修到「看得清」</td></tr>
+            <tr><td>B 反相</td><td>颜色（大改）</td><td>最强</td><td>用户的话抢过正文，调性反了</td></tr>
+            <tr><td>C 装订线</td><td>结构（左槽 + 刻度）</td><td>强（可数）</td><td>内容列要右移或占用外侧留白</td></tr>
+            <tr><td>D 全宽带</td><td>结构（整轮换形）</td><td>强（有章节感）</td><td>不再是气泡，用户短句显空</td></tr>
+            <tr><td>E 刻度轨</td><td>交互（右缘导航）</td><td>取决于操作</td><td>代码最多，右边已有两样东西</td></tr>
+          </tbody>
+        </table>
+
+        <h3 style="margin-top: 24px">我的建议</h3>
+        <p>
+          <b>C + A</b>：装订线给「扫得到」，加深给「看得清」，两个都不吵。C 的刻度放<b>列外留白</b>里
+          （1440 窗口左右各 50px，够 24px 的槽），内容列一个字都不用挪；窗口窄了再把刻度收进列内、内容右移 16px。
+        </p>
+        <p>
+          如果你想要的是「长对话里快速定位我说过什么」而不只是「看得见」，那 <b>E</b> 更对 —
+          但它跟 C 的刻度是同一件事的两种落点，二选一就行，别叠。
+        </p>
+        <p>
+          <b>B / D</b> 我不推荐作为默认：B 会把页面重心从「答案」挪到「问题」；D 得先决定这个产品到底还叫不叫「聊天」。
+          不过 D 很适合做<b>「只看我的提问」</b>这种折叠视图，以后要的话可以拿它当另一个模式的底子。
+        </p>
+
+        <h3 style="margin-top: 24px">还能叠上去的小东西（都不改结构）</h3>
+        <p>
+          <b>⌘↑ / ⌘↓ 在提问之间跳</b> —— 跟 C 的刻度是一对：刻度负责「看得见」，快捷键负责「跳得到」。
+          不用记位置，一条命令回到上一条我说的话。
+        </p>
+        <p>
+          <b>悬停出工具条</b> —— 鼠标扫过用户气泡时右上角浮出「复制 / 重新发送」。它顺带给了气泡一个「被选中」的亮起，
+          等于给滚动中的眼睛一个诱饵；代价是多一层 hover 状态要管。
+        </p>
+        <p>
+          <b>轮次或时间戳</b> —— 气泡角上一行 11px 的 <code>14:32</code>，或刻度 hover 时显示「第 4 次提问」。
+          信息量很小，但给了一个可以报坐标的锚。
+        </p>
+        <p>
+          <b>滚动时的一闪</b> —— 用户轮划过视口中线时 200ms 轻微加深。想法漂亮，实际很容易变成「一直在闪」——
+          我倾向不做，除非你只想要它在快速滚动（速度超过阈值）时出现。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

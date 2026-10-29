@@ -56,7 +56,7 @@ const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
 
 /** 假的内容流：够看出普通模式长什么样 */
 const FAKE_ITEMS: StreamItem[] = [
-  { kind: 'message', role: 'user', text: '把记忆索引改成增量更新，顺便把 tokens.ts 的导出整理一下。' },
+  { kind: 'message', role: 'user', text: '把记忆索引改成增量更新，顺便把 `tokens.ts` 的导出整理一下。' },
   {
     kind: 'message',
     role: 'assistant',
