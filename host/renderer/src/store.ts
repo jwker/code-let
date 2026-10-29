@@ -1,6 +1,14 @@
 import { create } from 'zustand'
-import type { ConversationMode, HostSnapshot, NavEntry, SessionEvent, StreamItem } from '@contract/index'
+import type {
+  ConversationMode,
+  HostSnapshot,
+  ModelOption,
+  NavEntry,
+  SessionEvent,
+  StreamItem
+} from '@contract/index'
 import { applyEvent } from '@contract/stream'
+import { host } from './host'
 
 export type Theme = 'light' | 'dark'
 
@@ -8,7 +16,14 @@ const EMPTY_SNAPSHOT: HostSnapshot = {
   projects: [],
   currentProject: null,
   conversations: [],
-  session: { ready: false, cwd: null, sessionId: null, error: null }
+  session: {
+    ready: false,
+    cwd: null,
+    sessionId: null,
+    model: null,
+    modelFallback: null,
+    error: null
+  }
 }
 
 const THEME_KEY = 'codelet:theme'
@@ -110,6 +125,14 @@ interface RendererStore {
   inspectorOpen: boolean
   /** 左侧栏是否展开 */
   sidebarOpen: boolean
+  /** 模型选择器的锚点（null = 关着）。position: fixed 用，贴着触发它的控件上方 */
+  modelPickerAnchor: { left: number; bottom: number } | null
+  /** 已配置凭据的模型清单（打开选择器时拉一次） */
+  models: ModelOption[]
+  /** 模型清单拉取中的提示 */
+  modelsLoading: boolean
+  /** 模型清单拉取失败的原因 */
+  modelsError: string | null
 
   setSnapshot: (snapshot: HostSnapshot) => void
   setNav: (nav: NavEntry) => void
@@ -127,6 +150,14 @@ interface RendererStore {
   applySessionEvents: (events: SessionEvent[]) => void
   /** 展开 / 收起某个工具的输出 */
   setToolExpanded: (callId: string, expanded: boolean) => void
+  /** 打开模型选择器（锚点是触发控件的视口坐标） */
+  openModelPicker: (anchor: { left: number; bottom: number }) => void
+  /** 关掉模型选择器 */
+  closeModelPicker: () => void
+  /** 拉模型清单 */
+  loadModels: () => Promise<void>
+  /** 切当前会话的模型（persist 时同时设为新会话默认） */
+  selectModel: (provider: string, id: string, persist: boolean) => Promise<void>
 }
 
 export const useStore = create<RendererStore>((set, get) => ({
@@ -140,6 +171,10 @@ export const useStore = create<RendererStore>((set, get) => ({
   expandedTools: {},
   inspectorOpen: loadInspectorOpen(),
   sidebarOpen: loadSidebarOpen(),
+  modelPickerAnchor: null,
+  models: [],
+  modelsLoading: false,
+  modelsError: null,
 
   setSnapshot: (snapshot) => {
     const previousSessionId = get().snapshot.session.sessionId
@@ -210,5 +245,31 @@ export const useStore = create<RendererStore>((set, get) => ({
     const next = !get().sidebarOpen
     saveSidebarOpen(next)
     set({ sidebarOpen: next })
+  },
+
+  openModelPicker: (anchor) => {
+    set({ modelPickerAnchor: anchor })
+    void get().loadModels()
+  },
+
+  closeModelPicker: () => set({ modelPickerAnchor: null }),
+
+  loadModels: async () => {
+    set({ modelsLoading: true, modelsError: null })
+    try {
+      const models = await host.listModels()
+      set({ models, modelsLoading: false })
+    } catch (error) {
+      set({
+        models: [],
+        modelsLoading: false,
+        modelsError: error instanceof Error ? error.message : String(error)
+      })
+    }
+  },
+
+  selectModel: async (provider, id, persist) => {
+    // 主进程切完之后会推新快照，session.model 从那一路回来
+    await host.selectModel(provider, id, persist)
   }
 }))

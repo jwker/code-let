@@ -470,6 +470,16 @@ body.is-pane-resizing * {
   }
 }
 
+/*
+ * 再窄下去（主区可到 160）模型胶囊也会被挤成一条缝 —— 不如隐掉。
+ * 模型在状态栏里仍然看得到，那儿也能点开同一个选择器。
+ */
+@container (max-width: 230px) {
+  .conv-model {
+    display: none;
+  }
+}
+
 /* 反相气泡里的 markdown 要跟着换色，不然行内代码 / 加粗会在深底上糊掉 */
 .md-bubble.is-inverse .md,
 .md-bubble.is-inverse .md-h,

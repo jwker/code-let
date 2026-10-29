@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import { host } from '../host'
 import { IconArrowUp } from '../shell/icons'
+import { shortName } from '../shell/modelList'
 import { NormalStream } from './NormalStream'
 import { ScrollJump } from './ScrollJump'
 import { TerminalStream } from './TerminalStream'
@@ -18,6 +19,7 @@ export function ConversationArea() {
   const session = useStore((s) => s.snapshot.session)
   const items = useStore((s) => s.items)
   const streaming = useStore((s) => s.streaming)
+  const openPicker = useStore((s) => s.openModelPicker)
   const [draft, setDraft] = useState('')
 
   // 实时流往下长 —— 视图要跟着走，不然用户看不到刚出来的内容（R2）
@@ -99,7 +101,31 @@ export function ConversationArea() {
             />
 
             <div className="mt-1 flex items-center gap-3 px-2">
-              <span className="conv-hint text-[11.5px] text-fg-3">⌘↵ 发送</span>
+              {/*
+                模型胶囊：换模型是「准备发下一条」时做的决定，所以放在输入框上。
+                生成中禁用 —— 本轮的模型已经定了，要换得等这轮结束。
+              */}
+              {mode === 'normal' && (
+                <button
+                  type="button"
+                  disabled={streaming || !session.model}
+                  onClick={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect()
+                    openPicker({ left: rect.left, bottom: window.innerHeight - rect.top + 8 })
+                  }}
+                  title={
+                    session.model ? `${session.model.provider}/${session.model.id}` : '未选模型'
+                  }
+                  className="conv-model flex min-w-0 max-w-[190px] items-center gap-1 rounded-full border border-hairline px-2 py-0.5 text-[10.5px] text-fg-2 transition-colors hover:border-hairline-strong hover:bg-panel hover:text-fg-1 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <span className="flex-none text-fg-3">◇</span>
+                  <span className="min-w-0 truncate font-mono">
+                    {session.model ? shortName(session.model.name) : '未选模型'}
+                  </span>
+                  <span className="flex-none text-fg-3">▾</span>
+                </button>
+              )}
+              <span className="conv-hint flex-none text-[11.5px] text-fg-3">⌘↵ 发送</span>
               {session.error && (
                 <span className="min-w-0 flex-1 truncate text-[11.5px] text-danger" title={session.error}>
                   {session.error}

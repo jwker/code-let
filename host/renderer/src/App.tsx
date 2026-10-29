@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { host } from './host'
 import { Inspector } from './shell/Inspector'
 import { MainArea } from './shell/MainArea'
+import { ModelPicker } from './shell/ModelPicker'
 import { PaneResizer } from './shell/PaneResizer'
 import { Rail } from './shell/Rail'
 import { Sidebar } from './shell/Sidebar'
@@ -32,6 +33,11 @@ export function App() {
   const inspectorOpen = useStore((s) => s.inspectorOpen)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
+  const pickerAnchor = useStore((s) => s.modelPickerAnchor)
+  const models = useStore((s) => s.models)
+  const closeModelPicker = useStore((s) => s.closeModelPicker)
+  const selectModel = useStore((s) => s.selectModel)
+  const currentModel = useStore((s) => s.snapshot.session.model)
 
   const shellRef = useRef<HTMLDivElement>(null)
   const [sideWidth, setSideWidth] = useState(loadSidebarWidth)
@@ -164,6 +170,27 @@ export function App() {
           saveInspectorWidth(next)
         }}
       />
+
+      {/*
+        模型选择器：两个入口（状态栏、输入框胶囊）共用这一个浮层。
+        锚点是触发控件的视口坐标，统一贴在它上方 —— 两个入口都靠窗口底部。
+      */}
+      {pickerAnchor && (
+        <div
+          className="fixed z-[60]"
+          style={{
+            left: Math.max(8, Math.min(pickerAnchor.left, window.innerWidth - 436)),
+            bottom: pickerAnchor.bottom
+          }}
+        >
+          <ModelPicker
+            models={models}
+            current={currentModel}
+            onPick={(model, persist) => selectModel(model.provider, model.id, persist)}
+            onClose={closeModelPicker}
+          />
+        </div>
+      )}
     </div>
   )
 }
