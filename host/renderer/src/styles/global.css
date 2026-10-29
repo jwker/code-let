@@ -163,44 +163,11 @@
   grid-template-columns: calc(var(--rail-w) + var(--side-track)) minmax(0, 1fr) var(--insp-track);
 }
 /*
- * 打通导航轨：底边线不从窗口左上角画起，而是从轨道右边开始，
- * 左上角那块留给 macOS 红绿灯，导航轨看上去就一路通到窗口顶端。
- * 起点再让出一个圆角半径，好跟侧栏的圆角接上。
+ * 标题栏不画底边线：它和导航轨是同一块底槽（都是 --canvas 一档的灰），
+ * 连成一片之后，侧栏和主区才像浮在上面的面板。
+ * 面板之间的竖线还在（侧栏右侧、检视器左侧）—— 那两条是「两块面板的分界」，
+ * 而底下这条是「底槽与面板的分界」，靠色阶和圆角就够，画上线反而把底槽切成两截。
  */
-.shell-title::after {
-  content: '';
-  position: absolute;
-  left: calc(var(--rail-w) + var(--panel-radius) - 1px);
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: var(--hairline);
-  pointer-events: none;
-}
-/*
- * 侧栏左上角的 1px 弧线：横线在这里拐个弯接上轨道的竖线。
- *
- * 这个角是「轨道与内容交界处」的固定形状，不跟收放走：
- * 侧栏在的时候是侧栏的角，收起后换成主区的角（见 .shell.is-side-hidden .shell-main）。
- * 所以弧线、横线起点、轨道竖线三处全程不动 —— 不会出现「有圆角、没弧线」的空档，
- * 也不需要在动画末尾偷偷换一遍。
- *
- * 必须画在标题栏上（标题栏 z-index 高于侧栏），
- * 否则弧线在 y < titlebar-h 的那半截会被标题栏盖掉，接缝处露出 1px 台阶。
- */
-.shell-title::before {
-  content: '';
-  position: absolute;
-  left: calc(var(--rail-w) - 1px);
-  top: calc(100% - 1px);
-  width: var(--panel-radius);
-  height: var(--panel-radius);
-  border-top: 1px solid var(--hairline);
-  border-left: 1px solid var(--hairline);
-  border-top-left-radius: var(--panel-radius);
-  pointer-events: none;
-  z-index: 1;
-}
 .titlebar-left {
   /* 左段（导航轨 + 侧栏）的占位。开关浮在标题栏上，不在这里 —— 见 .titlebar-side */
   min-width: 0;
@@ -294,17 +261,10 @@
   grid-area: rail;
   position: relative;
 }
-/* 竖线让出圆角那一段，剩下的由标题栏上的弧线接上（见 .shell-title::before） */
-.shell-rail::after {
-  content: '';
-  position: absolute;
-  top: calc(var(--panel-radius) - 1px);
-  right: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--hairline);
-  pointer-events: none;
-}
+/*
+ * 导航轨右侧不画竖线：它和标题栏、侧栏同属底槽，靠色阶区分就够了。
+ * 画上线会把「图标列」从底槽里切出来，收起侧栏后还得多一步跟着改。
+ */
 
 .shell-side {
   grid-area: side;
@@ -341,7 +301,7 @@
 }
 /*
  * 侧栏收起后，左上角那块圆角由主区自己带着 —— 位置跟侧栏的角完全重合，
- * 所以弧线、横线起点、轨道竖线都不用动，全程形状不变。
+ * 所以收放全程这个角都在原地，只是从侧栏换到主区。
  *
  * overflow: hidden 是必需的：主区里的 <section> 也铺了 bg-surface，
  * 不裁的话会把这张圆角盖回直角。
