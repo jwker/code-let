@@ -105,7 +105,7 @@
 }
 
 .shell {
-  /* 三栏宽度只在这里定义；将来侧栏可拖拽时改这三个变量即可，标题栏会跟着走 */
+  /* 三栏宽度只在这里定义；拖拽时 App 往 shell 上写同样的变量，标题栏跟着走 */
   --rail-w: 56px;
   --side-w: 264px;
   --insp-w: 300px;
@@ -113,9 +113,10 @@
   /* 侧栏左上角的圆角；分隔线按这个半径拐弯，改大改小只要动这里 */
   --panel-radius: 12px;
 
+  position: relative;
   display: grid;
   grid-template-columns: var(--rail-w) var(--side-w) minmax(0, 1fr) var(--insp-track);
-  grid-template-rows: var(--titlebar-h) minmax(0, 1fr) 24px;
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr) var(--statusbar-h);
   grid-template-areas:
     'title title title title'
     'rail side main insp'
@@ -128,6 +129,11 @@
 /* 收起检视器：只改占位宽度，面板自己滑出去（见 .shell-insp） */
 .shell.is-insp-hidden {
   --insp-track: 0px;
+}
+
+/* 拖拽中不要 180ms 过渡，否则宽度跟不上鼠标 */
+.shell.is-resizing {
+  transition: none;
 }
 
 /*
@@ -303,11 +309,65 @@
   height: 14px;
 }
 
-/* 拖拽可调宽度的分隔条 */
-.shell-resizer {
+/* ---------------------------------------------------------------------------
+ * 栏宽拖拽条：压在栏与栏之间那条 1px 细线上，自身不占布局
+ * ------------------------------------------------------------------------- */
+.shell-grip {
+  position: absolute;
+  top: var(--titlebar-h);
+  bottom: var(--statusbar-h);
+  /*
+   * 命中区 6px，压在分隔线上、两边各占 3px。
+   * 不能再宽：两侧都是 8px 滚动条，滑块只有中间 4px，再宽就把滑块抓走了。
+   */
+  width: 6px;
+  transform: translateX(-50%);
+  z-index: 26;
+  cursor: col-resize;
+  touch-action: none;
+  /* 标题栏是窗口拖动区，拖拽条得单独退出来 */
+  -webkit-app-region: no-drag;
+  outline: none;
+}
+.shell-grip-left {
+  left: calc(var(--rail-w) + var(--side-w));
+}
+.shell-grip-right {
+  left: calc(100% - var(--insp-track));
+}
+/* 检视器收起时不占位，也就没有可拖的缝 */
+.shell.is-insp-hidden .shell-grip-right {
+  display: none;
+}
+/* 悬停时把原有那条细线加粗一格，不另外画线，免得出现双线 */
+.shell-grip::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
   width: 1px;
-  background: var(--hairline);
-  flex: none;
+  transform: translateX(-50%);
+  background: transparent;
+  transition:
+    background var(--dur) var(--ease),
+    width var(--dur) var(--ease);
+}
+.shell-grip:hover::after,
+.shell-grip:focus-visible::after {
+  width: 2px;
+  background: var(--hairline-strong);
+}
+.shell.is-resizing .shell-grip::after {
+  width: 2px;
+  background: var(--fg-3);
+}
+
+/* 拖拽中整页换成拖拽光标，别让鼠标滑出去后变回箭头 */
+body.is-pane-resizing,
+body.is-pane-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 /* 对话区三种排版的容器（骨架，具体排版待写） */

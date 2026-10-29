@@ -33,6 +33,7 @@
   /* 主区内容列宽与窗口标题栏高度 */
   --content-max: 720px;
   --titlebar-h: 52px;
+  --statusbar-h: 24px;
 
   --dur: 160ms;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
