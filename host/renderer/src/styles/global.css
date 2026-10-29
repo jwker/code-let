@@ -717,6 +717,43 @@ body.is-pane-resizing * {
   margin-bottom: 0;
 }
 
+/* 过程叙述：比正文小一级、暗一档。结构和答案分层，见 docs/design/turn-emphasis.html ——
+ * 答案顶格且不加任何装饰，过程缩进 + 左侧细线（线条由组件画）+ 这一套字号颜色。
+ * 用后代选择器盖掉 .md 自己的字号与颜色，markdown 渲染器不用动。 */
+.md-process .md {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--fg-2);
+}
+.md-process .md-h {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-2);
+  margin: 12px 0 6px;
+}
+.md-process .md-p {
+  margin: 0 0 8px;
+}
+.md-process .md-list,
+.md-process .md-table-wrap,
+.md-process .md-quote {
+  margin-bottom: 8px;
+}
+.md-process .md-code {
+  font-size: 11.5px;
+}
+.md-process .md-pre {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: var(--r-md);
+}
+.md-process .md-pre code {
+  font-size: 11.5px;
+}
+.md-process .md strong {
+  color: var(--fg-2);
+}
+
 /* 终端变体：还是等宽，格式一样在 */
 .md-terminal {
   font-family: var(--font-code);
