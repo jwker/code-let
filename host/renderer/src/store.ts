@@ -34,6 +34,8 @@ const MODE_KEY = 'codelet:conversation-mode'
 
 const INSPECTOR_KEY = 'codelet:inspector-open'
 
+const SIDEBAR_KEY = 'codelet:sidebar-open'
+
 /** 右侧检视器默认展开 */
 function loadInspectorOpen(): boolean {
   try {
@@ -46,6 +48,23 @@ function loadInspectorOpen(): boolean {
 function saveInspectorOpen(open: boolean): void {
   try {
     localStorage.setItem(INSPECTOR_KEY, open ? '1' : '0')
+  } catch {
+    // 存不下就算了
+  }
+}
+
+/** 左侧栏默认展开 */
+function loadSidebarOpen(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+function saveSidebarOpen(open: boolean): void {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, open ? '1' : '0')
   } catch {
     // 存不下就算了
   }
@@ -89,6 +108,8 @@ interface RendererStore {
   expandedTools: Record<string, boolean>
   /** 右侧检视器是否展开 */
   inspectorOpen: boolean
+  /** 左侧栏是否展开 */
+  sidebarOpen: boolean
 
   setSnapshot: (snapshot: HostSnapshot) => void
   setNav: (nav: NavEntry) => void
@@ -97,6 +118,8 @@ interface RendererStore {
   toggleTheme: () => void
   /** 展开 / 收起右侧检视器 */
   toggleInspector: () => void
+  /** 展开 / 收起左侧栏 */
+  toggleSidebar: () => void
   bumpEvents: (count: number) => void
   /** 换会话时整体替换内容流（R5） */
   setItems: (items: StreamItem[]) => void
@@ -116,6 +139,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   streaming: false,
   expandedTools: {},
   inspectorOpen: loadInspectorOpen(),
+  sidebarOpen: loadSidebarOpen(),
 
   setSnapshot: (snapshot) => {
     const previousSessionId = get().snapshot.session.sessionId
@@ -180,5 +204,11 @@ export const useStore = create<RendererStore>((set, get) => ({
     const next = !get().inspectorOpen
     saveInspectorOpen(next)
     set({ inspectorOpen: next })
+  },
+
+  toggleSidebar: () => {
+    const next = !get().sidebarOpen
+    saveSidebarOpen(next)
+    set({ sidebarOpen: next })
   }
 }))

@@ -31,6 +31,8 @@ export function TitleBar() {
   const conversations = useStore((s) => s.snapshot.conversations)
   const inspectorOpen = useStore((s) => s.inspectorOpen)
   const toggleInspector = useStore((s) => s.toggleInspector)
+  const sidebarOpen = useStore((s) => s.sidebarOpen)
+  const toggleSidebar = useStore((s) => s.toggleSidebar)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [subOpen, setSubOpen] = useState(false)
@@ -147,6 +149,21 @@ export function TitleBar() {
                     className="no-drag absolute right-0 top-full z-50 mt-2 w-52 rounded-xl border border-hairline bg-raised p-1"
                     style={{ boxShadow: 'var(--sh-lg)' }}
                   >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        closeMenu()
+                        toggleSidebar()
+                      }}
+                      className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken"
+                    >
+                      <span>{sidebarOpen ? '隐藏侧栏' : '显示侧栏'}</span>
+                      <span className="ml-auto font-mono text-[10.5px] text-fg-3">⌘B</span>
+                    </button>
+
+                    <div className="my-1 h-px bg-hairline" />
+
                     <div
                       className="relative"
                       onMouseEnter={openSub}
