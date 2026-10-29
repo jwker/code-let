@@ -31,7 +31,11 @@ export const IPC = {
   /** 往当前会话发一条用户消息 */
   promptSend: 'host:prompt:send',
   /** 把一段文字写入系统剪贴板 */
-  clipboardWrite: 'host:clipboard:write'
+  clipboardWrite: 'host:clipboard:write',
+  /** 列出已配置凭据的模型 */
+  modelsList: 'host:models:list',
+  /** 切换当前会话的模型 */
+  modelsSelect: 'host:models:select'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -88,6 +92,20 @@ export interface ConversationInfo {
   cwd: string
 }
 
+/** 一个可选的模型（选择器里的一项） */
+export interface ModelOption {
+  provider: string
+  id: string
+  /** 显示名 */
+  name: string
+  /** 上下文窗口（token） */
+  contextWindow: number
+  /** 支不支持思考强度 */
+  reasoning: boolean
+  /** 每百万 token 的价格（美元） */
+  cost: { input: number; output: number }
+}
+
 /** 当前 Pi 会话的状态 */
 export interface SessionState {
   /** runtime 是否就绪 */
@@ -95,6 +113,15 @@ export interface SessionState {
   /** 当前会话所在目录 */
   cwd: string | null
   sessionId: string | null
+  /**
+   * 当前会话用的模型。
+   *
+   * 模型是绑在会话上的（Pi 的会话文件里有 model_change 与助手消息自带的模型），
+   * 换会话就换模型。
+   */
+  model: ModelOption | null
+  /** 恢复会话时没能恢复原模型的原因（没有就为 null） */
+  modelFallback: string | null
   /** 创建失败时的原因 */
   error: string | null
 }
@@ -211,6 +238,10 @@ export interface CodeletApi {
   prompt(text: string): Promise<void>
   /** 把一段文字写入系统剪贴板（复制回复正文） */
   copyText(text: string): Promise<void>
+  /** 列出已配置凭据的模型（选择器用） */
+  listModels(): Promise<ModelOption[]>
+  /** 切当前会话的模型；persist 为真时同时设为新会话默认 */
+  selectModel(provider: string, id: string, persist: boolean): Promise<void>
   /** 订阅快照推送，返回取消订阅的函数 */
   onSnapshot(listener: (snapshot: HostSnapshot) => void): () => void
   /** 订阅会话流增量事件 */

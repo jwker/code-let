@@ -10,7 +10,7 @@ import {
   type CreateAgentSessionRuntimeFactory,
   type EventBus
 } from '@earendil-works/pi-coding-agent'
-import type { ConversationInfo, StreamItem } from '@contract/index'
+import type { ConversationInfo, ModelOption, StreamItem } from '@contract/index'
 import { entriesToItems } from '@contract/stream'
 
 export type PiEventListener = (event: { type: string; data: unknown }) => void
@@ -40,6 +40,14 @@ export interface PiRuntimePort {
   prompt(text: string): Promise<void>
   /** 当前会话已经说过的话 */
   readEntries(): StreamItem[]
+  /** 当前会话用的模型 */
+  currentModel(): ModelOption | null
+  /** 恢复会话时没能恢复原模型的原因 */
+  modelFallback(): string | null
+  /** 已配置凭据的模型清单 */
+  listModels(): Promise<ModelOption[]>
+  /** 切当前会话的模型（persist 时同时设为新会话默认） */
+  selectModel(provider: string, id: string, persist: boolean): Promise<void>
   /** 收摊 */
   stop(): Promise<void>
 }
@@ -172,6 +180,47 @@ export class PiRuntime implements PiRuntimePort {
     return entriesToItems(entries)
   }
 
+  // -------------------------------------------------------------------------
+  // 模型（绑在会话上）
+  // -------------------------------------------------------------------------
+
+  /** 当前会话用的模型 */
+  currentModel(): ModelOption | null {
+    const model = this.runtime?.session.model
+    return model ? toOption(model) : null
+  }
+
+  /**
+   * 恢复会话时没能恢复原模型的原因。
+   *
+   * Pi 会退回全局默认而不报错，原因只放在这个字段里 —— 不显示出来，
+   * 用户就只会看到「我明明选了 X，打开却是 Y」。
+   */
+  modelFallback(): string | null {
+    return this.runtime?.modelFallbackMessage ?? null
+  }
+
+  /** 已配置凭据的模型清单（没凭据的选了也是报错，不列） */
+  async listModels(): Promise<ModelOption[]> {
+    const modelRuntime = this.runtime?.session.modelRuntime
+    if (!modelRuntime) return []
+    try {
+      return (await modelRuntime.getAvailable()).map(toOption)
+    } catch {
+      // 取不到就退回上一次的快照，总比空白强
+      return modelRuntime.getAvailableSnapshot().map(toOption)
+    }
+  }
+
+  /** 切当前会话的模型 */
+  async selectModel(provider: string, id: string, persist: boolean): Promise<void> {
+    const session = this.runtime?.session
+    if (!session) throw new Error('runtime 尚未启动')
+    const model = session.modelRuntime.getModel(provider, id)
+    if (!model) throw new Error(`模型不存在：${provider}/${id}`)
+    await session.setModel(model, { persist })
+  }
+
   /** 列出某个目录下的会话 */
   static async listConversations(cwd: string): Promise<ConversationInfo[]> {
     const sessions = await SessionManager.list(cwd)
@@ -185,6 +234,30 @@ export class PiRuntime implements PiRuntimePort {
         cwd: info.cwd
       }))
       .sort((a, b) => b.modified.localeCompare(a.modified))
+  }
+}
+
+/**
+ * Pi 的模型对象 → 渲染进程能吃的形状。
+ *
+ * 只给选择器要用的四个量：名字、上下文长度、支不支持思考、价格（每百万 token）。
+ * 完整模型对象不往渲染进程送 —— Pi 的类型不该跨过 IPC。
+ */
+function toOption(model: {
+  provider: string
+  id: string
+  name: string
+  contextWindow: number
+  reasoning: boolean
+  cost: { input: number; output: number }
+}): ModelOption {
+  return {
+    provider: model.provider,
+    id: model.id,
+    name: model.name,
+    contextWindow: model.contextWindow,
+    reasoning: model.reasoning,
+    cost: { input: model.cost.input, output: model.cost.output }
   }
 }
 

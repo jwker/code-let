@@ -6,7 +6,7 @@ import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import type { PiEventListener, PiRuntimePort } from '../host/main/pi/runtime'
-import type { HostSnapshot, StreamItem } from '@contract/index'
+import type { HostSnapshot, ModelOption, StreamItem } from '@contract/index'
 
 /**
  * 复现「新会话聊完了也不在左侧列表里，切一下别的会话才冒出来」这个 bug（PLAN.md D19）。
@@ -67,6 +67,23 @@ class FakePi implements PiRuntimePort {
 
   readEntries(): StreamItem[] {
     return []
+  }
+
+  // 模型在这份测试里不参与（只盯对话列表的刷新时机）
+  currentModel(): ModelOption | null {
+    return null
+  }
+
+  modelFallback(): string | null {
+    return null
+  }
+
+  async listModels(): Promise<ModelOption[]> {
+    return []
+  }
+
+  async selectModel(): Promise<void> {
+    // 不参与
   }
 
   async stop(): Promise<void> {

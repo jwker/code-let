@@ -1,6 +1,13 @@
 import { EventEmitter } from 'node:events'
 import { normalize } from 'node:path'
-import type { ConversationInfo, HostSnapshot, ProjectInfo, SessionState, StreamItem } from '@contract/index'
+import type {
+  ConversationInfo,
+  HostSnapshot,
+  ModelOption,
+  ProjectInfo,
+  SessionState,
+  StreamItem
+} from '@contract/index'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
@@ -15,7 +22,14 @@ export class HostState extends EventEmitter {
   private readonly store: ProjectStore
   private currentProject: ProjectInfo | null = null
   private conversations: ConversationInfo[] = []
-  private session: SessionState = { ready: false, cwd: null, sessionId: null, error: null }
+  private session: SessionState = {
+    ready: false,
+    cwd: null,
+    sessionId: null,
+    model: null,
+    modelFallback: null,
+    error: null
+  }
   /** 去抖刷新：把一轮里的多次刷新合成一次 */
   private readonly conversationsRefresh: DebouncedRefresh
   /** 刷新的序号：只认最后一次发起的 */
@@ -54,6 +68,11 @@ export class HostState extends EventEmitter {
     // 会话流事件：转发给渲染进程
     this.pi.onEvent((event) => {
       this.emit('session-event', event)
+      // 模型被换了（比如扩展调的 setModel）—— 快照跟着变
+      if (event.type === 'model_select') {
+        this.readSession()
+        this.push()
+      }
       // 会话文件变了，对话列表要跟着变
       if (affectsConversationList(event)) {
         this.conversationsRefresh.schedule()
@@ -86,22 +105,26 @@ export class HostState extends EventEmitter {
 
     this.currentProject = { path: dir, name: basenameOf(dir) }
     this.conversations = []
-    this.session = { ready: false, cwd: dir, sessionId: null, error: null }
+    this.session = {
+      ready: false,
+      cwd: dir,
+      sessionId: null,
+      model: null,
+      modelFallback: null,
+      error: null
+    }
     this.push()
 
     try {
       await this.pi.start(dir, { resume: options?.resume })
-      this.session = {
-        ready: this.pi.ready,
-        cwd: this.pi.cwd,
-        sessionId: this.pi.currentSessionId,
-        error: null
-      }
+      this.readSession()
     } catch (error) {
       this.session = {
         ready: false,
         cwd: dir,
         sessionId: null,
+        model: null,
+        modelFallback: null,
         error: error instanceof Error ? error.message : String(error)
       }
     }
@@ -143,25 +166,44 @@ export class HostState extends EventEmitter {
   /** 在当前项目下新建会话 */
   async newConversation(): Promise<void> {
     await this.pi.newSession()
-    this.session = {
-      ready: this.pi.ready,
-      cwd: this.pi.cwd,
-      sessionId: this.pi.currentSessionId,
-      error: null
-    }
+    this.readSession()
     await this.refreshConversations()
   }
 
   /** 切到某个已有会话 */
   async switchConversation(path: string): Promise<void> {
     await this.pi.switchSession(path)
+    this.readSession()
+    await this.refreshConversations()
+  }
+
+  /**
+   * 把运行时里的会话状态抄进快照。
+   *
+   * 换项目、新建会话、切会话都要走一次 —— 模型是跟着会话走的，
+   * 漏抄就会出现「切了会话，状态栏还显示上一个会话的模型」。
+   */
+  private readSession(): void {
     this.session = {
       ready: this.pi.ready,
       cwd: this.pi.cwd,
       sessionId: this.pi.currentSessionId,
+      model: this.pi.currentModel(),
+      modelFallback: this.pi.modelFallback(),
       error: null
     }
-    await this.refreshConversations()
+  }
+
+  /** 已配置凭据的模型清单（选择器用） */
+  listModels(): Promise<ModelOption[]> {
+    return this.pi.listModels()
+  }
+
+  /** 切当前会话的模型 */
+  async selectModel(provider: string, id: string, persist: boolean): Promise<void> {
+    await this.pi.selectModel(provider, id, persist)
+    this.readSession()
+    this.push()
   }
 
   /** 往当前会话发一条用户消息 */

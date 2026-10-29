@@ -8,6 +8,7 @@ import {
 } from '@contract/index'
 import {
   clipboardWriteSchema,
+  modelSelectSchema,
   promptSchema,
   switchConversationSchema,
   switchProjectSchema
@@ -115,6 +116,13 @@ export function registerIpc(state: HostState): () => void {
     clipboard.writeText(text)
   })
 
+  ipcMain.handle(IPC.modelsList, () => state.listModels())
+
+  ipcMain.handle(IPC.modelsSelect, async (_event, payload: unknown) => {
+    const { provider, id, persist } = modelSelectSchema.parse(payload)
+    await state.selectModel(provider, id, persist)
+  })
+
   return () => {
     coalescer.dispose()
     ipcMain.removeHandler(IPC.snapshotGet)
@@ -125,5 +133,7 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.conversationsSwitch)
     ipcMain.removeHandler(IPC.promptSend)
     ipcMain.removeHandler(IPC.clipboardWrite)
+    ipcMain.removeHandler(IPC.modelsList)
+    ipcMain.removeHandler(IPC.modelsSelect)
   }
 }

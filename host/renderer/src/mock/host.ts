@@ -2,6 +2,7 @@ import type {
   CodeletApi,
   ConversationInfo,
   HostSnapshot,
+  ModelOption,
   ProjectInfo,
   SessionEvent,
   StreamItem
@@ -120,6 +121,15 @@ const FAKE_ITEMS: StreamItem[] = [
   { kind: 'message', role: 'user', text: '好，那就这样。把改动整理成一条提交信息给我。' }
 ]
 
+/** 假的可用模型清单：够看出分组、搜索、价格 */
+const FAKE_MODELS: ModelOption[] = [
+  { provider: 'minimax-cn', id: 'MiniMax-M3.1-Flash', name: 'MiniMax-M3.1-Flash', contextWindow: 200_000, reasoning: true, cost: { input: 0.2, output: 1.1 } },
+  { provider: 'minimax-cn', id: 'MiniMax-M3', name: 'MiniMax-M3', contextWindow: 200_000, reasoning: true, cost: { input: 0.6, output: 2.4 } },
+  { provider: 'deepseek', id: 'deepseek-flash', name: 'deepseek-flash', contextWindow: 128_000, reasoning: true, cost: { input: 0.1, output: 0.4 } },
+  { provider: 'deepseek', id: 'deepseek-v4-pro', name: 'deepseek-v4-pro', contextWindow: 128_000, reasoning: true, cost: { input: 0.8, output: 3.2 } },
+  { provider: 'anthropic', id: 'claude-sonnet', name: 'claude-sonnet', contextWindow: 200_000, reasoning: true, cost: { input: 3, output: 15 } }
+]
+
 /** 假回复：一段带格式的文字，一段段吐出来 */
 const FAKE_REPLY = [
   '### 改完了\n\n',
@@ -145,6 +155,7 @@ export function createMockApi(): CodeletApi {
   const snapshotListeners = new Set<(snapshot: HostSnapshot) => void>()
   const eventListeners = new Set<(events: SessionEvent[]) => void>()
   let fakeItems: StreamItem[] = [...FAKE_ITEMS]
+  let fakeModel: ModelOption | null = FAKE_MODELS[0]
 
   function snapshot(): HostSnapshot {
     return {
@@ -155,6 +166,8 @@ export function createMockApi(): CodeletApi {
         ready: true,
         cwd: currentProject.path,
         sessionId,
+        model: fakeModel,
+        modelFallback: null,
         error: null
       }
     }
@@ -209,6 +222,15 @@ export function createMockApi(): CodeletApi {
     },
 
     getSessionEntries: async () => fakeItems,
+
+    listModels: async () => FAKE_MODELS,
+
+    selectModel: async (provider, id) => {
+      const found = FAKE_MODELS.find((m) => m.provider === provider && m.id === id)
+      if (!found) throw new Error(`模型不存在：${provider}/${id}`)
+      fakeModel = found
+      publish()
+    },
 
     copyText: async (text: string) => {
       // 浏览器预览里没有系统剪贴板权限时也别报错

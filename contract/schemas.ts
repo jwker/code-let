@@ -22,6 +22,12 @@ export const clipboardWriteSchema = z.object({
   text: z.string()
 })
 
+export const modelSelectSchema = z.object({
+  provider: z.string().min(1),
+  id: z.string().min(1),
+  persist: z.boolean()
+})
+
 export type SwitchProjectPayload = z.infer<typeof switchProjectSchema>
 export type SwitchConversationPayload = z.infer<typeof switchConversationSchema>
 export type PromptPayload = z.infer<typeof promptSchema>
