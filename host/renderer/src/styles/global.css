@@ -639,6 +639,15 @@ body.is-pane-resizing * {
 .md-list {
   margin: 0 0 14px;
   padding-left: 22px;
+  /*
+   * Tailwind 的 preflight 把 ol / ul 的 list-style 清成了 none，
+   * 不写回来列表就只剩缩进、没有圆点和序号。
+   */
+  list-style: disc;
+}
+/* 有序列表的序号：1. 2. 3.（默认 disc 会变成实心圆点） */
+ol.md-list {
+  list-style: decimal;
 }
 .md-list li {
   margin-bottom: 6px;

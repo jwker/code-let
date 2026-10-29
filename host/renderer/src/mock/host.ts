@@ -62,7 +62,7 @@ const FAKE_ITEMS: StreamItem[] = [
     kind: 'message',
     role: 'assistant',
     text: '好的。我先读了现有的索引实现，索引写入是全量重建，在 12k 条记忆上约 1.8s。',
-    stats: { input: 6214, output: 93, cacheRead: 189, cacheWrite: 0, durationMs: 4044 }
+    stats: { input: 6214, output: 93, cacheRead: 189, cacheWrite: 0, durationMs: 4044, startedAt: Date.now() - 60_000 }
   },
   { kind: 'tool', callId: 'c1', name: 'read', status: 'ok' },
   { kind: 'tool', callId: 'c2', name: 'grep', status: 'ok' },
@@ -83,7 +83,7 @@ const FAKE_ITEMS: StreamItem[] = [
     kind: 'message',
     role: 'assistant',
     text: '已改为按 updatedAt 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。',
-    stats: { input: 7960, output: 601, cacheRead: 6764, cacheWrite: 0, durationMs: 5521 }
+    stats: { input: 7960, output: 601, cacheRead: 6764, cacheWrite: 0, durationMs: 5521, startedAt: Date.now() - 60_000 }
   },
   { kind: 'message', role: 'user', text: '再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。' },
   {
@@ -253,8 +253,14 @@ export function createMockApi(): CodeletApi {
       // 假的一次回复：用户消息 → 助手消息一点点长出来
       publishEvent('message_start', { message: { role: 'user', content: text } })
       publishEvent('message_end', { message: { role: 'user', content: text } })
+      const startedAt = Date.now()
       publishEvent('message_start', {
-        message: { role: 'assistant', content: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }
+        message: {
+          role: 'assistant',
+          content: [],
+          usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          timestamp: startedAt
+        }
       })
       for (const chunk of FAKE_REPLY) {
         publishEvent('message_update', { type: 'text_delta', contentIndex: 0, delta: chunk })
@@ -267,7 +273,8 @@ export function createMockApi(): CodeletApi {
             { type: 'toolCall', id: 'm1', name: 'bash', arguments: { command: 'npm test -- --run' } }
           ],
           usage: { input: 6214, output: 601, cacheRead: 189, cacheWrite: 0 },
-          durationMs: 4044
+          durationMs: 4044,
+          timestamp: startedAt
         }
       })
 
@@ -289,6 +296,10 @@ export function createMockApi(): CodeletApi {
       publishEvent('message_end', {
         message: { role: 'toolResult', toolCallId: 'm1', content: [{ type: 'text', text: acc }] }
       })
+
+      // 一轮结束 —— 真的 Pi 会发这个。不发的话预览里 streaming 永远为真，
+      // 元信息行会停在跳动的计时器上、复制按钮一直禁用。
+      publishEvent('agent_settled', { aborted: false })
     },
 
     onSnapshot: (listener) => {
