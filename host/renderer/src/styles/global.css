@@ -215,6 +215,7 @@
   transition: top 0s linear 180ms;
 }
 .titlebar-left {
+  /* 左段（导航轨 + 侧栏）的占位。开关浮在标题栏上，不在这里 —— 见 .titlebar-side */
   min-width: 0;
   padding-left: 16px;
 }
@@ -222,12 +223,38 @@
   padding-left: var(--traffic-light-gutter);
 }
 /*
+ * 侧栏开关：贴着红绿灯右边、垂直居中。
+ *
+ * 定位参照是标题栏本身（.shell-title 有 position: relative），不是左边那一格 ——
+ * 那格会随侧栏收放缩到 56 宽，按钮挂进去就成了「溢出父元素」的画框，
+ * Electron 会继续把它当拖动区，点不动。尺寸与右上角的检视器开关一致。
+ * 另外它和检视器开关都必须排在标题栏 DOM 的最后，原因见 TitleBar.tsx。
+ */
+.titlebar-side {
+  position: absolute;
+  top: calc((var(--titlebar-h) - 28px) / 2);
+  left: 14px;
+  width: 28px;
+  height: 28px;
+}
+[data-platform='darwin'] .titlebar-side {
+  left: var(--traffic-light-gutter);
+}
+/* 检视器开关：贴窗口右上角。同样挂在标题栏上，理由同 .titlebar-side */
+.titlebar-insp-toggle {
+  position: absolute;
+  top: calc((var(--titlebar-h) - 28px) / 2);
+  right: 12px;
+  width: 28px;
+  height: 28px;
+}
+/*
  * 侧栏收起后主栏顶到导航轨右边，标题会钻到红绿灯底下。
- * 把交通灯占的那一段让回来：轨道之外剩下的部分再加一个间距。
+ * 把交通灯 + 开关占的那一段让回来，再加一个间距。
  * 让左边距跟着收放一起过渡 —— 不然收起末尾标题会突然往右跳一格。
  */
 [data-platform='darwin'] .shell.is-side-hidden .titlebar-content {
-  padding-left: calc(var(--traffic-light-gutter) - var(--rail-w) + var(--sp-3));
+  padding-left: calc(var(--traffic-light-gutter) - var(--rail-w) + 28px + var(--sp-3));
 }
 .titlebar-main {
   min-width: 0;

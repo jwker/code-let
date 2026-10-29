@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ConversationMode, NavEntry } from '@contract/index'
 import { useStore } from '../store'
-import { IconMore, IconPanelRight, IconSession } from './icons'
+import { IconMore, IconPanelLeft, IconPanelRight, IconSession } from './icons'
 
 const NAV_TITLES: Record<NavEntry, string> = {
   session: '会话',
@@ -235,25 +235,48 @@ export function TitleBar() {
         </div>
       </div>
 
-      <div className="titlebar-insp">
-        {/*
-         * 固定在窗口右上角：检视器收起时这一列会变成 0 宽，
-         * 按钮不能跟着列走，所以脱离网格绝对定位。
-         */}
-        <button
-          type="button"
-          aria-pressed={inspectorOpen}
-          aria-label={inspectorOpen ? '隐藏右侧面板' : '显示右侧面板'}
-          title={inspectorOpen ? '隐藏右侧面板' : '显示右侧面板'}
-          onClick={toggleInspector}
-          className={[
-            'no-drag absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-sunken hover:text-fg-1',
-            inspectorOpen ? 'text-fg-2' : 'text-fg-3'
-          ].join(' ')}
-        >
-          <IconPanelRight />
-        </button>
-      </div>
+      <div className="titlebar-insp" />
+
+      {/*
+       * 两个开关必须留在标题栏的最后 —— 顺序是有意义的，不是在排版。
+       *
+       * `-webkit-app-region` 会往下继承，整条标题栏连同三段占位格都是拖动区；
+       * Electron 按 DOM 顺序把「拖动区」一块块加回来、「no-drag」一块块抠掉。
+       * 开关要是排在前面，后面那些占位格的拖动区会把它的洞重新盖住 ——
+       * 看着在最上层（DOM 命中也是它），真机器上却点不动。
+       * 实测同一个按钮：放最后一个能点，放第一个点不动。
+       *
+       * 另外它们直接挂在标题栏上，不放进左/右那一格：那两格的宽度跟着面板
+       * 收放走（左 320→56、右 300→0），按钮却是绝对定位、永远停在原地，
+       * 收起来后画框就跑到格子外面了。挂在标题栏上就没有这个问题。
+       */}
+      <button
+        type="button"
+        aria-pressed={sidebarOpen}
+        aria-label={sidebarOpen ? '隐藏侧栏' : '显示侧栏'}
+        title={sidebarOpen ? '隐藏侧栏 ⌘B' : '显示侧栏 ⌘B'}
+        onClick={toggleSidebar}
+        className={[
+          'titlebar-side no-drag flex items-center justify-center rounded-md transition-colors hover:bg-sunken hover:text-fg-1',
+          sidebarOpen ? 'text-fg-2' : 'text-fg-3'
+        ].join(' ')}
+      >
+        <IconPanelLeft />
+      </button>
+
+      <button
+        type="button"
+        aria-pressed={inspectorOpen}
+        aria-label={inspectorOpen ? '隐藏右侧面板' : '显示右侧面板'}
+        title={inspectorOpen ? '隐藏右侧面板' : '显示右侧面板'}
+        onClick={toggleInspector}
+        className={[
+          'titlebar-insp-toggle no-drag absolute flex items-center justify-center rounded-md transition-colors hover:bg-sunken hover:text-fg-1',
+          inspectorOpen ? 'text-fg-2' : 'text-fg-3'
+        ].join(' ')}
+      >
+        <IconPanelRight />
+      </button>
     </header>
   )
 }

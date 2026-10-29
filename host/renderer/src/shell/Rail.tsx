@@ -6,7 +6,6 @@ import {
   IconCode,
   IconMemory,
   IconMoon,
-  IconPanelLeft,
   IconSession,
   IconSettings,
   IconSun,
@@ -27,8 +26,6 @@ export function Rail() {
   const setNav = useStore((s) => s.setNav)
   const theme = useStore((s) => s.theme)
   const toggleTheme = useStore((s) => s.toggleTheme)
-  const sidebarOpen = useStore((s) => s.sidebarOpen)
-  const toggleSidebar = useStore((s) => s.toggleSidebar)
 
   return (
     <nav className="shell-rail flex flex-col items-center gap-1 bg-canvas px-2 py-3">
@@ -61,19 +58,6 @@ export function Rail() {
       })}
 
       <div className="mt-auto flex flex-col items-center gap-1.5">
-        <button
-          type="button"
-          title={sidebarOpen ? '隐藏侧栏 ⌘B' : '显示侧栏 ⌘B'}
-          aria-label={sidebarOpen ? '隐藏侧栏' : '显示侧栏'}
-          aria-pressed={sidebarOpen}
-          onClick={toggleSidebar}
-          className={[
-            'flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-sunken hover:text-fg-2',
-            sidebarOpen ? 'text-fg-2' : 'text-fg-3'
-          ].join(' ')}
-        >
-          <IconPanelLeft />
-        </button>
         <button
           type="button"
           title={theme === 'dark' ? '切到亮色' : '切到暗色'}
