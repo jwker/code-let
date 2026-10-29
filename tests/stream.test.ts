@@ -15,6 +15,11 @@ const USER_TEXT = '把记忆索引改成增量更新'
 const ASSISTANT_TEXT = '好的。我先读了现有的索引实现，'
 const LAST_TEXT = '改完了'
 
+/** 一条助手回复的用量 —— 两条来源给的是同一份 */
+const USAGE = { input: 6214, output: 93, cacheRead: 189, cacheWrite: 0 }
+const DURATION_MS = 4044
+const TIMESTAMP = 1793269598527
+
 /** 会话文件里的样子 */
 const ENTRIES = [
   { type: 'message', message: { role: 'user', content: USER_TEXT } },
@@ -26,7 +31,10 @@ const ENTRIES = [
         { type: 'text', text: ASSISTANT_TEXT },
         { type: 'toolCall', id: 't1', name: 'read' },
         { type: 'toolCall', id: 't2', name: 'bash' }
-      ]
+      ],
+      usage: USAGE,
+      durationMs: DURATION_MS,
+      timestamp: TIMESTAMP
     }
   },
   {
@@ -70,7 +78,10 @@ const EVENTS = [
           { type: 'text', text: ASSISTANT_TEXT },
           { type: 'toolCall', id: 't1', name: 'read' },
           { type: 'toolCall', id: 't2', name: 'bash' }
-        ]
+        ],
+        usage: USAGE,
+        durationMs: DURATION_MS,
+        timestamp: TIMESTAMP
       }
     }
   },
@@ -108,7 +119,12 @@ const EVENTS = [
 
 const EXPECTED: StreamItem[] = [
   { kind: 'message', role: 'user', text: USER_TEXT },
-  { kind: 'message', role: 'assistant', text: ASSISTANT_TEXT },
+  {
+    kind: 'message',
+    role: 'assistant',
+    text: ASSISTANT_TEXT,
+    stats: { ...USAGE, startedAt: TIMESTAMP, durationMs: DURATION_MS }
+  },
   { kind: 'tool', callId: 't1', name: 'read', status: 'ok' },
   { kind: 'tool', callId: 't2', name: 'bash', status: 'ok' },
   { kind: 'message', role: 'toolResult', text: 'src/memory/index.ts', callId: 't1' },
@@ -279,6 +295,93 @@ describe('工具跑到一半的输出（R4）', () => {
       { kind: 'tool', callId: 'b1', name: 'bash', status: 'ok' },
       { kind: 'message', role: 'toolResult', text: '第一行\n第二行\n', callId: 'b1' }
     ])
+  })
+})
+
+describe('元信息（token 与耗时）', () => {
+  it('正文的那条助手消息带着计量', () => {
+    const items = entriesToItems([
+      {
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: '改完了' }],
+          usage: { input: 100, output: 20, cacheRead: 300, cacheWrite: 5 },
+          durationMs: 1500,
+          timestamp: 1700000000000
+        }
+      }
+    ])
+    expect(items).toEqual([
+      {
+        kind: 'message',
+        role: 'assistant',
+        text: '改完了',
+        stats: {
+          input: 100,
+          output: 20,
+          cacheRead: 300,
+          cacheWrite: 5,
+          durationMs: 1500,
+          startedAt: 1700000000000
+        }
+      }
+    ])
+  })
+
+  it('只有工具调用、没有正文的那一轮不留元信息', () => {
+    const items = entriesToItems([
+      {
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'toolCall', id: 'b1', name: 'bash' }],
+          usage: { input: 100, output: 20, cacheRead: 0, cacheWrite: 0 },
+          durationMs: 900
+        }
+      }
+    ])
+    expect(items).toEqual([{ kind: 'tool', callId: 'b1', name: 'bash', status: 'running' }])
+  })
+
+  it('两条来源给的是同一份计量（R3）', () => {
+    const usage = { input: 6214, output: 93, cacheRead: 189, cacheWrite: 0 }
+    const fromHistory = entriesToItems([
+      {
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: '好的' }],
+          usage,
+          durationMs: 4044,
+          timestamp: 1793269598527
+        }
+      }
+    ])
+
+    const live = applyEvent(
+      [
+        {
+          kind: 'message',
+          role: 'assistant',
+          text: '',
+          stats: { ...usage, startedAt: 1793269598527 }
+        }
+      ],
+      {
+        type: 'message_end',
+        data: {
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: '好的' }],
+            usage,
+            durationMs: 4044,
+            timestamp: 1793269598527
+          }
+        }
+      }
+    )
+    expect(live).toEqual(fromHistory)
   })
 })
 

@@ -60,7 +60,8 @@ const FAKE_ITEMS: StreamItem[] = [
   {
     kind: 'message',
     role: 'assistant',
-    text: '好的。我先读了现有的索引实现，索引写入是全量重建，在 12k 条记忆上约 1.8s。'
+    text: '好的。我先读了现有的索引实现，索引写入是全量重建，在 12k 条记忆上约 1.8s。',
+    stats: { input: 6214, output: 93, cacheRead: 189, cacheWrite: 0, durationMs: 4044 }
   },
   { kind: 'tool', callId: 'c1', name: 'read', status: 'ok' },
   { kind: 'tool', callId: 'c2', name: 'grep', status: 'ok' },
@@ -80,7 +81,8 @@ const FAKE_ITEMS: StreamItem[] = [
   {
     kind: 'message',
     role: 'assistant',
-    text: '已改为按 updatedAt 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。'
+    text: '已改为按 updatedAt 游标增量更新，并补上 3 个用例。测试全绿（42 passed / 42）。',
+    stats: { input: 7960, output: 601, cacheRead: 6764, cacheWrite: 0, durationMs: 5521 }
   },
   { kind: 'message', role: 'user', text: '再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。' },
   {
@@ -208,11 +210,23 @@ export function createMockApi(): CodeletApi {
 
     getSessionEntries: async () => fakeItems,
 
+    copyText: async (text: string) => {
+      // 浏览器预览里没有系统剪贴板权限时也别报错
+      if (!navigator.clipboard) return
+      try {
+        await navigator.clipboard.writeText(text)
+      } catch {
+        // 忽略：预览环境不保证剪贴板可用
+      }
+    },
+
     prompt: async (text) => {
       // 假的一次回复：用户消息 → 助手消息一点点长出来
       publishEvent('message_start', { message: { role: 'user', content: text } })
       publishEvent('message_end', { message: { role: 'user', content: text } })
-      publishEvent('message_start', { message: { role: 'assistant', content: [] } })
+      publishEvent('message_start', {
+        message: { role: 'assistant', content: [], usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }
+      })
       for (const chunk of FAKE_REPLY) {
         publishEvent('message_update', { type: 'text_delta', contentIndex: 0, delta: chunk })
       }
@@ -222,7 +236,9 @@ export function createMockApi(): CodeletApi {
           content: [
             { type: 'text', text: FAKE_REPLY.join('') },
             { type: 'toolCall', id: 'm1', name: 'bash', arguments: { command: 'npm test -- --run' } }
-          ]
+          ],
+          usage: { input: 6214, output: 601, cacheRead: 189, cacheWrite: 0 },
+          durationMs: 4044
         }
       })
 

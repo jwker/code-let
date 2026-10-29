@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, clipboard, ipcMain } from 'electron'
 import {
   EVENT_COALESCE_MS,
   IPC,
@@ -6,7 +6,12 @@ import {
   MAX_PAYLOAD_BYTES,
   type SessionEvent
 } from '@contract/index'
-import { promptSchema, switchConversationSchema, switchProjectSchema } from '@contract/schemas'
+import {
+  clipboardWriteSchema,
+  promptSchema,
+  switchConversationSchema,
+  switchProjectSchema
+} from '@contract/schemas'
 import { trimMessageUpdate } from '@contract/stream'
 import type { HostState } from './state'
 
@@ -105,6 +110,11 @@ export function registerIpc(state: HostState): () => void {
     await state.prompt(text)
   })
 
+  ipcMain.handle(IPC.clipboardWrite, (_event, payload: unknown) => {
+    const { text } = clipboardWriteSchema.parse(payload)
+    clipboard.writeText(text)
+  })
+
   return () => {
     coalescer.dispose()
     ipcMain.removeHandler(IPC.snapshotGet)
@@ -114,5 +124,6 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.conversationsNew)
     ipcMain.removeHandler(IPC.conversationsSwitch)
     ipcMain.removeHandler(IPC.promptSend)
+    ipcMain.removeHandler(IPC.clipboardWrite)
   }
 }

@@ -18,6 +18,10 @@ export const promptSchema = z.object({
   text: z.string().min(1)
 })
 
+export const clipboardWriteSchema = z.object({
+  text: z.string()
+})
+
 export type SwitchProjectPayload = z.infer<typeof switchProjectSchema>
 export type SwitchConversationPayload = z.infer<typeof switchConversationSchema>
 export type PromptPayload = z.infer<typeof promptSchema>
