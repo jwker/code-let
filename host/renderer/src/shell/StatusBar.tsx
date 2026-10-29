@@ -10,7 +10,7 @@ export function StatusBar() {
   const eventCount = useStore((s) => s.eventCount)
 
   return (
-    <footer className="shell-bar flex items-center gap-4 border-t border-hairline bg-surface px-3 text-[11px] text-fg-3">
+    <footer className="shell-bar flex items-center gap-4 bg-surface px-4 text-[10.5px] text-fg-3">
       <span className="truncate">{snapshot.currentProject?.name ?? '未选择项目'}</span>
       <span className="truncate font-mono">
         {snapshot.session.sessionId ? `session ${snapshot.session.sessionId.slice(0, 8)}` : 'no session'}

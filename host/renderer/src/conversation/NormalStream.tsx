@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { AnsiText } from './AnsiText'
@@ -6,10 +6,11 @@ import { Markdown } from './Markdown'
 import { useToolOutputs } from './useToolOutputs'
 
 /**
- * 普通模式 · 气泡消息流。
+ * 普通模式 · 聊天流。
  *
  * 读的是内容流那个数组，跟终端模式读的是同一份（R3）——
- * 这里只决定怎么画：气泡、头像，工具收成一行（名 + 状态 + 命令）。
+ * 这里只决定怎么画：用户消息右气泡，助手消息直接铺在内容列上，
+ * 工具收成一条灰线（名 + 状态 + 命令）。
  *
  * 工具输出默认收起来，点那一行才展开 —— 输出往往很长，全铺开会把对话区撑爆。
  */
@@ -17,10 +18,10 @@ import { useToolOutputs } from './useToolOutputs'
 type MessageItem = Extract<StreamItem, { kind: 'message' }>
 type ToolItem = Extract<StreamItem, { kind: 'tool' }>
 
-const TOOL_LOOK: Record<ToolItem['status'], { icon: string; bg: string; fg: string; line: string }> = {
-  running: { icon: '◐', bg: 'var(--accent-wash)', fg: 'var(--accent)', line: 'var(--accent-line)' },
-  ok: { icon: '✓', bg: 'var(--ok-wash)', fg: 'var(--ok)', line: 'var(--ok-line)' },
-  error: { icon: '✗', bg: 'var(--danger-wash)', fg: 'var(--danger)', line: 'var(--danger-line)' }
+const TOOL_LOOK: Record<ToolItem['status'], { icon: string; color: string }> = {
+  running: { icon: '◐', color: 'var(--fg-3)' },
+  ok: { icon: '✓', color: 'var(--fg-3)' },
+  error: { icon: '✗', color: 'var(--danger)' }
 }
 
 export function NormalStream({ items, streaming }: { items: StreamItem[]; streaming: boolean }) {
@@ -42,7 +43,7 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
   while (index < items.length) {
     const item = items[index]
 
-    // 工具项跟在消息后面 —— 归到那条消息的气泡里
+    // 工具项跟在消息后面 —— 归到那条消息下面
     if (item.kind === 'tool') {
       index += 1
       continue
@@ -65,7 +66,7 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
     }
 
     rows.push(
-      <MessageBubble
+      <MessageRow
         key={`msg-${index}`}
         item={item}
         tools={tools}
@@ -78,10 +79,14 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
     index = look
   }
 
-  return <div className="flex flex-col gap-4 px-5 py-5">{rows}</div>
+  return (
+    <div className="mx-auto flex w-full max-w-[var(--content-max)] flex-col gap-7 py-12">
+      {rows}
+    </div>
+  )
 }
 
-function MessageBubble({
+function MessageRow({
   item,
   tools,
   outputs,
@@ -96,43 +101,111 @@ function MessageBubble({
   onToggle: (callId: string, expanded: boolean) => void
   streaming: boolean
 }) {
-  const isUser = item.role === 'user'
-  return (
-    <div className="flex gap-2.5">
-      <span
-        className="mt-0.5 grid h-[22px] w-[22px] flex-none place-items-center rounded-full border text-[9.5px] font-bold"
-        style={{
-          background: isUser ? 'var(--sunken)' : 'var(--accent-wash)',
-          borderColor: isUser ? 'var(--hairline)' : 'var(--accent-line)',
-          color: isUser ? 'var(--fg-2)' : 'var(--accent)'
-        }}
-      >
-        {isUser ? 'ME' : 'π'}
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <div className="mb-1 flex items-center gap-2 text-[11.5px] font-semibold text-fg-1">
-          {isUser ? '你' : 'pi'}
-        </div>
-        <div className="rounded-md border border-hairline bg-surface px-3 py-2.5">
+  if (item.role === 'user') {
+    return (
+      <div className="flex flex-col items-end gap-2">
+        <div className="md-bubble max-w-[70%] rounded-[14px] bg-bubble px-3.5 py-2.5 text-[14.5px] leading-[1.65] text-fg-1">
           <Markdown text={item.text} variant="normal" />
-          {streaming && <span className="cursor" />}
-          {tools.length > 0 && (
-            <div className="mt-2 flex flex-col gap-0.5">
-              {tools.map((tool) => (
-                <ToolRow
-                  key={tool.callId || tool.name}
-                  tool={tool}
-                  output={outputs.get(tool.callId)}
-                  expanded={isExpanded(tool.callId, tool.status === 'running')}
-                  onToggle={(expanded) => onToggle(tool.callId, expanded)}
-                />
-              ))}
-            </div>
-          )}
         </div>
+        {tools.length > 0 && (
+          <div className="flex w-full flex-col gap-1">
+            <ToolList
+              tools={tools}
+              outputs={outputs}
+              isExpanded={isExpanded}
+              onToggle={onToggle}
+            />
+          </div>
+        )}
       </div>
+    )
+  }
+
+  return (
+    <div className="min-w-0">
+      <div className="text-[14.5px] leading-[1.9] text-fg-1">
+        <Markdown text={item.text} variant="normal" />
+        {streaming && <span className="cursor" />}
+      </div>
+      {tools.length > 0 && (
+        <div className="mt-3 flex flex-col gap-1">
+          <ToolList tools={tools} outputs={outputs} isExpanded={isExpanded} onToggle={onToggle} />
+        </div>
+      )}
     </div>
+  )
+}
+
+function ToolList({
+  tools,
+  outputs,
+  isExpanded,
+  onToggle
+}: {
+  tools: ToolItem[]
+  outputs: Map<string, string>
+  isExpanded: (callId: string, running: boolean) => boolean
+  onToggle: (callId: string, expanded: boolean) => void
+}) {
+  const [open, setOpen] = useState(false)
+
+  // 单个工具就按原样铺开；多个工具先收成一条摘要，点开再看每一项。
+  if (tools.length === 1) {
+    const tool = tools[0]
+    return (
+      <ToolRow
+        tool={tool}
+        output={outputs.get(tool.callId)}
+        expanded={isExpanded(tool.callId, tool.status === 'running')}
+        onToggle={(expanded) => onToggle(tool.callId, expanded)}
+      />
+    )
+  }
+
+  const running = tools.some((tool) => tool.status === 'running')
+  const hasError = tools.some((tool) => tool.status === 'error')
+  const showRows = open || running
+  const icon = hasError ? '✗' : running ? '◐' : '✓'
+  const color = hasError ? 'var(--danger)' : 'var(--fg-3)'
+  const summary = tools
+    .map((tool) => (tool.label ? `${tool.name} ${tool.label}` : tool.name))
+    .join(' · ')
+
+  return (
+    <>
+      {(!running || open) && (
+        <button
+          type="button"
+          aria-expanded={showRows}
+          onClick={() => setOpen((value) => !value)}
+          title={summary}
+          className="group flex h-7 w-fit max-w-full items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-sunken"
+        >
+          <span
+            className="grid h-4 w-4 flex-none place-items-center rounded-full border border-hairline text-[9px]"
+            style={{ color }}
+          >
+            {icon}
+          </span>
+          <span className="min-w-0 max-w-[70%] truncate text-[11.5px] text-fg-2">{summary}</span>
+          <span className="flex-none text-[9px] text-fg-3 opacity-0 transition-opacity group-hover:opacity-100">
+            {showRows ? '▾' : '▸'}
+          </span>
+        </button>
+      )}
+
+      {showRows &&
+        tools.map((tool) => (
+          <div key={tool.callId || tool.name} className="ml-5">
+            <ToolRow
+              tool={tool}
+              output={outputs.get(tool.callId)}
+              expanded={isExpanded(tool.callId, tool.status === 'running')}
+              onToggle={(expanded) => onToggle(tool.callId, expanded)}
+            />
+          </div>
+        ))}
+    </>
   )
 }
 
@@ -156,32 +229,28 @@ function ToolRow({
         aria-expanded={expanded}
         onClick={() => onToggle(!expanded)}
         title={tool.label}
-        className="flex w-full items-center gap-2 rounded-sm px-1 py-0.5 text-left hover:bg-sunken"
+        className="group flex h-7 w-full items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-sunken"
       >
         <span
-          className="inline-flex flex-none items-center gap-1.5 rounded-full border px-2 py-0.5 font-mono text-[10.5px]"
-          style={{ background: look.bg, borderColor: look.line, color: look.fg }}
+          className="grid h-4 w-4 flex-none place-items-center rounded-full border border-hairline text-[9px]"
+          style={{ color: look.color }}
         >
-          <span>{look.icon}</span>
-          <span className="font-semibold">{tool.name}</span>
+          {look.icon}
         </span>
-        <span
-          className="min-w-0 max-w-[70%] truncate font-mono text-[11px]"
-          style={{ color: 'var(--fg-3)' }}
-        >
+        <span className="flex-none text-[11.5px] font-medium text-fg-2">{tool.name}</span>
+        <span className="min-w-0 max-w-[60%] truncate font-mono text-[11px] text-fg-3">
           {tool.label}
         </span>
-        <span className="flex-none text-[10px]" style={{ color: 'var(--fg-3)' }}>
+        <span className="ml-auto flex-none text-[9px] text-fg-3 opacity-0 transition-opacity group-hover:opacity-100">
           {expanded ? '▾' : '▸'}
         </span>
       </button>
 
       {expanded && output !== undefined && (
-        <div
-          className="mt-1 ml-2 whitespace-pre-wrap break-words border-l-2 pl-2.5 font-mono text-[11px] leading-relaxed"
-          style={{ borderColor: 'var(--hairline)', color: 'var(--fg-3)' }}
-        >
-          <AnsiText text={output} />
+        <div className="mb-1 ml-6 border-l border-hairline pl-3 font-mono text-[11.5px] leading-relaxed text-fg-3">
+          <div className="whitespace-pre-wrap break-words">
+            <AnsiText text={output} />
+          </div>
         </div>
       )}
     </div>
@@ -190,11 +259,10 @@ function ToolRow({
 
 function ToolOutput({ text }: { text: string }) {
   return (
-    <div
-      className="ml-[30px] whitespace-pre-wrap break-words border-l-2 pl-2.5 font-mono text-[11px] leading-relaxed"
-      style={{ borderColor: 'var(--hairline)', color: 'var(--fg-3)' }}
-    >
-      <AnsiText text={text} />
+    <div className="border-l border-hairline pl-3 font-mono text-[11.5px] leading-relaxed text-fg-3">
+      <div className="whitespace-pre-wrap break-words">
+        <AnsiText text={text} />
+      </div>
     </div>
   )
 }

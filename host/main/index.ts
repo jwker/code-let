@@ -23,8 +23,10 @@ function createWindow(): BrowserWindow {
     minHeight: 640,
     show: false,
     // 渲染进程还没画之前的窗口底色 —— 默认主题是亮色
-    backgroundColor: '#f6f6f7',
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    backgroundColor: '#f4f4f5',
+    // macOS：标题栏整条交给渲染进程，红绿灯压在自绘标题栏左侧
+    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
+    trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 18 } : undefined,
     webPreferences: {
       preload: join(currentDir, '../preload/index.cjs'),
       sandbox: true,

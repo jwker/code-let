@@ -4,12 +4,12 @@ import type { ReactNode } from 'react'
 export function Icon({ children }: { children: ReactNode }) {
   return (
     <svg
-      width="17"
-      height="17"
+      width="18"
+      height="18"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.7"
+      strokeWidth="1.6"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -54,6 +54,13 @@ export const IconTerminal = () => (
   </Icon>
 )
 
+export const IconPanelRight = () => (
+  <Icon>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <path d="M15 4v16" />
+  </Icon>
+)
+
 export const IconSettings = () => (
   <Icon>
     <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
@@ -69,6 +76,33 @@ export const IconChevron = () => (
 export const IconPlus = () => (
   <Icon>
     <path d="M12 5v14M5 12h14" />
+  </Icon>
+)
+
+export const IconFolder = () => (
+  <Icon>
+    <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z" />
+  </Icon>
+)
+
+export const IconPencil = () => (
+  <Icon>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+  </Icon>
+)
+
+export const IconArrowUp = () => (
+  <Icon>
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </Icon>
+)
+
+export const IconMore = () => (
+  <Icon>
+    <circle cx="5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="12" r="1.2" fill="currentColor" stroke="none" />
   </Icon>
 )
 

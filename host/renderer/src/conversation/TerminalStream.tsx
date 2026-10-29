@@ -15,8 +15,8 @@ import { useToolOutputs } from './useToolOutputs'
  */
 
 const TOOL_MARK = {
-  running: { icon: '◐', color: 'var(--accent)' },
-  ok: { icon: '✓', color: 'var(--ok)' },
+  running: { icon: '◐', color: 'var(--fg-3)' },
+  ok: { icon: '✓', color: 'var(--fg-3)' },
   error: { icon: '✗', color: 'var(--danger)' }
 } as const
 
@@ -34,7 +34,7 @@ export function TerminalStream({ items, streaming }: { items: StreamItem[]; stre
   }, [items])
 
   return (
-    <div className="flex flex-col gap-1.5 px-4 py-3 font-mono text-[12px] leading-relaxed">
+    <div className="mx-auto flex w-full max-w-[var(--content-max)] flex-col gap-2 py-10 font-mono text-[12.5px] leading-[1.75]">
       {items.map((item, index) => {
         const last = index === items.length - 1
         switch (item.kind) {
@@ -42,7 +42,7 @@ export function TerminalStream({ items, streaming }: { items: StreamItem[]; stre
             if (item.role === 'user') {
               return (
                 <div key={index} className="flex gap-2">
-                  <span style={{ color: 'var(--accent)' }}>›</span>
+                  <span style={{ color: 'var(--fg-3)' }}>›</span>
                   <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-fg-1">
                     {item.text}
                   </span>
@@ -82,7 +82,7 @@ export function TerminalStream({ items, streaming }: { items: StreamItem[]; stre
                   aria-expanded={expanded}
                   title={item.label}
                   onClick={() => setToolExpanded(item.callId, !expanded)}
-                  className="flex w-full gap-2 rounded-sm px-1 text-left hover:bg-sunken"
+                  className="flex w-full gap-2 rounded-md px-1.5 py-0.5 text-left transition-colors hover:bg-sunken"
                 >
                   <span style={{ color: mark.color }}>{mark.icon}</span>
                   <span className="min-w-0 flex-none break-words text-fg-2">{item.name}</span>

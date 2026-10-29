@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store'
-import { IconChevron } from './icons'
+import { IconChevron, IconFolder } from './icons'
 import { host } from '../host'
 
 function shorten(path: string): string {
@@ -30,23 +30,19 @@ export function ProjectSwitcher() {
   }
 
   return (
-    <div className="relative border-b border-hairline px-3 py-2.5">
+    <div className="relative px-2.5 pt-3">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-sunken"
+        title={current?.path}
+        className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-sunken"
       >
-        <span className="flex h-5 w-5 flex-none items-center justify-center rounded-sm border border-accent-line bg-accent-wash text-[10px] font-semibold text-accent">
-          {(current?.name ?? '?').slice(0, 1).toUpperCase()}
+        <span className="flex-none text-fg-2">
+          <IconFolder />
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[12.5px] font-semibold text-fg-1">
-            {current?.name ?? '未选择项目'}
-          </span>
-          <span className="block truncate font-mono text-[10px] text-fg-3">
-            {current ? shorten(current.path) : '—'}
-          </span>
+        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-fg-1">
+          {current?.name ?? '未选择项目'}
         </span>
         <span className="flex-none text-fg-3">
           <IconChevron />
@@ -55,21 +51,19 @@ export function ProjectSwitcher() {
 
       {open && (
         <div
-          className="absolute left-3 right-3 top-full z-20 mt-1 overflow-hidden rounded-md border border-hairline-strong bg-surface"
+          className="absolute left-2.5 right-2.5 top-full z-20 mt-1 overflow-hidden rounded-xl border border-hairline bg-raised p-1"
           style={{ boxShadow: 'var(--sh-lg)' }}
         >
-          <div className="border-b border-hairline px-3 py-1.5 text-[10px] tracking-[0.07em] text-fg-3 uppercase">
-            最近项目
-          </div>
+          <div className="px-2.5 py-2 text-[11px] text-fg-3">最近项目</div>
           {snapshot.projects.length === 0 && (
-            <div className="px-3 py-2 text-[12px] text-fg-3">还没有项目</div>
+            <div className="px-2.5 py-2 text-[12px] text-fg-3">还没有项目</div>
           )}
           {snapshot.projects.map((project) => (
             <button
               key={project.path}
               type="button"
               onClick={() => void handleSwitch(project.path)}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-fg-2 hover:bg-sunken"
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12.5px] text-fg-2 transition-colors hover:bg-sunken"
             >
               <span className="min-w-0 flex-1 truncate">{project.name}</span>
               <span className="min-w-0 truncate font-mono text-[10px] text-fg-3">
@@ -77,11 +71,11 @@ export function ProjectSwitcher() {
               </span>
             </button>
           ))}
-          <div className="h-px bg-hairline" />
+          <div className="my-1 h-px bg-hairline" />
           <button
             type="button"
             onClick={() => void handleOpenProject()}
-            className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-fg-1 hover:bg-sunken"
+            className="flex w-full items-center rounded-lg px-2.5 py-2 text-left text-[12.5px] text-fg-1 transition-colors hover:bg-sunken"
           >
             打开项目…
           </button>

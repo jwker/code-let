@@ -14,7 +14,9 @@
   --font-mono: var(--font-code);
 
   --color-canvas: var(--canvas);
+  --color-panel: var(--panel);
   --color-surface: var(--surface);
+  --color-insp: var(--insp);
   --color-raised: var(--raised);
   --color-sunken: var(--sunken);
   --color-overlay: var(--overlay);
@@ -24,6 +26,7 @@
   --color-fg-1: var(--fg-1);
   --color-fg-2: var(--fg-2);
   --color-fg-3: var(--fg-3);
+  --color-bubble: var(--bubble);
 
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
@@ -59,8 +62,8 @@
     background: var(--canvas);
     color: var(--fg-1);
     font-family: var(--font-ui);
-    font-size: 13px;
-    line-height: 1.5;
+    font-size: 13.5px;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
   }
@@ -71,13 +74,13 @@
   }
 
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
   }
   ::-webkit-scrollbar-thumb {
     background: var(--hairline-strong);
     border-radius: var(--r-full);
-    border: 3px solid transparent;
+    border: 2px solid transparent;
     background-clip: content-box;
   }
   ::-webkit-scrollbar-track {
@@ -90,36 +93,213 @@
  * 位置写死（PLAN.md D5）。
  * ------------------------------------------------------------------------- */
 
+/*
+ * 检视器宽度要能动画：自定义属性默认不可插值，注册成 <length> 才能过渡。
+ * --insp-w 是面板的设计宽度（内容按它排版），--insp-track 是实际占位宽度。
+ */
+@property --insp-track {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 300px;
+}
+
 .shell {
+  /* 三栏宽度只在这里定义；将来侧栏可拖拽时改这三个变量即可，标题栏会跟着走 */
+  --rail-w: 56px;
+  --side-w: 264px;
+  --insp-w: 300px;
+  --insp-track: var(--insp-w);
+  /* 侧栏左上角的圆角；分隔线按这个半径拐弯，改大改小只要动这里 */
+  --panel-radius: 12px;
+
   display: grid;
-  grid-template-columns: 56px 264px minmax(0, 1fr) 300px;
-  grid-template-rows: minmax(0, 1fr) 26px;
+  grid-template-columns: var(--rail-w) var(--side-w) minmax(0, 1fr) var(--insp-track);
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr) 24px;
   grid-template-areas:
+    'title title title title'
     'rail side main insp'
     'rail side bar bar';
   height: 100vh;
   background: var(--canvas);
+  transition: --insp-track 180ms ease;
+}
+
+/* 收起检视器：只改占位宽度，面板自己滑出去（见 .shell-insp） */
+.shell.is-insp-hidden {
+  --insp-track: 0px;
+}
+
+/*
+ * 窗口标题栏：整条可拖动，内部按钮单独 no-drag。
+ * 内部按「导航轨 + 侧栏 / 主区 / 检视器」切成三段，列宽跟 shell 共用变量。
+ */
+.shell-title {
+  grid-area: title;
+  position: relative;
+  z-index: 30;
+  display: grid;
+  grid-template-columns: calc(var(--rail-w) + var(--side-w)) minmax(0, 1fr) var(--insp-track);
+}
+/*
+ * 打通导航轨：底边线不从窗口左上角画起，而是从轨道右边开始，
+ * 左上角那块留给 macOS 红绿灯，导航轨看上去就一路通到窗口顶端。
+ * 起点再让出一个圆角半径，好跟侧栏的圆角接上。
+ */
+.shell-title::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--rail-w) + var(--panel-radius) - 1px);
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--hairline);
+  pointer-events: none;
+}
+/*
+ * 侧栏左上角的 1px 弧线：横线在这里拐个弯接上轨道的竖线。
+ * 必须画在标题栏上（标题栏 z-index 高于侧栏），
+ * 否则弧线在 y < titlebar-h 的那半截会被标题栏盖掉，接缝处露出 1px 台阶。
+ */
+.shell-title::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--rail-w) - 1px);
+  top: calc(100% - 1px);
+  width: var(--panel-radius);
+  height: var(--panel-radius);
+  border-top: 1px solid var(--hairline);
+  border-left: 1px solid var(--hairline);
+  border-top-left-radius: var(--panel-radius);
+  pointer-events: none;
+  z-index: 1;
+}
+.titlebar-left {
+  min-width: 0;
+  padding-left: 16px;
+}
+[data-platform='darwin'] .titlebar-left {
+  padding-left: 84px;
+}
+.titlebar-main {
+  min-width: 0;
+}
+.titlebar-insp {
+  min-width: 0;
+}
+/* 顶栏中间段：标题贴左、菜单按钮贴右，跟下方主栏同宽同边界 */
+.titlebar-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 16px;
+  transition: padding-right 180ms ease;
+}
+/* 检视器收起后主栏铺到窗口右边，给右上角的开关按钮让出位置，别跟「…」挤在一起 */
+.shell.is-insp-hidden .titlebar-content {
+  padding-right: 48px;
+}
+.titlebar-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+}
+.titlebar-more {
+  display: flex;
+  flex: none;
+  /* 整条标题栏是拖动区，交互元素必须单独退出拖动区，否则点不到 */
+  -webkit-app-region: no-drag;
+}
+.titlebar-more svg {
+  width: 16px;
+  height: 16px;
+}
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
 }
 
 .shell-rail {
   grid-area: rail;
+  position: relative;
+}
+/* 竖线让出圆角那一段，剩下的由标题栏上的弧线接上（见 .shell-title::before） */
+.shell-rail::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--panel-radius) - 1px);
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--hairline);
+  pointer-events: none;
 }
 
-/* macOS 隐藏式标题栏：红绿灯占住导航轨顶部 */
-[data-platform='darwin'] .shell-rail {
-  padding-top: 38px;
-}
 .shell-side {
   grid-area: side;
+  /* 面板底色向内收 1px，正好贴在弧线内侧 */
+  border-top-left-radius: calc(var(--panel-radius) - 1px);
 }
 .shell-main {
   grid-area: main;
 }
 .shell-insp {
   grid-area: insp;
+  position: relative;
+  /* 收起时列宽归零，内容按 --insp-w 排版后靠右裁掉 */
+  min-width: 0;
+  overflow: hidden;
+}
+/* 左分隔线单独画，别用 border —— border 会占掉 1px，面板就比列宽宽 1px */
+.shell-insp::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--hairline);
+  transition: opacity 180ms ease;
+}
+.shell.is-insp-hidden .shell-insp {
+  visibility: hidden;
+  /* 收起时延后隐藏，让滑出动画看得见；展开时立刻显示 */
+  transition: visibility 0s linear 180ms;
+}
+.shell.is-insp-hidden .shell-insp::before {
+  opacity: 0;
+}
+.insp-body {
+  display: flex;
+  width: var(--insp-w);
+  height: 100%;
+  margin-left: auto;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell,
+  .titlebar-content,
+  .shell-insp::before {
+    transition: none;
+  }
 }
 .shell-bar {
   grid-area: bar;
+}
+
+/* 标题栏里的小图标比导航轨的再小一号 */
+.shell-title .title-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* 拖拽可调宽度的分隔条 */
@@ -144,12 +324,12 @@
 
 .conv-terminal {
   font-family: var(--font-code);
-  font-size: 12px;
+  font-size: 12.5px;
   white-space: pre-wrap;
 }
 
 .conv-html {
-  max-width: 760px;
+  max-width: var(--content-max);
   margin: 0 auto;
   padding: var(--sp-8) var(--sp-6);
   line-height: 1.75;
@@ -166,15 +346,16 @@
   color: var(--fg-3);
   text-align: center;
   padding: var(--sp-8);
+  font-size: 13px;
 }
 
 /* ---------------------------------------------------------------------------
    内容格式（markdown）—— 两种排版读同一套格式（R7）
    ------------------------------------------------------------------------- */
 .md {
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--fg-2);
+  font-size: 14.5px;
+  line-height: 1.9;
+  color: var(--fg-1);
   /* 长路径 / 长 URL / 长标识符：断在任意位置，不把对话区撑宽（R7） */
   overflow-wrap: anywhere;
 }
@@ -187,75 +368,75 @@
 .md-h {
   color: var(--fg-1);
   letter-spacing: -0.01em;
-  line-height: 1.35;
-  margin: 14px 0 6px;
+  line-height: 1.4;
+  margin: 24px 0 10px;
 }
 .md-h1 {
-  font-size: 17px;
-  font-weight: 650;
+  font-size: 21px;
+  font-weight: 600;
 }
 .md-h2 {
-  font-size: 15px;
-  font-weight: 650;
+  font-size: 18px;
+  font-weight: 600;
 }
 .md-h3 {
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 600;
 }
 .md-h4,
 .md-h5,
 .md-h6 {
-  font-size: 13px;
+  font-size: 14.5px;
   font-weight: 600;
 }
 .md-p {
-  margin: 0 0 10px;
+  margin: 0 0 14px;
 }
 .md-list {
-  margin: 0 0 10px;
-  padding-left: 20px;
+  margin: 0 0 14px;
+  padding-left: 22px;
 }
 .md-list li {
-  margin-bottom: 2px;
+  margin-bottom: 6px;
 }
 .md-list li::marker {
   color: var(--fg-3);
 }
 .md-code {
   font-family: var(--font-code);
-  font-size: 11.5px;
+  font-size: 12.5px;
   background: var(--sunken);
-  border: 1px solid var(--hairline);
+  border: none;
   border-radius: var(--r-xs);
-  padding: 1px 5px;
+  padding: 2px 6px;
   color: var(--fg-1);
 }
 .md-pre {
   background: var(--sunken);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-sm);
-  padding: 10px 12px;
-  margin: 0 0 10px;
+  border: none;
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  margin: 0 0 14px;
   overflow-x: auto;
   /* 代码块自己横向滚动，长行不折断 —— 折了代码就对不齐了 */
   overflow-wrap: normal;
 }
 .md-pre code {
   font-family: var(--font-code);
-  font-size: 11.5px;
-  line-height: 1.65;
+  font-size: 12.5px;
+  line-height: 1.7;
   color: var(--fg-2);
 }
 /* 宽表格自己横向滚，不把对话区撑宽 */
 .md-table-wrap {
   overflow-x: auto;
   max-width: 100%;
-  margin: 0 0 10px;
+  margin: 0 0 14px;
 }
 .md-table {
   border-collapse: collapse;
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   /* 表格单元格里不折长词 —— 折了会把别的列挤成一字一行（R7） */
   overflow-wrap: normal;
 }
@@ -263,18 +444,18 @@
   text-align: left;
   font-weight: 600;
   color: var(--fg-1);
-  padding: 6px 14px 6px 0;
+  padding: 8px 16px 8px 0;
   border-bottom: 1px solid var(--hairline-strong);
 }
 .md-table td {
-  padding: 6px 14px 6px 0;
+  padding: 8px 16px 8px 0;
   border-bottom: 1px solid var(--hairline);
   color: var(--fg-2);
   vertical-align: top;
 }
 .md-quote {
-  margin: 0 0 10px;
-  padding-left: 12px;
+  margin: 0 0 14px;
+  padding-left: 14px;
   border-left: 2px solid var(--hairline-strong);
   color: var(--fg-3);
 }
@@ -284,17 +465,32 @@
 .md-rule {
   border: none;
   border-top: 1px solid var(--hairline);
-  margin: 14px 0;
+  margin: 22px 0;
 }
 .md strong {
   color: var(--fg-1);
   font-weight: 600;
 }
 
+/* 用户气泡里的正文：比助手区更紧凑一点 */
+.md-bubble .md {
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+.md-bubble .md-p {
+  margin-bottom: 0;
+}
+.md-bubble .md-list,
+.md-bubble .md-pre,
+.md-bubble .md-table-wrap,
+.md-bubble .md-quote {
+  margin-bottom: 0;
+}
+
 /* 终端变体：还是等宽，格式一样在 */
 .md-terminal {
   font-family: var(--font-code);
-  font-size: 12px;
+  font-size: 12.5px;
   line-height: 1.8;
 }
 .md-terminal .md-h {
@@ -322,15 +518,15 @@
   padding: 3px 10px;
 }
 .md-terminal .md-table th {
-  background: var(--surface);
+  background: var(--sunken);
 }
 
 /* 正在生成时的光标 */
 .cursor {
   display: inline-block;
-  width: 6px;
-  height: 13px;
-  background: var(--accent);
+  width: 2px;
+  height: 1.05em;
+  background: var(--fg-2);
   vertical-align: -2px;
   margin-left: 2px;
   border-radius: 1px;
