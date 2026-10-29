@@ -80,7 +80,7 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[var(--content-max)] flex-col gap-7 py-12">
+    <div className="conv-stream mx-auto flex flex-col gap-7 py-12">
       {rows}
     </div>
   )

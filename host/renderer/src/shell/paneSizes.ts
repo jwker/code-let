@@ -7,15 +7,20 @@
  */
 export const RAIL_W = 56
 
-/** 主区至少留这么宽，不然内容列（720）会被挤成一团 */
-export const MAIN_MIN = 420
+/**
+ * 主区至少留这么宽。
+ *
+ * 这不是内容列的下限 —— 只是「还看得出会话区在这儿」的一条缝。
+ * 检视器不设上限，想铺多大就多大，主区让位给它。
+ */
+export const MAIN_MIN = 160
 
 export const SIDEBAR_MIN = 200
 export const SIDEBAR_MAX = 360
 export const SIDEBAR_DEFAULT = 264
 
+/** 检视器只有下限，没有上限 */
 export const INSPECTOR_MIN = 260
-export const INSPECTOR_MAX = 480
 export const INSPECTOR_DEFAULT = 300
 
 const SIDEBAR_KEY = 'codelet:sidebar-width'
@@ -26,7 +31,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /** 读一个存过的宽度；没存过、存坏了、超出上下限都退回默认值 */
-function load(key: string, fallback: number, min: number, max: number): number {
+function load(key: string, fallback: number, min: number, max = Number.MAX_SAFE_INTEGER): number {
   try {
     const raw = Number(localStorage.getItem(key))
     if (!Number.isFinite(raw) || raw <= 0) return fallback
@@ -53,7 +58,7 @@ export function saveSidebarWidth(width: number): void {
 }
 
 export function loadInspectorWidth(): number {
-  return load(INSPECTOR_KEY, INSPECTOR_DEFAULT, INSPECTOR_MIN, INSPECTOR_MAX)
+  return load(INSPECTOR_KEY, INSPECTOR_DEFAULT, INSPECTOR_MIN)
 }
 
 export function saveInspectorWidth(width: number): void {
@@ -61,8 +66,8 @@ export function saveInspectorWidth(width: number): void {
 }
 
 /**
- * 左栏能拖到多宽：窗口减去导航轨、检视器和给主区留的下限。
- * 窗口太窄时上限会低于下限，这时按最小宽度算 —— 宁可主区挤一点，也不让侧栏消失。
+ * 左栏能拖到多宽：窗口减去导航轨、检视器和给主区留的那条缝。
+ * 窗口太窄时上限会低于下限，这时按最小宽度算 —— 宁可主区没地方，也不让侧栏消失。
  */
 export function sidebarCeiling(inspectorTrack: number, windowWidth: number): number {
   return Math.max(
@@ -71,11 +76,9 @@ export function sidebarCeiling(inspectorTrack: number, windowWidth: number): num
   )
 }
 
+/** 检视器没有上限：一直拖到主区只剩 MAIN_MIN 为止 */
 export function inspectorCeiling(sidebarWidth: number, windowWidth: number): number {
-  return Math.max(
-    INSPECTOR_MIN,
-    Math.min(INSPECTOR_MAX, windowWidth - RAIL_W - sidebarWidth - MAIN_MIN)
-  )
+  return Math.max(INSPECTOR_MIN, windowWidth - RAIL_W - sidebarWidth - MAIN_MIN)
 }
 
 /** 把宽度收进上下限（鼠标拖拽和键盘微调共用） */

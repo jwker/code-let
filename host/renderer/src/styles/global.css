@@ -309,6 +309,11 @@
 }
 .shell-main {
   grid-area: main;
+  /*
+   * 主区宽度受两侧拖拽影响，窄到什么程度都可能有；
+   * 让内部按自身宽度收缩（见下面的 @container），别让内容列贴边。
+   */
+  container-type: inline-size;
 }
 .shell-insp {
   grid-area: insp;
@@ -436,6 +441,34 @@ body.is-pane-resizing * {
 .conv-normal {
   display: flex;
   flex-direction: column;
+}
+
+/*
+ * 内容列：最宽 720，两侧至少留 16px。
+ * 用宽度算而不是容器查询 —— 拖窄时连续收，不会在某个宽度跳一下。
+ */
+.conv-stream {
+  width: clamp(0px, calc(100% - var(--sp-8)), var(--content-max));
+  margin-inline: auto;
+}
+
+/*
+ * 输入卡的左右边距跟主区联动：够宽时 24，窄下来收到 12，
+ * 不然主区被拖窄后卡片会贴着栏边、里面只剩一条缝。
+ */
+.conv-footer {
+  padding-inline: clamp(
+    var(--sp-3),
+    calc((100% - var(--content-max)) / 2 + var(--sp-6)),
+    var(--sp-6)
+  );
+}
+
+/* 窄到放不下一行快捷键说明时，只留发送键 */
+@container (max-width: 380px) {
+  .conv-hint {
+    display: none;
+  }
 }
 
 /* 反相气泡里的 markdown 要跟着换色，不然行内代码 / 加粗会在深底上糊掉 */

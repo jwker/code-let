@@ -76,7 +76,7 @@ export function ConversationArea() {
         )}
       </div>
 
-      <footer className="flex-none px-6 pb-5 pt-2">
+      <footer className="conv-footer flex-none pb-5 pt-2">
         <div className="relative mx-auto w-full max-w-[var(--content-max)]">
           {/* 现阶段只有普通模式有这个钮（PLAN.md D14）；钉在内容列右下角、输入卡上方 */}
           {mode === 'normal' && (
@@ -99,7 +99,7 @@ export function ConversationArea() {
             />
 
             <div className="mt-1 flex items-center gap-3 px-2">
-              <span className="text-[11.5px] text-fg-3">⌘↵ 发送</span>
+              <span className="conv-hint text-[11.5px] text-fg-3">⌘↵ 发送</span>
               {session.error && (
                 <span className="min-w-0 flex-1 truncate text-[11.5px] text-danger" title={session.error}>
                   {session.error}
