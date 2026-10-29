@@ -179,6 +179,12 @@
 }
 /*
  * 侧栏左上角的 1px 弧线：横线在这里拐个弯接上轨道的竖线。
+ *
+ * 这个角是「轨道与内容交界处」的固定形状，不跟收放走：
+ * 侧栏在的时候是侧栏的角，收起后换成主区的角（见 .shell.is-side-hidden .shell-main）。
+ * 所以弧线、横线起点、轨道竖线三处全程不动 —— 不会出现「有圆角、没弧线」的空档，
+ * 也不需要在动画末尾偷偷换一遍。
+ *
  * 必须画在标题栏上（标题栏 z-index 高于侧栏），
  * 否则弧线在 y < titlebar-h 的那半截会被标题栏盖掉，接缝处露出 1px 台阶。
  */
@@ -194,25 +200,6 @@
   border-top-left-radius: var(--panel-radius);
   pointer-events: none;
   z-index: 1;
-}
-/*
- * 侧栏收起后那个圆角不存在了：横线一路画到轨道边、轨道竖线顶到标题栏，
- * 变成和右侧检视器一样的直角接缝。
- *
- * 三处都延后 180ms 再换 —— 收起过程中面板的圆角还在原位，
- * 提前把弧线抽掉会留下一个「有圆角、没弧线」的空档；等面板滑完一起换。
- */
-.shell.is-side-hidden .shell-title::before {
-  opacity: 0;
-  transition: opacity 0s linear 180ms;
-}
-.shell.is-side-hidden .shell-title::after {
-  left: calc(var(--rail-w) - 1px);
-  transition: left 0s linear 180ms;
-}
-.shell.is-side-hidden .shell-rail::after {
-  top: 0;
-  transition: top 0s linear 180ms;
 }
 .titlebar-left {
   /* 左段（导航轨 + 侧栏）的占位。开关浮在标题栏上，不在这里 —— 见 .titlebar-side */
@@ -351,6 +338,21 @@
    * 让内部按自身宽度收缩（见下面的 @container），别让内容列贴边。
    */
   container-type: inline-size;
+}
+/*
+ * 侧栏收起后，左上角那块圆角由主区自己带着 —— 位置跟侧栏的角完全重合，
+ * 所以弧线、横线起点、轨道竖线都不用动，全程形状不变。
+ *
+ * overflow: hidden 是必需的：主区里的 <section> 也铺了 bg-surface，
+ * 不裁的话会把这张圆角盖回直角。
+ *
+ * 收起时延后 180ms 才挂上：面板滑走的过程中角还是侧栏自己的，最后一帧无缝交接。
+ * 展开时立刻摘掉 —— 那一刻侧栏刚好 0 宽、主区贴边，下一帧侧栏就盖过来了。
+ */
+.shell.is-side-hidden .shell-main {
+  border-top-left-radius: calc(var(--panel-radius) - 1px);
+  overflow: hidden;
+  transition: border-radius 0s linear 180ms;
 }
 .shell-insp {
   grid-area: insp;
