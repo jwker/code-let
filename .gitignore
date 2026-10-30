@@ -10,3 +10,4 @@ lifecycle-log.json
 .idea/
 .vscode/*
 !.vscode/extensions.json
+.tmp/

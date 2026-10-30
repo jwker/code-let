@@ -124,9 +124,14 @@
   position: relative;
   display: grid;
   grid-template-columns: var(--rail-w) var(--side-track) minmax(0, 1fr) var(--insp-track);
-  grid-template-rows: var(--titlebar-h) minmax(0, 1fr) var(--statusbar-h);
+  /*
+   * 标签栏占一行，横向只盖主区那一列（PLAN.md D4 修订 · 设计稿 A 方案）。
+   * 侧栏和导航轨保持满高 —— 标签栏只属于主区，跟主面板是同一块。
+   */
+  grid-template-rows: var(--titlebar-h) var(--tabbar-h) minmax(0, 1fr) var(--statusbar-h);
   grid-template-areas:
     'title title title title'
+    'rail side tabs insp'
     'rail side main insp'
     'rail side bar bar';
   height: 100vh;
@@ -291,6 +296,31 @@
   /* 收起时延后隐藏，让滑出动画看得见；展开时立刻显示 */
   transition: visibility 0s linear 180ms;
 }
+/*
+ * 标签栏 —— 标题栏下方一行，横向只盖主区那一列（设计稿 A 方案）。
+ *
+ * 它是底槽色（--canvas），活动标签是面板色（--surface）——
+ * 看着像活动标签从底槽里「拉出来」接上了下面的主面板。
+ */
+.shell-tabs {
+  grid-area: tabs;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--hairline);
+}
+/* 活动标签：底部一条 2px 短线 */
+.shell-tabs .tab[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
 .shell-main {
   grid-area: main;
   /*
