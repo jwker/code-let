@@ -135,7 +135,8 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .nav-item.on{background:var(--accent-wash);color:var(--fg-1);font-weight:600}
 .nav-item .ico{font-size:11px;line-height:1}
 
-.nav-icon-only .nav-item{padding:0;width:30px;justify-content:center}
+/* 只留图标：5 个均匀铺满整条，每个一格 */
+.nav-icon-only .nav-item{flex:1;padding:0;justify-content:center;height:26px}
 .nav-v{display:flex;flex-direction:column;gap:2px;padding:5px;width:38px}
 .nav-v .nav-item{width:28px;height:26px;padding:0;justify-content:center}
 
@@ -237,12 +238,12 @@ table.spec .mid{color:var(--warn);font-weight:600}
   <section class="option">
     <div class="option-head">
       <span class="tag rec">A · 推荐</span>
-      <h2>图标 + 文字横排；检视器收起时导航栏留在右边一条窄轨</h2>
+      <h2>只有图标、均匀铺满；检视器收起时导航栏留在右边一条窄轨</h2>
     </div>
     <p class="desc">
-      导航栏横排在右侧面板顶部：图标 + 文字，5 项共约 300px，正好铺满 300px 宽的面板。
-      检视器收起时，导航栏<b>不跟着消失</b> —— 它变成右边一条 38px 的窄轨（竖排图标），
-      面板内容收起来。
+      导航栏横排在右侧面板顶部，<b>只有图标、不写文字</b>：5 个图标各占一格，均匀铺满 300px 的面板宽度。
+      检视器收起时，导航栏<b>不跟着消失</b> —— 它变成右边一条 38px 的窄轨（图标竖排），
+      面板内容（Git / Agent）收起来。
     </p>
     <div class="frame">
       <div class="app">
@@ -283,12 +284,12 @@ table.spec .mid{color:var(--warn);font-weight:600}
           </div>
           <div class="card insp">
             <div class="insp-nav hot" data-hot="导航栏">
-              <div class="nav-h">
-                <div class="nav-item on"><span class="ico">▢</span>会话</div>
-                <div class="nav-item"><span class="ico">▤</span>看板</div>
-                <div class="nav-item"><span class="ico">◈</span>记忆</div>
-                <div class="nav-item"><span class="ico">‹›</span>代码</div>
-                <div class="nav-item"><span class="ico">›_</span>终端</div>
+              <div class="nav-h nav-icon-only">
+                <div class="nav-item on" title="会话"><span class="ico">▢</span></div>
+                <div class="nav-item" title="看板"><span class="ico">▤</span></div>
+                <div class="nav-item" title="记忆"><span class="ico">◈</span></div>
+                <div class="nav-item" title="代码"><span class="ico">‹›</span></div>
+                <div class="nav-item" title="终端"><span class="ico">›_</span></div>
               </div>
             </div>
             <div class="insp-body"><div class="icard"></div><div class="icard"></div></div>
@@ -352,10 +353,10 @@ table.spec .mid{color:var(--warn);font-weight:600}
       </div>
     </div>
     <div class="verdict">
-      <b>好处</b>：图标 + 文字，一眼认得出；5 项正好铺满面板宽度，不用换行；
-      <b>检视器收起时导航还在</b>（变成窄轨），入口不会消失。<br>
-      <b>代价</b>：<span class="warn">要维护两种形态</span> —— 横排（面板展开）和竖排窄轨（面板收起），
-      两套图标尺寸和间距。收起时右边仍占 38px。
+      <b>好处</b>：只有图标，导航栏最矮最干净；5 个各占一格铺满面板，点按区域大；
+      <b>检视器收起时导航还在</b>（变成窄轨），入口不会消失，位置也不变。<br>
+      <b>代价</b>：<span class="warn">光看图标认不出</span>（「▤」是看板还是列表？）—— 只能靠悬停；
+      而且要维护两种形态（横排 / 竖排窄轨）。收起时右边仍占 38px。
     </div>
   </section>
 
@@ -556,22 +557,23 @@ table.spec .mid{color:var(--warn);font-weight:600}
   <table class="spec">
     <thead><tr><th>方案</th><th>认得出吗</th><th>收起检视器后</th><th>要维护几种形态</th><th>收起后右侧占宽</th></tr></thead>
     <tbody>
-      <tr><td>A 图标+文字 · 收起成窄轨</td><td class="ok">一眼认得出</td><td class="ok">变成 38px 竖排窄轨</td><td class="mid">两种</td><td class="ok">38px</td></tr>
+      <tr><td class="ok">A 只图标 · 收起成窄轨（已选）</td><td class="no">只能靠悬停</td><td class="ok">变成 38px 竖排窄轨</td><td class="mid">两种</td><td class="ok">38px</td></tr>
       <tr><td>B 纯图标 · 收起后搬到标题栏</td><td class="no">只能靠悬停</td><td class="no">搬家到标题栏（位置会跳）</td><td class="ok">一种</td><td class="ok">0</td></tr>
       <tr><td>C 图标+文字 · 收起成胶囊</td><td class="ok">一眼认得出</td><td class="mid">缩成当前项胶囊</td><td class="mid">两种</td><td class="no">120px</td></tr>
     </tbody>
   </table>
 
   <div class="rec-card">
-    <h3>推荐：A</h3>
+    <h3>已选：A（只有图标）</h3>
     <ol>
-      <li><b>图标 + 文字</b>。5 个入口里「看板 / 记忆 / 代码」光看图标分不出来，加文字才认得。</li>
       <li><b>收起时留一条 38px 窄轨</b>，而不是搬家或者缩成胶囊 ——
       入口<b>位置不变</b>（一直在右边），只是从横排变竖排。搬家的代价是「收起之后不知道去哪点」。</li>
-      <li>5 项 × (图标 + 文字 + padding) ≈ 300px，<b>正好铺满 300px 的面板</b>，不用换行也不用留白。</li>
+      <li><b>5 个图标各占一格、均匀铺满</b>面板宽度，点按区域大，也不用算间距。</li>
+      <li>只留图标，导航栏最矮最干净。<b>代价是认不出</b> —— 所以每一项都要有 <code>title</code>，
+      悬停能看到名字。</li>
     </ol>
     <p>
-      代价是维护两种形态（横排 / 竖排窄轨）。但这两个形态只差 <code>flex-direction</code> 和尺寸，
+      两种形态（横排 / 竖排窄轨）只差 <code>flex-direction</code> 和尺寸，
       同一个组件加一个 <code>compact</code> 属性就能覆盖。
     </p>
   </div>

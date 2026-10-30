@@ -1,7 +1,6 @@
 import type { NavEntry } from '@contract/index'
 import { ConversationArea } from '../conversation/ConversationArea'
 import { useStore } from '../store'
-import { StatusBar } from './StatusBar'
 
 const TITLES: Record<NavEntry, string> = {
   session: '会话',
@@ -11,11 +10,7 @@ const TITLES: Record<NavEntry, string> = {
   terminal: '终端'
 }
 
-/**
- * 主工作区 —— 一张卡，内容按入口换（PLAN.md D5）。
- *
- * 状态栏收在这张卡的底部当页脚 —— 它显示的是这个会话的状态。
- */
+/** 主工作区 —— 一张卡，内容按入口换（PLAN.md D5） */
 export function MainArea() {
   const nav = useStore((s) => s.nav)
 
@@ -31,7 +26,6 @@ export function MainArea() {
           </div>
         )}
       </div>
-      {nav === 'session' && <StatusBar />}
     </main>
   )
 }
