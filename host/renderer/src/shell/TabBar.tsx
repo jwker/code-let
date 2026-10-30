@@ -135,7 +135,7 @@ function Tab({ tab, active, clipped }: { tab: TabInfo; active: boolean; clipped:
         title={`${tab.title} · ${tab.projectName}`}
         className={[
           'tab group/tab no-drag flex items-center gap-1.5 px-2 text-left transition-colors',
-          clipped ? 'invisible' : ''
+          clipped ? 'tab-clipped' : ''
         ].join(' ')}
       >
         {tab.streaming ? (
@@ -212,7 +212,7 @@ function OverflowMenu({ tabs, onPick }: { tabs: TabInfo[]; onPick: (id: string) 
         onClick={() => setOpen((v) => !v)}
         className="no-drag flex h-6 w-6 flex-none items-center justify-center rounded text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1"
       >
-        ⋯
+        »
       </button>
       {open && (
         <div

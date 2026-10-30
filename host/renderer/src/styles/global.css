@@ -398,14 +398,30 @@
    */
   overflow: visible;
 }
-/* 裁切只在这一条上：排不下的标签在这里被裁掉，不影响外面的下拉菜单 */
+/*
+ * 裁切只在这一条上：排不下的标签在这里被裁掉，不影响外面的下拉菜单。
+ *
+ * flex 是 0 1 auto —— 宽度按内容算（只算还看得见的那些），
+ * 所以「⋯」和「＋」会紧跟在最后一个可见标签后面，而不是被推到最右。
+ */
 .shell-tabs-strip {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
   overflow: hidden;
+  position: relative;
+}
+/*
+ * 裁掉的标签：脱离文档流（不占位置），但仍然有布局盒 ——
+ * 量宽度还要用到它们的自然宽度（offsetWidth 对绝对定位的元素照样给值）。
+ */
+.shell-tabs .tab-clipped {
+  position: absolute;
+  left: 0;
+  top: 0;
+  visibility: hidden;
 }
 .shell-tabs .tab {
   display: flex;
