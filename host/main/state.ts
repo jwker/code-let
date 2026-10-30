@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { basename, normalize } from 'node:path'
 import type {
   ConversationInfo,
@@ -27,6 +27,15 @@ interface HostTab {
   title: string
   /** 创建失败时的原因 */
   error: string | null
+  /**
+   * 这个标签「已经看到」的会话文件修改时间（ms）。
+   *
+   * 比它新 = 文件在别处被改过。**我们自己写文件之后要把它推上去** ——
+   * 不然自己发一条消息就会把自己标成「有外部更新」。
+   */
+  seenMtime: number
+  /** 文件在别处被改过，内容流落后了 */
+  stale: boolean
 }
 
 /**
@@ -34,6 +43,16 @@ interface HostTab {
  *
  * 渲染进程只是它的投影：状态变化从这里推快照，不从渲染进程回写。
  */
+/** 文件的修改时间（ms）；文件不在就是 0 */
+function mtimeOf(path: string | null): number {
+  if (!path) return 0
+  try {
+    return statSync(path).mtimeMs
+  } catch {
+    return 0
+  }
+}
+
 /**
  * 窗口离开多久之后，回来才值得重读会话列表。
  *
@@ -113,6 +132,7 @@ export class HostState extends EventEmitter {
       ready: state.ready,
       // 项目从清单里移走了 —— 标签还能用，但它不再「在清单里」
       removed: !this.projects.has(tab.cwd),
+      stale: tab.stale,
       model: state.model,
       modelFallback: state.modelFallback,
       error: tab.error
@@ -140,6 +160,9 @@ export class HostState extends EventEmitter {
       if (affectsConversationList(event)) {
         this.conversationsRefresh.schedule()
       }
+      // 一轮结束 —— 这一轮我们自己写了不少东西，把「已看到」的时间推上去，
+      // 免得紧接着的检查把自己标成「有外部更新」
+      if (event.type === 'agent_settled') this.markWritten(event.tabId)
     })
 
     // 先把会话列表读出来 —— 首次启动没有标签时，要靠它找「接着上次那个会话跑」
@@ -199,7 +222,9 @@ export class HostState extends EventEmitter {
           // 重开的是新会话，路径要换成它的（此刻文件还没建，先记着）
           path: hasFile ? stored.path : null,
           title: stored.title,
-          error: null
+          error: null,
+          seenMtime: hasFile ? mtimeOf(stored.path) : 0,
+          stale: false
         })
       } catch (error) {
         // 目录被删之类 —— 标签留着，但标出来
@@ -208,7 +233,9 @@ export class HostState extends EventEmitter {
           cwd: stored.cwd,
           path: stored.path,
           title: stored.title,
-          error: error instanceof Error ? error.message : String(error)
+          error: error instanceof Error ? error.message : String(error),
+          seenMtime: 0,
+          stale: false
         })
       }
     }
@@ -241,7 +268,7 @@ export class HostState extends EventEmitter {
     // 会话文件路径必须记下来 —— 重启时按它找回会话。
     // 新建的会话在 Pi 里立刻就有路径了（只是文件还没建），所以这里读得到。
     const path = options.path ?? this.pi.tabState(id).sessionFile
-    this.tabs.push({ id, cwd: options.cwd, path, title, error: null })
+    this.tabs.push({ id, cwd: options.cwd, path, title, error: null, seenMtime: mtimeOf(path), stale: false })
     this.activeTabId = id
     this.persistTabs()
     this.readSession()
@@ -375,10 +402,65 @@ export class HostState extends EventEmitter {
       }
       // 标题变了要落盘 —— 不然重启后标签还写着「新对话」
       if (titleChanged) this.persistTabs()
+      // 顺便看看有没有标签的会话文件在别处被改过
+      this.checkStale()
     } catch {
       if (token !== this.refreshToken) return
       this.conversations = []
     }
+    this.push()
+  }
+
+  /**
+   * 检查每个标签的会话文件有没有在**别处**被改过。
+   *
+   * 判据：文件 mtime 比这个标签「已经看到」的时间新。
+   * 我们自己写文件之后会把 seenMtime 推上去（见 markWritten），
+   * 所以自己发消息不会把自己标成「有外部更新」。
+   *
+   * 只标记、不自动重读 —— 重建 runtime 会丢掉当前状态，
+   * 而且如果别处还在写，重建完很快又会落后。让用户自己决定。
+   */
+  private checkStale(): void {
+    let changed = false
+    for (const tab of this.tabs) {
+      if (!tab.path) continue
+      const stale = mtimeOf(tab.path) > tab.seenMtime
+      if (stale !== tab.stale) {
+        tab.stale = stale
+        changed = true
+      }
+    }
+    if (changed) this.push()
+  }
+
+  /**
+   * 我们自己往这个标签的会话里写过东西 —— 把「已经看到」的时间推到当下。
+   *
+   * 不推的话，自己发一条消息就会把自己标成「有外部更新」。
+   */
+  private markWritten(tabId: string): void {
+    const tab = this.tabs.find((t) => t.id === tabId)
+    if (!tab?.path) return
+    tab.seenMtime = mtimeOf(tab.path)
+    tab.stale = false
+  }
+
+  /**
+   * 重新加载某个标签：重建 runtime，从磁盘重新读会话。
+   *
+   * 用于「这个会话在别处被改过」（stale）之后。
+   */
+  async reloadTab(tabId: string): Promise<void> {
+    const tab = this.tabs.find((t) => t.id === tabId)
+    if (!tab) return
+    await this.pi.reloadTab(tabId)
+    // 重建后路径可能变了（原来是「没说过话的空标签」的话）
+    const state = this.pi.tabState(tabId)
+    if (state.sessionFile) tab.path = state.sessionFile
+    tab.seenMtime = mtimeOf(tab.path)
+    tab.stale = false
+    this.readSession()
     this.push()
   }
 

@@ -152,6 +152,12 @@ interface RendererStore {
   bumpEvents: (count: number) => void
   /** 换会话时整体替换内容流（R5）—— 按标签存 */
   setItems: (tabId: string, items: StreamItem[]) => void
+  /**
+   * 重新加载某个标签：重建 runtime 并把内容流也重读一遍。
+   *
+   * 两件事必须一起做 —— 只重建 runtime 的话，runtime 是新的、屏幕还是旧的。
+   */
+  reloadTab: (tabId: string) => Promise<void>
   /** 把实时事件落到内容流上（R2） */
   applySessionEvents: (events: SessionEvent[]) => void
   /** 展开 / 收起某个工具的输出 */
@@ -197,6 +203,12 @@ export const useStore = create<RendererStore>((set, get) => ({
 
 
   setNav: (nav) => set({ nav }),
+
+  reloadTab: async (tabId) => {
+    await host.reloadTab(tabId)
+    // 重建完 runtime 再从磁盘读一遍内容流 —— 少了这一步，屏幕还是旧的
+    get().setItems(tabId, await host.getTabEntries(tabId))
+  },
 
   // 换会话：内容流和展开状态一起换（按标签存）
   setItems: (tabId, items) =>

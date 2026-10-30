@@ -127,17 +127,26 @@ function Tab({ tab, active, clipped }: { tab: TabInfo; active: boolean; clipped:
     await controller.requestClose()
   }
 
+  /**
+   * 重新加载：这个会话在别处被改过，重建 runtime 从磁盘重读。
+   *
+   * 重建完要让渲染进程把内容流也重读一遍 —— 不然 runtime 是新的、屏幕还是旧的。
+   */
+  async function reload(): Promise<void> {
+    await useStore.getState().reloadTab(tab.id)
+  }
+
   return (
     <>
       <button
         type="button"
         aria-current={active ? 'page' : undefined}
         onClick={() => void host.activateTab(tab.id)}
-        title={
-          tab.removed
-            ? `${tab.title} · ${tab.projectName}（这个项目已经从 Codelet 移除，对话还在磁盘上）`
-            : `${tab.title} · ${tab.projectName}`
-        }
+        title={[
+          `${tab.title} · ${tab.projectName}`,
+          tab.removed ? '（这个项目已经从 Codelet 移除，对话还在磁盘上）' : '',
+          tab.stale ? '（这个会话在别处有更新，点右边的 ↻ 重新加载）' : ''
+        ].join('')}
         className={[
           'tab group/tab no-drag flex items-center gap-1.5 px-2 text-left transition-colors',
           clipped ? 'tab-clipped' : ''
@@ -160,6 +169,31 @@ function Tab({ tab, active, clipped }: { tab: TabInfo; active: boolean; clipped:
         >
           {tab.projectName}
         </span>
+        {/*
+          会话在别处被改过 —— 给一个重新加载的入口。
+          不自动同步：重建 runtime 会丢掉当前状态，而且如果别处还在写，重建完很快又落后。
+        */}
+        {tab.stale ? (
+          <span
+            role="button"
+            tabIndex={0}
+            aria-label={`重新加载 ${tab.title}`}
+            title="这个会话在别处有更新，点一下重新加载"
+            onClick={(event) => {
+              event.stopPropagation()
+              void reload()
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return
+              event.stopPropagation()
+              event.preventDefault()
+              void reload()
+            }}
+            className="flex h-4 w-4 flex-none items-center justify-center rounded text-warn transition-colors hover:bg-sunken"
+          >
+            ↻
+          </span>
+        ) : null}
         <span
           role="button"
           tabIndex={0}

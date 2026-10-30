@@ -42,6 +42,7 @@ class FakePi implements PiRuntimePort {
   async activateTab(tabId: string): Promise<void> {
     this.calls.push(`activate:${tabId}`)
   }
+  async reloadTab(): Promise<void> {}
 
   tabState(tabId: string): TabRuntimeState {
     const tab = this.tabs.get(tabId)
