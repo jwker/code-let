@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>右侧面板 · 常驻还是切换</title>
+<style>
+:root{
+  --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-code:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-xl:18px; --r-full:999px;
+  --dur:160ms; --ease:cubic-bezier(.4,0,.2,1);
+}
+[data-theme="light"]{
+  --canvas:#F4F4F5; --panel:#FBFBFB; --surface:#FFFFFF; --insp:#FAFAFA; --raised:#FFFFFF; --sunken:#F1F1F3;
+  --hairline:#ECECEE; --hairline-strong:#DEDEE2;
+  --fg-1:#1B1B19; --fg-2:#5C5C56; --fg-3:#94948C;
+  --accent:#1F1F1D; --accent-fg:#FFFFFF; --accent-wash:#EEEEF0; --accent-line:#DCDCE1;
+  --ok:#2E7D53; --warn:#9C6B15; --info:#2563A8;
+  --sh-sm:0 1px 2px rgba(20,20,16,.04); --sh-md:0 8px 24px -8px rgba(20,20,16,.10);
+}
+[data-theme="dark"]{
+  --canvas:#131312; --panel:#181817; --surface:#1C1C1B; --insp:#191918; --raised:#242423; --sunken:#2A2A29;
+  --hairline:#2B2B29; --hairline-strong:#3B3B38;
+  --fg-1:#EDEDEB; --fg-2:#B4B4AD; --fg-3:#7D7D76;
+  --accent:#F0F0EC; --accent-fg:#151513; --accent-wash:#2A2A2C; --accent-line:#343430;
+  --ok:#5BD69A; --warn:#E5B75C; --info:#6FAEF0;
+  --sh-sm:0 1px 2px rgba(0,0,0,.5); --sh-md:0 12px 30px -12px rgba(0,0,0,.65);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--canvas);color:var(--fg-1);font-family:var(--font-ui);font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+code{font-family:var(--font-code);font-size:11.5px;background:var(--accent-wash);padding:1px 5px;border-radius:var(--r-xs);color:var(--fg-2)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+
+.page{max-width:1200px;margin:0 auto;padding:0 28px 140px}
+.topbar{position:sticky;top:0;z-index:50;height:52px;display:flex;align-items:center;gap:14px;background:var(--panel);border-bottom:1px solid var(--hairline);margin:0 -28px;padding:0 28px}
+.brand{font-weight:600;letter-spacing:-.015em}
+.brand span{color:var(--fg-3);font-weight:400}
+.topbar .spacer{flex:1}
+.ghost-btn{height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--hairline);color:var(--fg-2);font-size:12px;transition:all var(--dur) var(--ease)}
+.ghost-btn:hover{color:var(--fg-1);border-color:var(--hairline-strong);background:var(--surface)}
+
+.head{padding:36px 0 8px}
+.head h1{font-size:23px;margin-bottom:10px;line-height:1.35}
+.head p{color:var(--fg-2);max-width:86ch}
+.head p + p{margin-top:10px}
+
+.facts{margin:26px 0 0;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);padding:16px 18px;max-width:1000px}
+.facts h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:10px}
+.facts ul{margin:0;padding-left:18px;color:var(--fg-2)}
+.facts li{margin-bottom:7px}
+.facts b{color:var(--fg-1);font-weight:600}
+
+.sec{margin:44px 0 0;font-size:17px;letter-spacing:-.015em}
+.secled{margin:8px 0 0;color:var(--fg-2);font-size:13px;max-width:88ch}
+
+.option{margin-top:26px;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+.option-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--hairline);background:var(--panel)}
+.option-head .tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--fg-3);border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:2px 8px;white-space:nowrap}
+.option-head .tag.rec{color:var(--ok);border-color:var(--ok)}
+.option-head h2{font-size:14.5px}
+.desc{padding:16px 18px 0;color:var(--fg-2);font-size:12.5px;max-width:90ch}
+.desc b{color:var(--fg-1)}
+.frame{padding:18px}
+.verdict{padding:0 18px 18px;color:var(--fg-2);font-size:12.5px;max-width:90ch}
+.verdict b{color:var(--fg-1)}
+.warn{color:var(--warn)}
+.good{color:var(--ok)}
+.subcap{font-size:11.5px;color:var(--fg-3);padding:16px 18px 0;font-weight:600}
+
+/* ============================================================
+   外壳
+   ============================================================ */
+.app{
+  position:relative;height:430px;background:var(--canvas);
+  border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;
+  display:flex;flex-direction:column;
+  --title:44px; --status:22px; --side:170px; --insp:260px; --gap:7px;
+}
+.t{flex:none;height:var(--title);display:flex;align-items:center;gap:8px;padding:0 11px}
+.traffic{display:flex;gap:6px;flex:none}
+.traffic i{width:10px;height:10px;border-radius:50%;display:block}
+.traffic i:nth-child(1){background:#FF5F57}.traffic i:nth-child(2){background:#FEBC2E}.traffic i:nth-child(3){background:#28C840}
+.tbtn{width:24px;height:24px;border-radius:var(--r-sm);color:var(--fg-3);display:flex;align-items:center;justify-content:center;font-size:11px;flex:none}
+.tapp{font-size:12.5px;font-weight:600;color:var(--fg-1);white-space:nowrap}
+.pills{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
+.pill{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:var(--r-sm);border:1px solid var(--hairline-strong);background:var(--sunken);color:var(--fg-2);font-size:11.5px;white-space:nowrap;max-width:160px}
+.pill.on{background:var(--surface);border-color:var(--accent-line);color:var(--fg-1)}
+.pill .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill.add{width:24px;padding:0;justify-content:center;border-style:dashed;color:var(--fg-3)}
+
+.deck{flex:1;min-height:0;display:flex;gap:var(--gap);padding:0 var(--gap) var(--gap)}
+.card{background:var(--surface);border:1px solid var(--hairline-strong);border-radius:var(--r-lg);overflow:hidden;min-width:0;min-height:0;display:flex;flex-direction:column}
+.card.side{flex:none;width:var(--side);background:var(--panel)}
+.card.main{flex:1}
+.card.insp{flex:none;width:var(--insp);background:var(--insp)}
+
+.side-head{padding:8px 7px 0;flex:none}
+.side-title{display:flex;align-items:center;gap:3px;padding:0 4px 5px}
+.side-title .nm{flex:1;font-size:12px;font-weight:600;color:var(--fg-2)}
+.side-body{flex:1;overflow:hidden;padding:0 7px}
+.grp{display:flex;align-items:center;gap:5px;height:22px;padding:0 4px;font-size:11px;font-weight:600;color:var(--fg-1)}
+.grp .cnt{margin-left:auto;font-family:var(--font-code);font-size:9px;color:var(--fg-3);font-weight:400}
+.crow{display:flex;align-items:center;gap:5px;height:20px;padding:0 6px;border-radius:var(--r-sm);font-size:11px;color:var(--fg-2)}
+.crow.on{background:var(--accent-wash);color:var(--fg-1);font-weight:500}
+.crow .dot{width:4px;height:4px;border-radius:50%;background:var(--fg-3);flex:none}
+
+.main-body{flex:1;padding:10px 13px;position:relative;overflow:hidden}
+.bubble{height:7px;border-radius:4px;background:var(--sunken);margin-bottom:6px}
+.user-b{width:90px;height:16px;border-radius:8px;background:var(--fg-1);margin-left:auto;margin-bottom:8px}
+.composer{position:absolute;left:13px;right:13px;bottom:10px;height:44px;border:1px solid var(--hairline);border-radius:12px;background:var(--surface);box-shadow:var(--sh-sm)}
+
+.sbar{flex:none;height:var(--status);display:flex;align-items:center;gap:12px;padding:0 12px;font-family:var(--font-code);font-size:9.5px;color:var(--fg-3)}
+
+/* 导航栏 */
+.nav-bar{flex:none;display:flex;align-items:center;gap:0;padding:4px 5px;border-bottom:1px solid var(--hairline)}
+.nav-item{flex:1;display:flex;align-items:center;justify-content:center;height:24px;border-radius:var(--r-sm);color:var(--fg-3);font-size:11px}
+.nav-item.on{background:var(--accent-wash);color:var(--fg-1);font-weight:600}
+.nav-item .ico{font-size:12px;line-height:1}
+.nav-rail{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;padding:7px 0}
+.nav-rail .nav-item{width:26px;height:26px;flex:none}
+
+/* 面板内容 */
+.insp-body{flex:1;min-height:0;padding:8px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+.icard{border:1px solid var(--hairline);border-radius:var(--r-sm);background:var(--surface)}
+.icard .h{height:26px;display:flex;align-items:center;padding:0 9px;font-size:11px;font-weight:500;color:var(--fg-1)}
+.icard .b{padding:0 9px 8px;font-size:10px;color:var(--fg-3)}
+/* 分上下两栏 */
+.insp-split{flex:1;min-height:0;display:flex;flex-direction:column}
+.insp-top{flex:1;min-height:0;overflow-y:auto;padding:8px}
+.insp-splitter{flex:none;height:1px;background:var(--hairline-strong)}
+.insp-bottom{flex:none;padding:8px;display:flex;flex-direction:column;gap:8px}
+
+.hot{outline:2px solid var(--ok);outline-offset:-2px;position:relative}
+.hot::after{content:attr(data-hot);position:absolute;top:-8px;right:3px;background:var(--ok);color:#fff;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 4px;border-radius:3px;white-space:nowrap}
+
+table.spec{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
+table.spec th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);font-weight:600;padding:9px 12px;background:var(--panel);border-bottom:1px solid var(--hairline)}
+table.spec td{padding:9px 12px;border-bottom:1px solid var(--hairline);color:var(--fg-2);vertical-align:top}
+table.spec tr:last-child td{border-bottom:none}
+table.spec td:first-child{color:var(--fg-1);font-weight:600}
+table.spec .ok{color:var(--ok);font-weight:600}
+table.spec .no{color:#B8342A;font-weight:600}
+table.spec .mid{color:var(--warn);font-weight:600}
+
+.rec-card{margin-top:26px;border:1px solid var(--ok);border-radius:var(--r-lg);background:var(--surface);padding:18px 20px;max-width:1000px}
+.rec-card h3{font-size:14.5px;color:var(--ok);margin-bottom:10px}
+.rec-card ol{margin:0;padding-left:20px;color:var(--fg-2)}
+.rec-card li{margin-bottom:7px}
+.rec-card p{margin-top:10px;color:var(--fg-2)}
+.rec-card b{color:var(--fg-1)}
+
+.note{margin-top:16px;border:1px solid var(--hairline);border-left:3px solid var(--info);border-radius:var(--r-sm);background:#E9F1FA;padding:12px 14px;color:var(--fg-2);font-size:12.5px;max-width:1000px}
+.note b{color:var(--fg-1)}
+.note ol{margin:6px 0 0;padding-left:20px}
+.note li{margin-bottom:5px}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brand">右侧面板 <span>· 常驻还是切换</span></div>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="theme">切换明暗</button>
+  </div>
+
+  <div class="head">
+    <h1>右侧面板里到底放什么、怎么放</h1>
+    <p>
+      现在的做法是：<strong>导航项（看板/记忆/代码/终端）占满整块面板</strong>，没选时显示 Git + Agent。
+      问题是这两组<strong>互斥</strong> —— 点开看板，Git 和 Agent 就没了。
+    </p>
+    <p>
+      这份稿子比的是「常驻面板（Git/Agent）和导航视图能不能同时看」。
+      三个方案，都能收成 38px 窄轨。
+    </p>
+  </div>
+
+  <div class="facts">
+    <h3>现在的组件清单</h3>
+    <ul>
+      <li><b>导航视图</b>（点了才出现）：看板 · 记忆 · 代码 · 终端 —— 都还是「视图还没接」的占位。</li>
+      <li><b>常驻面板</b>（一直有）：Git · Agent —— 也都是「面板还没接」的占位。</li>
+      <li><b>共同点</b>：六个都还没有真内容。所以现在定的是<b>结构</b>，不是具体组件。</li>
+    </ul>
+  </div>
+
+  <h2 class="sec">一 · 三个方案</h2>
+  <p class="secled">
+    A 和 B 都把右侧分成上下两栏（上面切换、下面常驻）；C 保持「一次只显示一个」，
+    把 Git / Agent 也变成导航项。
+  </p>
+
+  <!-- ============ A ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag rec">A · 推荐</span>
+      <h2>上下两栏：上面是导航视图，下面是常驻面板</h2>
+    </div>
+    <p class="desc">
+      导航栏 4 个图标（看板/记忆/代码/终端）。下面分两块：
+      <b>上半</b>是当前导航视图（没选时是空的、显示提示），<b>下半</b>是常驻的 Git + Agent。
+      中间的 1px 线就是分界。
+    </p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span></div>
+            <div class="pill"><span class="nm">类型声明生成</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side">
+            <div class="side-head"><div class="side-title"><span class="nm">项目</span><span style="color:var(--fg-3);font-size:10px">⌃⌃</span><span style="color:var(--fg-3);font-size:10px">⚙</span></div></div>
+            <div class="side-body">
+              <div class="grp">Codelet <span class="cnt">3</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构</div>
+              <div class="crow"><span class="dot"></span>类型声明生成</div>
+              <div class="grp">pi-chat-box <span class="cnt">16</span></div>
+              <div class="crow">流式输出的三种写法</div>
+            </div>
+          </div>
+          <div class="card main">
+            <div class="main-body">
+              <div class="bubble" style="width:66%"></div>
+              <div class="bubble" style="width:82%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:56%"></div>
+              <div class="composer"></div>
+            </div>
+          </div>
+          <div class="card insp">
+            <div class="nav-bar hot" data-hot="导航">
+              <div class="nav-item"><span class="ico">▤</span></div>
+              <div class="nav-item on"><span class="ico">◈</span></div>
+              <div class="nav-item"><span class="ico">‹›</span></div>
+              <div class="nav-item"><span class="ico">›_</span></div>
+            </div>
+            <div class="insp-split">
+              <div class="insp-top hot" data-hot="上：导航视图">
+                <div class="icard"><div class="h">记忆图谱</div><div class="b">视图还没接</div></div>
+              </div>
+              <div class="insp-splitter"></div>
+              <div class="insp-bottom hot" data-hot="下：常驻">
+                <div class="icard"><div class="h">Git</div><div class="b">面板还没接</div></div>
+                <div class="icard"><div class="h">Agent</div><div class="b">面板还没接</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sbar"><span>Codelet</span><span>session 01a18b42</span><span style="margin-left:auto">普通 · events 214 · Pi 就绪</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<strong>两组同时看得见</strong> —— 点开看板，Git 和 Agent 还在下面；
+      导航项不用加进「常驻」那一堆，职责清楚（上面是「我要看的东西」，下面是「一直在的东西」）。<br>
+      <b>代价</b>：<span class="warn">上下都要分空间</span> —— 面板只有 300px 宽、800 多高，
+      上面占多少、下面占多少得有个说法（见方案 B）。而且上半块在「没选导航项」时是空的。
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">B</span>
+      <h2>上下两栏，中间可以拖（比例自己调）</h2>
+    </div>
+    <p class="desc">
+      跟 A 一样，但中间那条分界线是<b>可拖的</b>：往上拖把常驻面板放大，往下拖把导航视图放大。
+      比例记在本地，下次进来还是那样。
+    </p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span></div>
+            <div class="pill"><span class="nm">类型声明生成</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side">
+            <div class="side-head"><div class="side-title"><span class="nm">项目</span><span style="color:var(--fg-3);font-size:10px">⌃⌃</span><span style="color:var(--fg-3);font-size:10px">⚙</span></div></div>
+            <div class="side-body">
+              <div class="grp">Codelet <span class="cnt">3</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构</div>
+              <div class="crow"><span class="dot"></span>类型声明生成</div>
+            </div>
+          </div>
+          <div class="card main">
+            <div class="main-body">
+              <div class="bubble" style="width:66%"></div>
+              <div class="bubble" style="width:82%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:56%"></div>
+              <div class="composer"></div>
+            </div>
+          </div>
+          <div class="card insp">
+            <div class="nav-bar">
+              <div class="nav-item"><span class="ico">▤</span></div>
+              <div class="nav-item on"><span class="ico">◈</span></div>
+              <div class="nav-item"><span class="ico">‹›</span></div>
+              <div class="nav-item"><span class="ico">›_</span></div>
+            </div>
+            <div class="insp-split">
+              <div class="insp-top" style="flex:2">
+                <div class="icard"><div class="h">记忆图谱</div><div class="b">视图还没接</div></div>
+              </div>
+              <div class="insp-splitter hot" data-hot="可拖" style="height:6px;background:transparent;display:flex;align-items:center;justify-content:center">
+                <span style="width:24px;height:2px;border-radius:1px;background:var(--hairline-strong);display:block"></span>
+              </div>
+              <div class="insp-bottom" style="flex:1">
+                <div class="icard"><div class="h">Git</div><div class="b">面板还没接</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sbar"><span>Codelet</span><span>session 01a18b42</span><span style="margin-left:auto">普通 · events 214 · Pi 就绪</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：比例自己定 —— 盯 Git 的时候把下面拉大，看看板的时候把上面拉大。<br>
+      <b>代价</b>：<span class="warn">多一个拖拽手柄</span>（现在窗口里已经有两个了：侧栏、检视器）。
+      三根拖拽线在同一个窗口里，容易拖错。
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">C</span>
+      <h2>不加分栏，把 Git / Agent 也变成导航项（一次只显示一个）</h2>
+    </div>
+    <p class="desc">
+      导航栏从 4 个变 6 个：看板 · 记忆 · 代码 · 终端 · Git · Agent。
+      点哪个整块面板显示哪个，跟现在一样，只是常驻面板也进了导航。
+    </p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span></div>
+            <div class="pill"><span class="nm">类型声明生成</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side">
+            <div class="side-head"><div class="side-title"><span class="nm">项目</span><span style="color:var(--fg-3);font-size:10px">⌃⌃</span><span style="color:var(--fg-3);font-size:10px">⚙</span></div></div>
+            <div class="side-body">
+              <div class="grp">Codelet <span class="cnt">3</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构</div>
+              <div class="crow"><span class="dot"></span>类型声明生成</div>
+            </div>
+          </div>
+          <div class="card main">
+            <div class="main-body">
+              <div class="bubble" style="width:66%"></div>
+              <div class="bubble" style="width:82%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:56%"></div>
+              <div class="composer"></div>
+            </div>
+          </div>
+          <div class="card insp">
+            <div class="nav-bar hot" data-hot="6 个图标">
+              <div class="nav-item"><span class="ico">▤</span></div>
+              <div class="nav-item on"><span class="ico">◈</span></div>
+              <div class="nav-item"><span class="ico">‹›</span></div>
+              <div class="nav-item"><span class="ico">›_</span></div>
+              <div class="nav-item"><span class="ico">⎇</span></div>
+              <div class="nav-item"><span class="ico">◉</span></div>
+            </div>
+            <div class="insp-body">
+              <div class="icard"><div class="h">记忆图谱</div><div class="b">视图还没接</div></div>
+            </div>
+          </div>
+        </div>
+        <div class="sbar"><span>Codelet</span><span>session 01a18b42</span><span style="margin-left:auto">普通 · events 214 · Pi 就绪</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="good">结构最简单</span> —— 一个导航栏，一次一个视图，没有分栏、没有拖拽。
+      每个视图都能用满整块面板（看板、代码这些需要空间的正好）。<br>
+      <b>代价</b>：<span class="warn">Git 和 Agent 不再是「一直在」</span> —— 看代码的时候看不到 Git 状态，
+      要切回来。而且 6 个图标挤在 300px 里，每个只有 50px。
+    </div>
+  </section>
+
+  <h2 class="sec">二 · 三个方案比</h2>
+  <table class="spec">
+    <thead><tr><th>方案</th><th>Git/Agent 一直看得见吗</th><th>视图能用满面板吗</th><th>结构复杂度</th><th>图标宽度</th></tr></thead>
+    <tbody>
+      <tr><td class="ok">A 上下两栏（固定比例）</td><td class="ok">看得见（在下半）</td><td class="mid">只能占上半</td><td class="ok">简单</td><td class="ok">75px</td></tr>
+      <tr><td>B 上下两栏（可拖）</td><td class="ok">看得见（可调大小）</td><td class="ok">能拉到很大</td><td class="mid">多一根拖拽线</td><td class="ok">75px</td></tr>
+      <tr><td>C 全切换（6 个导航项）</td><td class="no">看不见</td><td class="ok">用满整块</td><td class="ok">最简单</td><td class="no">50px</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rec-card">
+    <h3>推荐：A（上下两栏，固定比例）</h3>
+    <ol>
+      <li><b>两组同时看得见。</b>看代码的时候 Git 状态还在下面 —— 这是分栏唯一的价值。</li>
+      <li><b>不用拖拽。</b>窗口里已经有两根拖拽线（侧栏、检视器），再加一根容易拖错。
+      固定比例（比如上 6 下 4）够用。</li>
+      <li><b>导航栏还是 4 个图标</b>，每个 75px，比 C 的 50px 宽得多。</li>
+    </ol>
+    <p>
+      如果以后发现「看板 / 代码」需要很大空间，再升级到 B（加拖拽）或者
+      「点导航时临时占满整块、再点一次回到分栏」。
+    </p>
+  </div>
+
+  <div class="note">
+    <b>三个要你定的：</b>
+    <ol>
+      <li><b>上半块没选导航项时显示什么？</b>空白 + 一句「从上面的图标里选一个」？还是默认选中第一个（看板）？</li>
+      <li><b>上下比例</b>：我倾向 <b>6 : 4</b>（上面给视图、下面给常驻）。Git/Agent 两张卡片加起来大概需要 200px，
+      300px 高的下半够。</li>
+      <li><b>常驻面板能不能折叠？</b>如果某天你只想看代码、不关心 Git，下半块能不能点一下收起来 ——
+      那就是「上下两栏 + 下半可折叠」。</li>
+    </ol>
+  </div>
+
+  <h2 class="sec">三 · 这一稿不做</h2>
+  <table class="spec">
+    <thead><tr><th>项</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td>六个组件的真实内容</td><td>它们现在全是「还没接」的占位。这轮只定结构。</td></tr>
+      <tr><td>导航项增减</td><td>看板/记忆/代码/终端是现在定下的四个，这轮不改。</td></tr>
+      <tr><td>窄轨（38px）里的导航</td><td>已经做了，这轮不动。</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.getElementById('theme').addEventListener('click', () => {
+    const root = document.documentElement
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'
+  })
+</script>
+</body>
+</html>
