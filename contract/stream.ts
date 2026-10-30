@@ -323,10 +323,25 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
       const delta = typeof data.delta === 'string' ? data.delta : ''
       if (!delta) return items
       const last = items[items.length - 1]
-      if (!last || last.kind !== 'message' || last.role !== 'assistant') return items
-      const next = items.slice()
-      next[next.length - 1] = { ...last, text: last.text + delta }
-      return next
+      if (last && last.kind === 'message' && last.role === 'assistant') {
+        const next = items.slice()
+        next[next.length - 1] = { ...last, text: last.text + delta }
+        return next
+      }
+      /*
+       * 没有正在流的助手消息项 —— 补一个再追加。
+       *
+       * 什么时候会这样：**错过了 message_start**。典型是页面刷新之后 ——
+       * 内容流重新从磁盘读回来，里面只有已经落盘的消息（用户那条），
+       * 而正在生成的那条还没进会话文件，所以读不到。
+       *
+       * 早先这里是 `return items`（直接丢掉 delta）。后果是刷新后正在流的那一轮
+       * 完全卡住：内容一动不动，直到 message_end 才一次性补齐（实测卡了 19 秒）。
+       *
+       * 补一个空壳是安全的：Pi 一次只流一条助手消息，所以「最后一项不是助手消息」
+       * 只可能是缺了开头，不可能是别的消息插进来。
+       */
+      return [...items, { kind: 'message', role: 'assistant', text: delta }]
     }
 
     case 'message_end': {

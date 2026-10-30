@@ -401,3 +401,47 @@ describe('削载荷（PLAN.md D5 补充）', () => {
     expect(trimMessageUpdate(data)).toBe(data)
   })
 })
+
+describe('错过了 message_start 时的增量（刷新页面后正在流的那一轮）', () => {
+  it('最后一项不是助手消息时，delta 补一个新的助手项，而不是丢掉', () => {
+    // 场景：页面刷新后，内容流从磁盘读回来 —— 只有已经落盘的用户消息，
+    // 正在生成的那条还没进会话文件，所以读不到。
+    let items: StreamItem[] = [
+      { kind: 'message', role: 'user', text: '用户那句' }
+    ]
+
+    items = applyEvent(items, {
+      type: 'message_update',
+      data: { type: 'text_delta', contentIndex: 0, delta: '第一段' }
+    })
+
+    expect(items).toHaveLength(2)
+    expect(items[1]).toMatchObject({ kind: 'message', role: 'assistant', text: '第一段' })
+
+    // 后续 delta 继续往同一项上加
+    items = applyEvent(items, {
+      type: 'message_update',
+      data: { type: 'text_delta', contentIndex: 0, delta: '第二段' }
+    })
+    expect(items).toHaveLength(2)
+    expect(items[1]).toMatchObject({ text: '第一段第二段' })
+
+    // message_end 用它带来的完整文本替换掉那一项，不会多出一条
+    items = applyEvent(items, {
+      type: 'message_end',
+      data: { message: { role: 'assistant', content: [{ type: 'text', text: '第一段第二段第三段' }] } }
+    })
+    expect(items).toHaveLength(2)
+    expect(items[1]).toMatchObject({ kind: 'message', role: 'assistant', text: '第一段第二段第三段' })
+  })
+
+  it('内容流是空的时候也一样', () => {
+    let items: StreamItem[] = []
+    items = applyEvent(items, {
+      type: 'message_update',
+      data: { type: 'text_delta', contentIndex: 0, delta: '只有一段' }
+    })
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'message', role: 'assistant', text: '只有一段' })
+  })
+})
