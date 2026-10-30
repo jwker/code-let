@@ -193,9 +193,10 @@
   border-width: 0;
   margin-right: -7px;
 }
-.shell.is-side-hidden .shell-deck {
-  padding-left: 0;
-}
+/*
+ * 侧栏收起后，主区卡直接贴着窗口左边 —— 但卡片区本来有 7px 的内边距，
+ * 那条要留着，不然主区卡会贴死在窗口边缘上（没有呼吸空间）。
+ */
 /*
  * 收起检视器：卡片收成 38px 的窄轨 —— **导航栏留在里面**，只收起面板内容。
  *
@@ -600,15 +601,15 @@
 .shell-grip-right {
   left: calc(100% - 7px - var(--insp-w));
 }
-/* 收起的一侧没有可拖的缝 */
+/*
+ * 收起的一侧没有可拖的缝。
+ *
+ * 检视器收起后卡片虽然还在（38px 的窄轨），但那只是导航栏 ——
+ * 面板内容已经没了，拖宽它没有意义，所以手柄也不该出现。
+ */
 .shell.is-insp-hidden .shell-grip-right,
 .shell.is-side-hidden .shell-grip-left {
   display: none;
-}
-/* 检视器收起时卡片是 38px 的窄轨 —— 手柄要贴在窄轨的左边 */
-.shell.is-insp-hidden .shell-grip-right {
-  display: block;
-  left: calc(100% - 38px);
 }
 /* 悬停时把原有那条细线加粗一格，不另外画线，免得出现双线 */
 .shell-grip::after {
