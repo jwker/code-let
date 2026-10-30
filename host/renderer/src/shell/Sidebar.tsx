@@ -2,13 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import type { ConversationInfo, ProjectInfo, TabInfo } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
-import { IconFolder } from './icons'
+import { IconCollapseAll, IconExpandAll, IconFolder, IconSliders } from './icons'
 import { ConfirmDialog } from './ConfirmDialog'
+import { collapseAll, expandAll, showExpandAll } from './sidebarCollapse'
 
 /**
  * 上下文侧栏 —— 宿主独占（PLAN.md D11 修订）。
  *
- * 顶部是应用名 +「打开项目」，下面是**按项目分组**的全部会话。
+ * 顶部是**标题「项目」+ 一颗选项钮**（sliders）—— 标题不是按钮，
+ * 所有动作（打开项目、收起/展开全部）都在那颗钮的浮层里。
+ * 下面是**按项目分组**的全部会话。
  * 没有「当前项目」了 —— 标签栏之后每个标签自带自己的目录（PLAN.md D4 修订）。
  */
 
@@ -42,9 +45,29 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed())
   /** 待确认移除的项目 */
   const [removing, setRemoving] = useState<ProjectInfo | null>(null)
+  /** 头部那颗 sliders 打开的浮层 */
+  const [optionsOpen, setOptionsOpen] = useState(false)
+  const optionsRef = useRef<HTMLDivElement>(null)
 
   // 分组只按**清单里的项目**分 —— 不是 Pi 聊过的所有项目
   const groups = groupByProject(projects, conversations)
+
+  // 浮层开着的时候，点外面或按 Esc 关掉
+  useEffect(() => {
+    if (!optionsOpen) return
+    function onDown(event: MouseEvent): void {
+      if (optionsRef.current && !optionsRef.current.contains(event.target as Node)) setOptionsOpen(false)
+    }
+    function onKey(event: KeyboardEvent): void {
+      if (event.key === 'Escape') setOptionsOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [optionsOpen])
 
   function toggle(project: string): void {
     setCollapsed((prev) => {
@@ -56,22 +79,88 @@ export function Sidebar() {
     })
   }
 
+  /** 一次收放所有项目 —— 约定一：有组收着就展开，没有就全收起 */
+  function toggleAll(): void {
+    setCollapsed((prev) => {
+      const next = showExpandAll(projects, prev) ? expandAll() : collapseAll(projects)
+      saveCollapsed(next)
+      return next
+    })
+  }
+
+  /** 该显示「展开全部项目」还是「收起全部项目」 */
+  const expandAllShown = showExpandAll(projects, collapsed)
+
   return (
     <aside className="shell-card side">
       <div className="side-panel">
-        <div className="px-2.5 pt-3">
-          <button
-            type="button"
-            title="打开项目"
-            aria-label="打开项目"
-            onClick={() => void host.openProject()}
-            className="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13.5px] text-fg-1 transition-colors hover:bg-sunken"
-          >
-            <span className="flex-none text-fg-2">
-              <IconFolder />
-            </span>
-            <span>打开项目</span>
-          </button>
+        {/*
+          头部：标题 + 一颗选项钮。
+          标题就是标题 —— 看着是个分区标题，点它没反应；
+          所有动作在浮层里（打开项目、收起/展开全部）。
+        */}
+        <div className="relative px-2.5 pt-3" ref={optionsRef}>
+          <div className="flex items-center gap-2">
+            <span className="flex-1 pl-1.5 text-[12.5px] font-semibold text-fg-2">项目</span>
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={optionsOpen}
+              aria-label="项目选项"
+              title="项目选项"
+              onClick={() => setOptionsOpen((v) => !v)}
+              className={[
+                'flex h-7 w-7 flex-none items-center justify-center rounded-lg transition-colors',
+                optionsOpen ? 'bg-sunken text-fg-1' : 'text-fg-3 hover:bg-sunken hover:text-fg-1'
+              ].join(' ')}
+            >
+              <IconSliders />
+            </button>
+          </div>
+
+          {optionsOpen && (
+            <div
+              role="menu"
+              className="absolute right-2.5 top-full z-30 mt-1 w-[232px] rounded-xl border border-hairline bg-raised p-1"
+              style={{ boxShadow: 'var(--sh-md)' }}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOptionsOpen(false)
+                  void host.openProject()
+                }}
+                className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken"
+              >
+                <span className="flex-none text-fg-2">
+                  <IconFolder size={15} />
+                </span>
+                <span>打开项目…</span>
+              </button>
+
+              {/* 一个项目都没有时没有可收放的东西，这一项不出现 */}
+              {projects.length > 0 && (
+                <>
+                  <div className="my-1 h-px bg-hairline" />
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setOptionsOpen(false)
+                      toggleAll()
+                    }}
+                    className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken"
+                  >
+                    <span className="flex-none text-fg-2">
+                      {expandAllShown ? <IconExpandAll /> : <IconCollapseAll />}
+                    </span>
+                    <span>{expandAllShown ? '展开全部项目' : '收起全部项目'}</span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="mx-2.5 mt-2 h-px bg-hairline" />
@@ -81,7 +170,7 @@ export function Sidebar() {
             <div className="px-4 py-8 text-center text-[12.5px] text-fg-3">
               还没有对话
               <br />
-              点上面的「打开项目」开始
+              点右上角的选项，打开一个项目
             </div>
           )}
 
