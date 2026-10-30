@@ -235,7 +235,6 @@ function ProcessBlock({
         className="flex h-7 w-fit max-w-full items-center gap-2 rounded-md px-1.5 text-left transition-colors hover:bg-sunken"
         title={open ? '收起过程' : '展开过程'}
       >
-        <span className="w-2 flex-none text-[9px] text-fg-3">{open ? '▾' : '▸'}</span>
         {streaming ? (
           <span className="h-1.5 w-1.5 flex-none animate-pulse rounded-full bg-info" />
         ) : (
@@ -243,6 +242,8 @@ function ProcessBlock({
         )}
         <span className="flex-none text-[11.5px] font-medium text-fg-2">过程</span>
         <span className="min-w-0 truncate font-mono text-[11px] text-fg-3">{describe(summary)}</span>
+        {/* 折叠指示放在行尾：整条的重心在左边的「过程」上，箭头在末尾读起来像「末尾还有内容」 */}
+        <span className="flex-none text-[12px] leading-none text-fg-3">{open ? '▾' : '▸'}</span>
       </button>
 
       {open && (
