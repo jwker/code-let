@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import type { NavEntry } from '@contract/index'
 import { useStore } from '../store'
-import { IconBoard, IconCode, IconMemory, IconTerminal } from './icons'
+import { IconAgent, IconBoard, IconCode, IconGit, IconMemory, IconTerminal } from './icons'
 
 /**
  * 导航栏 —— 原来在左边的导航轨，现在放在右侧面板顶部。
@@ -17,7 +17,9 @@ const ENTRIES: Array<{ key: NavEntry; label: string; icon: () => ReactElement }>
   { key: 'board', label: '看板', icon: IconBoard },
   { key: 'memory', label: '记忆', icon: IconMemory },
   { key: 'code', label: '代码', icon: IconCode },
-  { key: 'terminal', label: '终端', icon: IconTerminal }
+  { key: 'terminal', label: '终端', icon: IconTerminal },
+  { key: 'git', label: 'Git', icon: IconGit },
+  { key: 'agent', label: 'Agent', icon: IconAgent }
 ]
 
 export function NavBar({ compact }: { compact: boolean }) {

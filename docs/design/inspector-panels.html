@@ -344,7 +344,7 @@ table.spec .mid{color:var(--warn);font-weight:600}
   <!-- ============ C ============ -->
   <section class="option">
     <div class="option-head">
-      <span class="tag">C</span>
+      <span class="tag rec">C · 已选</span>
       <h2>不加分栏，把 Git / Agent 也变成导航项（一次只显示一个）</h2>
     </div>
     <p class="desc">
@@ -414,12 +414,22 @@ table.spec .mid{color:var(--warn);font-weight:600}
     <tbody>
       <tr><td class="ok">A 上下两栏（固定比例）</td><td class="ok">看得见（在下半）</td><td class="mid">只能占上半</td><td class="ok">简单</td><td class="ok">75px</td></tr>
       <tr><td>B 上下两栏（可拖）</td><td class="ok">看得见（可调大小）</td><td class="ok">能拉到很大</td><td class="mid">多一根拖拽线</td><td class="ok">75px</td></tr>
-      <tr><td>C 全切换（6 个导航项）</td><td class="no">看不见</td><td class="ok">用满整块</td><td class="ok">最简单</td><td class="no">50px</td></tr>
+      <tr><td class="ok">C 全切换（6 个导航项）· 已选</td><td class="no">看不见</td><td class="ok">用满整块</td><td class="ok">最简单</td><td class="no">50px</td></tr>
     </tbody>
   </table>
 
   <div class="rec-card">
-    <h3>推荐：A（上下两栏，固定比例）</h3>
+    <h3>已选：C（全切换，6 个导航项）</h3>
+    <p>
+      用户定的。理由：结构最简单，每个视图都能用满整块面板 —— 看板、代码这些需要空间的正好。
+      Git / Agent 不再常驻，要看就切过去。
+    </p>
+    <p>
+      <b>挤的问题</b>：6 个图标在 300px 面板里每个 46px。实测能接受，
+      但如果以后图标变复杂或者要加第 7 个，就把 <code>INSPECTOR_MIN</code> 从 260 提到 300
+      （这一轮已经提了，所以拖不窄）。
+    </p>
+    <h3 style="margin-top:16px">原先推荐的 A（留作备选）</h3>
     <ol>
       <li><b>两组同时看得见。</b>看代码的时候 Git 状态还在下面 —— 这是分栏唯一的价值。</li>
       <li><b>不用拖拽。</b>窗口里已经有两根拖拽线（侧栏、检视器），再加一根容易拖错。
