@@ -27,6 +27,18 @@ export function ConversationArea() {
     (s) => (s.snapshot.activeTabId ? s.streaming[s.snapshot.activeTabId] : undefined) ?? false
   )
   const openPicker = useStore((s) => s.openModelPicker)
+  const reloadTab = useStore((s) => s.reloadTab)
+  /**
+   * 这个会话在别处被改过 —— 内容流落后了，得先重新加载才能继续说话。
+   *
+   * 为什么不让输入：Codelet 这边的 runtime 还是旧上下文，
+   * 这时候发消息会跟别处（比如 TUI）的写入冲突。
+   */
+  const stale = useStore((s) => {
+    const tabId = s.snapshot.activeTabId
+    return tabId ? (s.snapshot.tabs.find((t) => t.id === tabId)?.stale ?? false) : false
+  })
+  const [reloading, setReloading] = useState(false)
   const [draft, setDraft] = useState('')
 
   // 实时流往下长 —— 视图要跟着走，不然用户看不到刚出来的内容（R2）
@@ -38,7 +50,8 @@ export function ConversationArea() {
 
   async function send(): Promise<void> {
     const text = draft.trim()
-    if (!text || !activeTabId) return
+    // 有外部更新时不让发 —— runtime 是旧上下文，发出去会跟别处冲突
+    if (!text || !activeTabId || stale) return
     setDraft('')
     scrollToBottom()
     await host.prompt(activeTabId, text)
@@ -87,6 +100,32 @@ export function ConversationArea() {
 
       <footer className="conv-footer flex-none pb-5 pt-2">
         <div className="relative mx-auto w-full max-w-[var(--content-max)]">
+          {/*
+            这个会话在别处被改过 —— 显眼地提示，并且挡住输入。
+            不用自动同步：重建 runtime 会丢掉当前状态，而且别处还在写的话重建完很快又落后。
+          */}
+          {stale && (
+            <div className="mb-2 flex items-center gap-3 rounded-xl border border-warn/40 bg-warn-wash px-3.5 py-2.5">
+              <span className="flex-none text-[13px] text-warn">▲</span>
+              <span className="min-w-0 flex-1 text-[12.5px] text-fg-2">
+                这个会话在别处有更新（比如在终端里聊过）。重新加载之前不能继续输入 ——
+                这边的上下文还是旧的。
+              </span>
+              <button
+                type="button"
+                disabled={reloading}
+                onClick={() => {
+                  if (!activeTabId) return
+                  setReloading(true)
+                  void reloadTab(activeTabId).finally(() => setReloading(false))
+                }}
+                className="flex-none rounded-lg bg-warn px-3 py-1 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+              >
+                {reloading ? '正在重新加载…' : '重新加载'}
+              </button>
+            </div>
+          )}
+
           {/* 现阶段只有普通模式有这个钮（PLAN.md D14）；钉在内容列右下角、输入卡上方 */}
           {mode === 'normal' && (
             <ScrollJump scrollable={scrollable} atBottom={atBottom} onJump={jumpTo} />
@@ -103,8 +142,9 @@ export function ConversationArea() {
                 }
               }}
               rows={2}
-              placeholder="说点什么…"
-              className="min-h-[52px] w-full resize-none border-0 bg-transparent px-2 pt-1 text-[14.5px] leading-6 text-fg-1 outline-none placeholder:text-fg-3"
+              disabled={stale}
+              placeholder={stale ? '先点上面的「重新加载」' : '说点什么…'}
+              className="min-h-[52px] w-full resize-none border-0 bg-transparent px-2 pt-1 text-[14.5px] leading-6 text-fg-1 outline-none placeholder:text-fg-3 disabled:cursor-not-allowed disabled:opacity-60"
             />
 
             <div className="mt-1 flex items-center gap-3 px-2">
@@ -114,7 +154,7 @@ export function ConversationArea() {
               */}
               <button
                 type="button"
-                disabled={streaming || !session.model}
+                disabled={streaming || stale || !session.model}
                 onClick={(event) => {
                   const rect = event.currentTarget.getBoundingClientRect()
                   openPicker({ left: rect.left, bottom: window.innerHeight - rect.top + 8 })
@@ -137,7 +177,7 @@ export function ConversationArea() {
               <button
                 type="button"
                 onClick={() => void send()}
-                disabled={!draft.trim()}
+                disabled={!draft.trim() || stale}
                 aria-label="发送"
                 title="发送"
                 className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-full bg-accent text-accent-fg transition-opacity hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
