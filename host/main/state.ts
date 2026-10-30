@@ -34,6 +34,9 @@ interface HostTab {
  *
  * 渲染进程只是它的投影：状态变化从这里推快照，不从渲染进程回写。
  */
+/** 焦点刷新的最小间隔 —— 快速 alt-tab 别反复扫盘 */
+const FOCUS_REFRESH_MIN_MS = 2000
+
 export class HostState extends EventEmitter {
   readonly pi: PiRuntimePort
   /** 用户选的项目清单 —— 侧栏只列这些项目的会话 */
@@ -57,6 +60,10 @@ export class HostState extends EventEmitter {
   private refreshToken = 0
   /** 标签 id 的序号 —— 宿主自己发，与会话 id 解耦 */
   private tabSeq = 0
+  /** init() 跑完了没 —— 没跑完之前不响应焦点刷新（init 自己会读一次） */
+  private initialized = false
+  /** 上次「焦点刷新」的时刻，用来限流 */
+  private lastFocusRefresh = 0
 
   /** 运行时、标签存储、目录选择器都能塞进来 —— 真跑要模型，测不动 */
   constructor(options?: {
@@ -135,6 +142,9 @@ export class HostState extends EventEmitter {
     // runtime 等用户点它的时候再建（懒加载）。
     const restored = await this.restoreTabs()
     if (!restored) await this.openFallbackTab()
+    // 启动时已经读过一次了 —— 别让紧接着的那次 focus 再扫一遍
+    this.initialized = true
+    this.lastFocusRefresh = Date.now()
   }
 
   /**
@@ -365,6 +375,26 @@ export class HostState extends EventEmitter {
       this.conversations = []
     }
     this.push()
+  }
+
+  /**
+   * 窗口重新获得焦点时重读会话列表。
+   *
+   * **为什么需要这个**：列表刷新本来是事件驱动的，但那只覆盖「Codelet 自己的 runtime」。
+   * 用户在裸 pi 的 TUI 里说话时，那是另一个进程 —— 我们收不到任何事件，
+   * 列表就一直不动，只有重启（`init()` 里无条件重读）才更新。
+   *
+   * 触发点选「窗口获得焦点」，因为那正是用户期望看到最新状态的时刻。
+   *
+   * 限流：快速 alt-tab 会反复触发，而每次都要读并解析那几个项目的 jsonl
+   * （实测 38 个会话 212ms）。所以两次之间至少隔 FOCUS_REFRESH_MIN_MS。
+   */
+  async refreshOnFocus(): Promise<void> {
+    if (!this.initialized) return
+    const now = Date.now()
+    if (now - this.lastFocusRefresh < FOCUS_REFRESH_MIN_MS) return
+    this.lastFocusRefresh = now
+    await this.refreshConversations()
   }
 
   /**
