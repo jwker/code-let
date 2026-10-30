@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>侧栏 · 全部收起 / 全部展开</title>
+    <style>
+      :root {
+        --canvas: #f4f4f5;
+        --panel: #fbfbfb;
+        --surface: #ffffff;
+        --sunken: #f1f1f3;
+        --hairline: #ececee;
+        --hairline-strong: #dedee2;
+        --fg1: #1b1b19;
+        --fg2: #5c5c56;
+        --fg3: #94948c;
+        --wash: #eeeef0;
+        --sh-md: 0 8px 24px -8px rgba(20, 20, 16, 0.12);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 48px 32px 88px;
+        background: #f7f7f8;
+        color: var(--fg1);
+        font:
+          14px/1.6 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei',
+          system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .page {
+        max-width: 880px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        margin: 0 0 6px;
+      }
+      .lead {
+        margin: 0 0 28px;
+        color: var(--fg2);
+        font-size: 13.5px;
+        max-width: 680px;
+      }
+
+      /* ---------- 通用信息块 ---------- */
+      .note {
+        border: 1px solid var(--hairline);
+        border-radius: 12px;
+        background: #fff;
+        padding: 14px 16px;
+        margin: 0 0 40px;
+        font-size: 12.5px;
+        color: var(--fg2);
+      }
+      .note h3 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--fg1);
+        letter-spacing: 0.02em;
+      }
+      .note ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .note li + li {
+        margin-top: 4px;
+      }
+      .note b {
+        color: var(--fg1);
+        font-weight: 600;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+        background: var(--sunken);
+        padding: 1px 5px;
+        border-radius: 5px;
+        color: var(--fg1);
+      }
+
+      /* ---------- 方案 ---------- */
+      .option {
+        margin: 0 0 44px;
+      }
+      .option-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0 0 4px;
+      }
+      .tag {
+        flex: none;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 2px 7px;
+        border-radius: 6px;
+        background: var(--wash);
+        color: var(--fg2);
+      }
+      .tag.rec {
+        background: var(--fg1);
+        color: #fff;
+      }
+      .option h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .desc {
+        margin: 0 0 14px;
+        font-size: 12.5px;
+        color: var(--fg2);
+        max-width: 700px;
+      }
+      .desc b {
+        color: var(--fg1);
+        font-weight: 600;
+      }
+      .states {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .state {
+        margin: 0;
+      }
+      .state figcaption {
+        margin-top: 7px;
+        font-size: 11.5px;
+        color: var(--fg3);
+        text-align: center;
+      }
+      .state figcaption b {
+        color: var(--fg2);
+        font-weight: 600;
+      }
+
+      /* ---------- 局部画面：侧栏头部 1:1 ---------- */
+      .frame {
+        width: 264px;
+        height: 210px;
+        overflow: hidden;
+        border: 1px solid var(--hairline-strong);
+        border-radius: 10px;
+        background: var(--panel);
+        box-shadow: 0 10px 26px -20px rgba(20, 20, 16, 0.4);
+        padding-top: 12px;
+      }
+      /* 头部一行：打开项目 + 方案各自的第二件东西 */
+      .side-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+      }
+      .side-open {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 36px;
+        padding: 0 8px;
+        border-radius: 8px;
+        color: var(--fg1);
+        font-size: 13.5px;
+      }
+      .side-open.grow {
+        flex: 1;
+      }
+      .side-open .ic {
+        flex: none;
+        color: var(--fg2);
+        display: flex;
+      }
+      /* 右侧小钮 */
+      .icon-btn {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        color: var(--fg3);
+      }
+      .icon-btn.hot {
+        background: var(--sunken);
+        color: var(--fg1);
+      }
+      /* 文字钮 */
+      .text-btn {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        height: 28px;
+        padding: 0 9px;
+        border-radius: 8px;
+        font-size: 12.5px;
+        color: var(--fg2);
+      }
+      /* 分隔线 */
+      .hr {
+        height: 1px;
+        background: var(--hairline);
+        margin: 8px 10px 0;
+      }
+      /* 项目组 */
+      .grp {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        margin: 8px 4px 0;
+        padding: 0 6px;
+        border-radius: 8px;
+        color: var(--fg1);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .grp .caret {
+        flex: none;
+        width: 12px;
+        text-align: center;
+        font-size: 9px;
+        color: var(--fg3);
+      }
+      .grp .nm {
+        flex: 1;
+        min-width: 0;
+      }
+      .grp .count {
+        flex: none;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        font-weight: 400;
+        color: var(--fg3);
+      }
+      .grp .dots {
+        flex: none;
+        color: var(--fg3);
+        font-size: 11px;
+        opacity: 0;
+      }
+      /* 组内 */
+      .time {
+        padding: 8px 8px 2px 22px;
+        font-size: 11px;
+        color: var(--fg3);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        height: 26px;
+        padding: 0 8px 0 22px;
+        font-size: 13px;
+        color: var(--fg2);
+      }
+      .row .dot {
+        flex: none;
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        margin-right: 7px;
+        background: var(--fg3);
+        opacity: 0.55;
+      }
+      .row .t {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .row.on {
+        background: var(--wash);
+        color: var(--fg1);
+      }
+      /* 方案 C 的菜单 */
+      .menu {
+        margin: 4px 10px 0;
+        padding: 4px;
+        border: 1px solid var(--hairline);
+        border-radius: 10px;
+        background: var(--surface);
+        box-shadow: var(--sh-md);
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 30px;
+        padding: 0 8px;
+        border-radius: 7px;
+        font-size: 13px;
+        color: var(--fg1);
+      }
+      .menu-item .ic {
+        flex: none;
+        color: var(--fg2);
+        display: flex;
+      }
+      .menu-item .tag2 {
+        margin-left: auto;
+        font-size: 10.5px;
+        color: var(--fg3);
+      }
+      .menu-sep {
+        height: 1px;
+        margin: 4px 6px;
+        background: var(--hairline);
+      }
+      /* 方案 D 的工具行 */
+      .tool-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 30px;
+        margin: 8px 10px 0;
+        color: var(--fg3);
+        font-size: 11.5px;
+      }
+      .tool-row .spacer {
+        flex: 1;
+      }
+
+      .footer {
+        border-top: 1px solid var(--hairline);
+        padding-top: 24px;
+        margin-top: 8px;
+      }
+      .footer h3 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 10px;
+      }
+      .footer p {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: var(--fg2);
+      }
+      .footer b {
+        color: var(--fg1);
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 8px;
+        font-size: 12.5px;
+      }
+      table.spec th,
+      table.spec td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--hairline);
+        vertical-align: top;
+      }
+      table.spec th {
+        width: 92px;
+        font-weight: 600;
+        color: var(--fg1);
+        white-space: nowrap;
+      }
+      table.spec td {
+        color: var(--fg2);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>侧栏 · 全部收起 / 全部展开</h1>
+      <p class="lead">
+        侧栏里按项目分组列全部会话，组头左边那个三角能收起<b>一个</b>项目。
+        这里要的是<b>一次收放所有</b>：38 个会话全摊着要滚很久，全部收起之后只剩 9 行项目名。
+        四个方案都跟「打开项目」放在一起考虑 —— 那一行现在是侧栏唯一的操作入口，多一件东西就得重新分配这一行。
+        图里每个框是侧栏的 1:1 裁切（宽 264），只有头部和两个项目组。
+      </p>
+
+      <div class="note" style="border-color: #dedee2; background: #fbfbfb">
+        <h3>前提变了 · 本稿还剩什么用</h3>
+        <ul>
+          <li>
+            <b>头部不再放按钮了</b>：侧栏头部改成「项目」（标题）+ 一颗 sliders，
+            所有动作进浮层（见 <a href="./sidebar-header-actions.html">侧栏 · 头部操作区</a>）。
+            所以本稿里的 A / B / D 三个位置方案作废 —— 「收起全部」不再是一个浮在外面的按钮。
+          </li>
+          <li>
+            <b>本稿剩下的两件事仍然要定</b>：
+            <br />
+            ① <b>它在浮层里长什么样</b>：一行文字（收起全部项目 / 展开全部项目）还是带图标；
+            <br />
+            ② <b>图标/文案什么时候换向</b>（部分收起这个中间态）。
+          </li>
+          <li>
+            <b>推荐落在浮层里的第二组</b>：动作项（打开项目… / 收起全部项目）在上，
+            带当前值的设置项（对话筛选：全部 ›）在下，分隔线隔开。
+          </li>
+        </ul>
+      </div>
+
+      <div class="note">
+        <h3>四个方案共用的规则</h3>
+        <ul>
+          <li>
+            <b>折叠粒度 = 项目组</b>：就是组头左边那个三角。组内的「今天 / 昨天 / 更早」不管，收起组时一起收掉。
+          </li>
+          <li>
+            <b>状态不用新存</b>：现有的 <code>codelet:sidebar-collapsed-projects</code> 存的就是一组项目路径。
+            「全部收起」= 把清单里所有项目加进去，「全部展开」= 清空。
+          </li>
+          <li>
+            <b>按钮图标随状态换向</b>（约定一）：
+            <b>全都展开</b>时显示「全部收起」（双上箭头 ⌃⌃），<b>有任何一个组收着</b>时显示「全部展开」（双下箭头 ⌄⌄）。
+            换句话说，按钮显示的是<b>点下去会做什么</b>。
+          </li>
+          <li>
+            <b>另一种约定（二）</b>：有组展开着就显示「全部收起」。
+            跟约定一差在<b>部分收起</b>的中间态 —— 两个约定给出的动作正好相反，图标会来回跳。
+            选一就得选死，别让用户靠试。
+          </li>
+          <li>
+            <b>双箭头</b>是刻意的：组头用单三角（▼/▶，说的是这一组的状态），
+            全局按钮用双箭头（说的是对<b>所有</b>组做的动作），两个不混。
+          </li>
+          <li><b>空态</b>：一个项目都没有时按钮不显示（跟「还没有对话」那段提示一起藏）。</li>
+          <li><b>不做动画</b>：组收起现在是条件渲染、瞬间消失，全收起也瞬间消失 —— 高度动画在 9 个组同时收时会很难看。</li>
+          <li><b>不做快捷键</b>：这个动作低频，占一个全局键位不值。真要加，<code>⌘⌥C</code> 收起 / <code>⌘⌥E</code> 展开。</li>
+        </ul>
+      </div>
+
+      <!-- ============ A ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag rec">方案 A · 推荐</span><h2>头部行右侧一个图标钮</h2></div>
+        <p class="desc">
+          「打开项目」改成 <code>flex-1</code>（不再占满整行），右边空出一个 28×28 的位置放图标钮。
+          <b>位置永远不动</b>，只有图标在换：全展开时是 ⌃⌃（全部收起），有组收着时是 ⌄⌄（全部展开）。
+          这一行从此是侧栏的<b>操作行</b>：左边管加项目，右边管列表怎么摆 —— 两件都是「对这个列表做什么」的事。
+          <b>代价</b>是图标含义要读一眼，靠 <code>title</code> / <code>aria-label</code> 补足。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+                <div class="icon-btn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span><span class="dots">⋯</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+              <div class="row"><span class="t">新增了一个任务，在 task.m…</span></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">pi-chat-box</span><span class="count">16</span><span class="dots">⋯</span></div>
+            </div>
+            <figcaption><b>全都展开</b> · 按钮是「全部收起」</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+                <div class="icon-btn hot">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 10 5 5 5-5" /><path d="m7 16 5 5 5-5" /></svg>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▶</span><span class="nm">Codelet</span><span class="count">3</span><span class="dots">⋯</span></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">pi-chat-box</span><span class="count">16</span><span class="dots">⋯</span></div>
+              <div class="time">今天</div>
+              <div class="row"><span class="dot"></span><span class="t">哈哈</span></div>
+              <div class="row"><span class="t">只回复：好的</span></div>
+            </div>
+            <figcaption><b>有一组收着</b> · 按钮翻成「全部展开」</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+                <div class="icon-btn hot">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 10 5 5 5-5" /><path d="m7 16 5 5 5-5" /></svg>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▶</span><span class="nm">Codelet</span><span class="count">3</span><span class="dots">⋯</span></div>
+              <div class="grp"><span class="caret">▶</span><span class="nm">pi-chat-box</span><span class="count">16</span><span class="dots">⋯</span></div>
+              <div class="grp"><span class="caret">▶</span><span class="nm">host</span><span class="count">5</span><span class="dots">⋯</span></div>
+              <div class="grp"><span class="caret">▶</span><span class="nm">doubao-chat-box</span><span class="count">2</span><span class="dots">⋯</span></div>
+            </div>
+            <figcaption><b>全都收起</b> · 只剩 9 行项目名</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ B ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 B</span><h2>头部行右侧一个文字钮</h2></div>
+        <p class="desc">
+          同一个位置，但放文字：「收起全部」/「展开全部」。<b>不用猜图标</b>，看到字就知道点下去会怎样。
+          264px 的侧栏放得下（两个按钮加起来约 170px），侧栏拖到最窄 200px 也还剩 30px。
+          <b>代价</b>是这一行从「一个按钮」变成「两个按钮」：左边那个带图标、是侧栏唯一的常驻主操作，
+          右边这个是纯文字的次操作 —— 权重不对等，看起来像两个同级按钮；而且文字会随状态变，宽度一变整行会轻微抖动。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+                <div class="text-btn">收起全部</div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">pi-chat-box</span><span class="count">16</span></div>
+            </div>
+            <figcaption><b>全都展开</b> · 「收起全部」</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+                <div class="text-btn" style="background: var(--sunken); color: var(--fg1)">展开全部</div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▶</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">pi-chat-box</span><span class="count">16</span></div>
+              <div class="time">今天</div>
+              <div class="row"><span class="dot"></span><span class="t">哈哈</span></div>
+            </div>
+            <figcaption><b>有一组收着</b> · 「展开全部」</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ C ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 C</span><h2>并进「打开项目」的下拉菜单</h2></div>
+        <p class="desc">
+          头部一行还是只有一个按钮，但点开是菜单：<b>打开项目…</b> / 分隔线 / <b>全部收起</b>（随状态换向）。
+          头部保持最干净，改动最小（<code>打开项目</code> 不用改宽度）。
+          <b>代价</b>有两层：一是多一次点击，二是<b>把两件不同类的事塞进一个菜单</b> ——
+          「打开项目」是加一个项目，「全部收起」是改列表怎么摆，一个是内容，一个是视图状态。
+          而且「打开项目」现在是个直接动作（点一下就开），变成菜单入口之后要多走一步。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+              </div>
+              <div class="menu">
+                <div class="menu-item">
+                  <span class="ic">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目…</span>
+                </div>
+                <div class="menu-sep"></div>
+                <div class="menu-item">
+                  <span class="ic">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg>
+                  </span>
+                  <span>全部收起</span>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+            </div>
+            <figcaption><b>菜单打开</b> · 收起 / 展开在第二段</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ D ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 D</span><h2>单独一行列表工具条</h2></div>
+        <p class="desc">
+          头部一行只留「打开项目」（不动它），下面另起一行工具条：左边写「9 个项目 · 38 个会话」，右边是图标钮。
+          <b>语义最清楚</b>：打开项目管「有哪些项目」，工具条管「这个列表怎么摆」，两件事各占一行，谁也不挤谁。
+          顺手还能把会话总数放回侧栏（之前定的「总数没有位置放」，这里就是那个位置）。
+          <b>代价</b>是侧栏白占一行 30px，而总数跟组头的会话数重复（各组加起来就是总数），
+          跟之前那个决定是反的；侧栏本来就在 264×很满的尺寸里挤。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+              </div>
+              <div class="tool-row">
+                <span>9 个项目 · 38 个会话</span>
+                <span class="spacer"></span>
+                <div class="icon-btn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg>
+                </div>
+              </div>
+              <div class="hr" style="margin-top: 8px"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+            </div>
+            <figcaption><b>工具条</b> · 左边总数，右边动作</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <div class="footer">
+        <h3>规格（四个方案共用）</h3>
+        <table class="spec">
+          <tr><th>按钮</th><td>28×28 圆角 8 的图标钮（方案 B 是 28 高文字钮），图标 15px、1.8 描边、<code>currentColor</code></td></tr>
+          <tr><th>配色</th><td>默认 <code>--fg-3</code>，悬停底 <code>--sunken</code>、字变 <code>--fg-1</code>；不抢「打开项目」的注意力</td></tr>
+          <tr><th>位置</th><td>跟「打开项目」同一行（方案 A / B）或下一行（方案 D）；不跟着列表内容滚动 —— 它在滚动区外面</td></tr>
+          <tr><th>无障碍</th><td><code>aria-label</code> 写全「收起全部项目」/「展开全部项目」，<code>title</code> 同文案；<code>aria-expanded</code> 反映「有没有组收着」</td></tr>
+          <tr><th>状态存储</th><td>沿用 <code>codelet:sidebar-collapsed-projects</code>，不新增键</td></tr>
+        </table>
+
+        <h3 style="margin-top: 22px">实现备注</h3>
+        <p>
+          <code>Sidebar.tsx</code> 里 <code>collapsed</code> 已经是一个 <code>Set&lt;string&gt;</code>，
+          存的是项目路径。<b>全部收起</b>就是 <code>setCollapsed(new Set(projects.map(p =&gt; p.path)))</code>，
+          <b>全部展开</b>就是 <code>setCollapsed(new Set())</code>，各自调一次 <code>saveCollapsed</code>。
+          项目清单位于 <code>snapshot.projects</code>，按钮的启用与否、图标朝哪，都从它和 <code>collapsed</code> 现算，不用另存状态。
+        </p>
+        <p>
+          「打开项目」现在是 <code>w-full</code>。方案 A / B 要把它改成 <code>flex-1</code>，右侧才能腾出位置；
+          方案 C / D 不动它的 DOM。
+        </p>
+
+        <h3 style="margin-top: 22px">我的建议</h3>
+        <p>
+          <b>A</b>：一行放两件事，各占一头，位置永远不动；改动只是「打开项目」让出 28px。
+          「全部收起 / 全部展开」这个动作本来就低频，图标 + <code>title</code> 足够说清楚，
+          跟对话区滚动按钮用的是同一套「位置不动、图标换向」的逻辑，一致。
+        </p>
+        <p>
+          <b>D</b> 是语义最干净的，但代价是白占一行，还把之前定掉的「总数不放侧栏」翻了过来 —— 要么接受总数回来，要么那行左边空着（那就退化成 A 了）。
+        </p>
+        <p>
+          <b>B</b> 我不太推荐：文字钮跟带图标的「打开项目」并排，两个按钮的权重不对等，文字变长变短还会让整行轻微抖。
+          <b>C</b> 是「最不打扰」的那个，但收放是高频到值得一按的动作（38 条会话摊着确实要滚很久），藏进菜单里等于把刚需降级。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

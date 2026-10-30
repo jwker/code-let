@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>侧栏 · 头部操作区怎么留位置给以后的按钮</title>
+    <style>
+      :root {
+        --canvas: #f4f4f5;
+        --panel: #fbfbfb;
+        --surface: #ffffff;
+        --sunken: #f1f1f3;
+        --hairline: #ececee;
+        --hairline-strong: #dedee2;
+        --fg1: #1b1b19;
+        --fg2: #5c5c56;
+        --fg3: #94948c;
+        --wash: #eeeef0;
+        --sh-md: 0 8px 24px -8px rgba(20, 20, 16, 0.12);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 48px 32px 88px;
+        background: #f7f7f8;
+        color: var(--fg1);
+        font:
+          14px/1.6 -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei',
+          system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .page {
+        max-width: 880px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        margin: 0 0 6px;
+      }
+      .lead {
+        margin: 0 0 28px;
+        color: var(--fg2);
+        font-size: 13.5px;
+        max-width: 680px;
+      }
+
+      .note {
+        border: 1px solid var(--hairline);
+        border-radius: 12px;
+        background: #fff;
+        padding: 14px 16px;
+        margin: 0 0 40px;
+        font-size: 12.5px;
+        color: var(--fg2);
+      }
+      .note h3 {
+        margin: 0 0 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--fg1);
+        letter-spacing: 0.02em;
+      }
+      .note ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .note li + li {
+        margin-top: 4px;
+      }
+      .note b {
+        color: var(--fg1);
+        font-weight: 600;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11.5px;
+        background: var(--sunken);
+        padding: 1px 5px;
+        border-radius: 5px;
+        color: var(--fg1);
+      }
+
+      .option {
+        margin: 0 0 44px;
+      }
+      .option-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin: 0 0 4px;
+      }
+      .tag {
+        flex: none;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        padding: 2px 7px;
+        border-radius: 6px;
+        background: var(--wash);
+        color: var(--fg2);
+      }
+      .tag.rec {
+        background: var(--fg1);
+        color: #fff;
+      }
+      .option h2 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .desc {
+        margin: 0 0 14px;
+        font-size: 12.5px;
+        color: var(--fg2);
+        max-width: 700px;
+      }
+      .desc b {
+        color: var(--fg1);
+        font-weight: 600;
+      }
+      .states {
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .state {
+        margin: 0;
+      }
+      .state figcaption {
+        margin-top: 7px;
+        font-size: 11.5px;
+        color: var(--fg3);
+        text-align: center;
+      }
+      .state figcaption b {
+        color: var(--fg2);
+        font-weight: 600;
+      }
+
+      /* ---------- 局部画面：侧栏头部 1:1 ---------- */
+      .frame {
+        position: relative;
+        width: 264px;
+        height: 210px;
+        overflow: hidden;
+        border: 1px solid var(--hairline-strong);
+        border-radius: 10px;
+        background: var(--panel);
+        box-shadow: 0 10px 26px -20px rgba(20, 20, 16, 0.4);
+        padding-top: 12px;
+      }
+      .side-head {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+      }
+      /* 标题行：只说明「这一块是什么」，不是按钮 */
+      .side-title {
+        flex: 1;
+        min-width: 0;
+        padding-left: 8px;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--fg2);
+      }
+      .side-open {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 36px;
+        padding: 0 8px;
+        border-radius: 8px;
+        color: var(--fg1);
+        font-size: 13.5px;
+      }
+      .side-open.grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .side-open .ic {
+        flex: none;
+        color: var(--fg2);
+        display: flex;
+      }
+      .side-open .ell {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .icon-btn {
+        flex: none;
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        border-radius: 8px;
+        color: var(--fg3);
+      }
+      .icon-btn.hot {
+        background: var(--sunken);
+        color: var(--fg1);
+      }
+      .icon-btn.line {
+        color: var(--fg2);
+      }
+      .tb {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        flex: none;
+      }
+      .vsep {
+        flex: none;
+        width: 1px;
+        height: 16px;
+        background: var(--hairline);
+        margin: 0 5px;
+      }
+      .search {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 8px;
+        border-radius: 8px;
+        background: var(--sunken);
+        color: var(--fg3);
+        font-size: 12.5px;
+      }
+      .search .kbd {
+        margin-left: auto;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        color: var(--fg3);
+      }
+      .hr {
+        height: 1px;
+        background: var(--hairline);
+        margin: 8px 10px 0;
+      }
+      .grp {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        margin: 8px 4px 0;
+        padding: 0 6px;
+        border-radius: 8px;
+        color: var(--fg1);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .grp .caret {
+        flex: none;
+        width: 12px;
+        text-align: center;
+        font-size: 9px;
+        color: var(--fg3);
+      }
+      .grp .nm {
+        flex: 1;
+        min-width: 0;
+      }
+      .grp .count {
+        flex: none;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        font-weight: 400;
+        color: var(--fg3);
+      }
+      .time {
+        padding: 8px 8px 2px 22px;
+        font-size: 11px;
+        color: var(--fg3);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        height: 26px;
+        padding: 0 8px 0 22px;
+        font-size: 13px;
+        color: var(--fg2);
+      }
+      .row .dot {
+        flex: none;
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        margin-right: 7px;
+        background: var(--fg3);
+        opacity: 0.55;
+      }
+      .row .t {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .row.on {
+        background: var(--wash);
+        color: var(--fg1);
+      }
+      .menu {
+        margin: 4px 10px 0;
+        padding: 4px;
+        border: 1px solid var(--hairline);
+        border-radius: 10px;
+        background: var(--surface);
+        box-shadow: var(--sh-md);
+      }
+      .menu-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 30px;
+        padding: 0 8px;
+        border-radius: 7px;
+        font-size: 13px;
+        color: var(--fg1);
+      }
+      .menu-item .ic {
+        flex: none;
+        color: var(--fg2);
+        display: flex;
+      }
+      .menu-item .kbd {
+        margin-left: auto;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 10px;
+        color: var(--fg3);
+      }
+      .menu-item .tag2 {
+        margin-left: auto;
+        font-size: 10.5px;
+        color: var(--fg3);
+      }
+      .menu-sep {
+        height: 1px;
+        margin: 4px 6px;
+        background: var(--hairline);
+      }
+      .menu-head {
+        padding: 5px 8px 3px;
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--fg3);
+      }
+
+      .footer {
+        border-top: 1px solid var(--hairline);
+        padding-top: 24px;
+        margin-top: 8px;
+      }
+      .footer h3 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 10px;
+      }
+      .footer p {
+        margin: 0 0 8px;
+        font-size: 13px;
+        color: var(--fg2);
+      }
+      .footer b {
+        color: var(--fg1);
+      }
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 8px;
+        font-size: 12.5px;
+      }
+      table.spec th,
+      table.spec td {
+        text-align: left;
+        padding: 7px 10px;
+        border-bottom: 1px solid var(--hairline);
+        vertical-align: top;
+      }
+      table.spec th {
+        width: 92px;
+        font-weight: 600;
+        color: var(--fg1);
+        white-space: nowrap;
+      }
+      table.spec td {
+        color: var(--fg2);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>侧栏 · 头部操作区怎么留位置给以后的按钮</h1>
+      <p class="lead">
+        上一份稿子定了「全部收起 / 全部展开」这一个按钮怎么放。但侧栏的头部不会只有这一个按钮 ——
+        排序、过滤、搜索、视图密度、批量操作，早晚都要进来。所以这一稿问的不是「这个按钮放哪」，
+        而是<b>头部这一行按什么结构长，才能接住以后的动作</b>。
+        <b>方向已经定了（见下面的「已定」）：头部只留标题 + 一颗钮，所有操作进浮层。</b>
+        下面五个方案是定方向之前铺开的备选，留作记录 —— 每一帧左边是<b>今天</b>，右边是<b>以后</b>。
+      </p>
+
+      <div class="note">
+        <h3>五个方案共用的分类</h3>
+        <ul>
+          <li>
+            <b>内容动作</b>：改变「有哪些东西」—— 打开项目、新建对话、移除项目。
+            低频、需要被看见，所以留在外面、给图标 + 文字。
+          </li>
+          <li>
+            <b>视图动作</b>：改变「这些东西怎么摆」—— 收起/展开全部、按时间排序、过滤只看某个项目。
+            高频、但都在同一个列表上，适合挤在一排小图标里。
+          </li>
+          <li>
+            <b>入口动作</b>：把一整类动作交给别处 —— 搜索框、命令面板。
+            它的存在本身就是入口，不该藏进菜单。
+          </li>
+          <li>
+            <b>侧栏宽度 200–264</b>：窄到 200px 时头部只剩 180px 可用。
+            任何一个方案都得说清楚<b>放不下的时候怎么办</b>，不能等以后再想。
+          </li>
+          <li>
+            <b>每个动作都要有第二条路</b>：快捷键或命令面板。图标按钮只靠悬停提示的，键盘用户是够不着的。
+          </li>
+        </ul>
+      </div>
+
+      <div class="note" style="border-color: #dedee2; background: #fbfbfb">
+        <h3>已定 · 头部形态</h3>
+        <ul>
+          <li>
+            <b>头部只留标题「项目」+ 一颗钮</b>（sliders）。标题就是标题，不做成按钮的样子 ——
+            看着就是个分区标题，点它没反应。
+          </li>
+          <li>
+            <b>所有动作都在浮层里打开</b>：打开项目、收起/展开全部、以后加的排序与筛选。
+            头部除了这颗钮，不放第二个按钮。
+          </li>
+          <li>
+            <b>浮层的行分两类，靠右边区分</b>：右边有<b>当前值 + 箭头</b>的是设置项（点进去选），
+            右边什么都没有的是动作项。分隔线把设置 / 动作 / 危险操作分组开。
+          </li>
+          <li>
+            <b>宽 230–240</b>，塞在侧栏里，不溢出到主区（侧栏只有 264，浮层再宽就盖住对话区了）。
+          </li>
+          <li>
+            <b>浮层按钮常驻可见</b>，打开时自己有按下态（灰底圆角块），
+            跟组头的「⋯」形状不同（sliders vs ⋯），不会认混。
+          </li>
+          <li>
+            <b>空态的文案要跟着改</b>：现在写的是「点上面的「打开项目」开始」，
+            以后没有那个按钮了，得改成「点右上角的选项」。
+          </li>
+        </ul>
+      </div>
+
+      <!-- ============ 已定方向 ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag rec">已定 · 方向 A′</span><h2>标题 + 一颗钮，操作都在浮层里</h2></div>
+        <p class="desc">
+          头部从「一个「打开项目」大按钮」改成「<b>项目</b>（标题） + 右侧一颗 sliders」。
+          标题回答了「这一块是什么」，钮回答了「这里能干什么」，两件事各占一头。
+          所有动作进浮层：<b>打开项目…</b>（加项目）、<b>收起全部项目</b>、以后加的排序与筛选。
+          好处是头部宽度<b>封顶</b>，加多少动作都不挤；代价是<b>打开项目从一步变成两步</b> ——
+          它现在是整个应用里唯一能加项目的路，所以浮层第一项必须是它。快捷键<b>待定</b>：
+          <code>⌘O</code> 被 Electron 默认菜单的「打开…」占着（那开的是文件选择器），
+          要用得先给这个应用自己的菜单（File &gt; 打开项目…）。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-title">项目</div>
+                <div class="icon-btn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2.2" /><circle cx="9" cy="17" r="2.2" /></svg>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+              <div class="grp"><span class="caret">▶</span><span class="nm">pi-chat-box</span><span class="count">16</span></div>
+            </div>
+            <figcaption><b>收起状态</b> · 标题 + 一颗钮</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-title">项目</div>
+                <div class="icon-btn hot">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9" /><circle cx="15" cy="7" r="2.2" /><circle cx="9" cy="17" r="2.2" /></svg>
+                </div>
+              </div>
+              <div class="menu">
+                <div class="menu-item">
+                  <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg></span>
+                  <span>打开项目…</span>
+                </div>
+                <div class="menu-sep"></div>
+                <div class="menu-item">
+                  <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg></span>
+                  <span>收起全部项目</span>
+                </div>
+                <div class="menu-sep"></div>
+                <div class="menu-item">
+                  <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v6l-4 2v-8z" /></svg></span>
+                  <span>对话筛选</span>
+                  <span class="tag2">全部 ›</span>
+                </div>
+              </div>
+              <div class="hr" style="margin-top: 6px"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+            </div>
+            <figcaption><b>浮层打开</b> · 动作在上，设置在下</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ A ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 A · 已被 A′ 取代</span><h2>一个溢出菜单「⋯」，宽度永远不变</h2></div>
+        <p class="desc">
+          头部只留两样东西：左边的「打开项目」（主操作），右边一颗 <b>⋯</b>。
+          所有<b>视图动作</b>都进这颗 ⋯ —— 收起/展开全部、排序、过滤、视图密度。
+          加一个新动作 = 菜单里多一行，<b>头部一个像素都不动</b>，也不存在「以后放不下怎么办」。
+          <b>代价</b>是收起/展开这种高频动作被藏进菜单，多一次点击；而且侧栏里会同时存在两个「⋯」
+          （头部这个、组头那个），语义都是「更多」，容易混 —— 缓解办法是给头部的菜单项分组、加标题。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+                <div class="icon-btn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18.5" cy="12" r="1.6" /></svg>
+                </div>
+              </div>
+              <div class="menu">
+                <div class="menu-head">视图</div>
+                <div class="menu-item">
+                  <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg></span>
+                  <span>全部收起</span>
+                </div>
+                <div class="menu-item">
+                  <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg></span>
+                  <span>排序</span>
+                </div>
+              </div>
+              <div class="hr" style="margin-top: 6px"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+            </div>
+            <figcaption><b>今天</b> · 一颗 ⋯ 装下所有视图动作</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+                <div class="icon-btn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18.5" cy="12" r="1.6" /></svg>
+                </div>
+              </div>
+              <div class="menu">
+                <div class="menu-head">视图</div>
+                <div class="menu-item">
+                  <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg></span>
+                  <span>全部收起</span>
+                </div>
+                <div class="menu-item">
+                  <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg></span>
+                  <span>排序</span>
+                  <span class="tag2">按时间</span>
+                </div>
+                <div class="menu-item">
+                  <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v6l-4 2v-8z" /></svg></span>
+                  <span>只看有更新的</span>
+                </div>
+                <div class="menu-sep"></div>
+                <div class="menu-item">
+                  <span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg></span>
+                  <span>紧凑行高</span>
+                </div>
+              </div>
+              <div class="hr" style="margin-top: 6px"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+            </div>
+            <figcaption><b>以后</b> · 菜单多了几行，头部没变</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ B ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 B</span><h2>右侧一排图标钮，放不下就折叠</h2></div>
+        <p class="desc">
+          头部右侧是一条<b>工具条</b>：今天一颗（收起/展开），以后加排序、过滤就变两颗、三颗。
+          每颗 28px，加上「打开项目」那 110px，264px 的侧栏放得下 4–5 颗；
+          <b>超过 5 颗</b>就把多出来的折进 ⋯，规则固定（永远保留最左边两颗）。
+          <b>好处</b>是视图动作不用点开菜单就够得着 —— 收起/展开是高频动作，这一点值。
+          <b>代价</b>是这一排图标要认；侧栏拖到 200px 时只剩 3 颗的位置，折叠规则就开始碍手。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+                <div class="tb">
+                  <div class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg>
+                  </div>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+            </div>
+            <figcaption><b>今天</b> · 一颗</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span class="ell">打开项目</span>
+                </div>
+                <div class="tb">
+                  <div class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg>
+                  </div>
+                  <div class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+                  </div>
+                  <div class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v6l-4 2v-8z" /></svg>
+                  </div>
+                  <div class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18.5" cy="12" r="1.6" /></svg>
+                  </div>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+            </div>
+            <figcaption><b>以后</b> · 三颗 + 一个 ⋯，「打开项目」被挤窄</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ C ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 C</span><h2>分区头：左边内容，右边视图</h2></div>
+        <p class="desc">
+          头部用一条<b>竖分隔线</b>分成两区：左边是内容动作（「打开项目」），右边是视图动作（小图标排）。
+          分隔线把「加东西」和「改摆法」在视觉上分开 —— 以后右边那一区加多少颗都是<b>一类</b>动作，
+          不会跟左边混。这个约定比「每个方案各自决定」更耐久：<b>新增动作先问自己属于哪一类</b>，
+          位置就定了，不用每次重新设计头部。
+          <b>代价</b>是右区宽度有限（264px 减去「打开项目」约剩 90px，放得下 3 颗），第四颗开始要缩；
+          而且分隔线在 200px 宽的侧栏里会显得挤。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+                <div class="vsep"></div>
+                <div class="tb">
+                  <div class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg>
+                  </div>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+            </div>
+            <figcaption><b>今天</b> · 左内容 / 右视图</figcaption>
+          </figure>
+
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span class="ell">打开项目</span>
+                </div>
+                <div class="vsep"></div>
+                <div class="tb">
+                  <div class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7 14 5-5 5 5" /><path d="m7 20 5-5 5 5" /></svg>
+                  </div>
+                  <div class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+                  </div>
+                  <div class="icon-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7v6l-4 2v-8z" /></svg>
+                  </div>
+                </div>
+              </div>
+              <div class="hr"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+            </div>
+            <figcaption><b>以后</b> · 右区加到三颗，左边开始让位</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ D ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 D</span><h2>两行头：主操作一行，工具条一行</h2></div>
+        <p class="desc">
+          头部拆成两行：第一行只有「打开项目」（保持现在的样子，一个字不用改）；第二行是一条工具条，
+          左边可以放<b>搜索框</b>，右边放视图动作的小图标。
+          <b>扩展性最好</b> —— 搜索框、过滤标签、排序下拉这些将来的东西都有地方放，不用在 264px 里挤。
+          <b>代价</b>是侧栏白占一行 30–36px，而侧栏本来就是最挤的一块（264×能显示 9 个会话）；
+          而且两行头部让「打开项目」跟下面的列表离得更远，视线要跨一行。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame">
+              <div class="side-head">
+                <div class="side-open grow">
+                  <span class="ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  </span>
+                  <span>打开项目</span>
+                </div>
+              </div>
+              <div class="side-head" style="margin-top: 6px">
+                <div class="search">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                  <span>搜索对话</span>
+                  <span class="kbd">⌘F</span>
+                </div>
+              </div>
+              <div class="hr" style="margin-top: 8px"></div>
+              <div class="grp"><span class="caret">▼</span><span class="nm">Codelet</span><span class="count">3</span></div>
+              <div class="time">今天</div>
+              <div class="row on"><span class="dot"></span><span class="t">看下 doc/design/ai-repl…</span></div>
+            </div>
+            <figcaption><b>以后</b> · 搜索框 + 工具条各占一行</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- ============ E ============ -->
+      <section class="option">
+        <div class="option-head"><span class="tag">方案 E</span><h2>头部零按钮，全交给命令面板</h2></div>
+        <p class="desc">
+          头部只留「打开项目」，别的动作全进 <b>⌘K 命令面板</b>：输入就能搜到「收起全部」「按时间排序」「只看某个项目」。
+          <b>扩展性是无限的</b> —— 加多少动作都不用改侧栏，而且命令面板还顺带能做搜索。
+          <b>代价</b>是所有动作都<b>不可见</b>：用户不知道能收起全部，得先知道有命令面板；
+          收起/展开这种高频动作藏进「先按 ⌘K 再打字」里，实际使用会很低。
+          <b>适合当补充</b>，不适合当唯一入口。
+        </p>
+        <div class="states">
+          <figure class="state">
+            <div class="frame" style="background: var(--sunken)">
+              <div style="margin: 10px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--surface); box-shadow: var(--sh-md); overflow: hidden">
+                <div style="display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--hairline); color: var(--fg3); font-size: 13px">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+                  <span>收起</span>
+                </div>
+                <div class="menu-item" style="padding: 0 12px; height: 34px"><span>全部收起项目</span><span class="kbd">⌘⌥C</span></div>
+                <div class="menu-item" style="padding: 0 12px; height: 34px"><span>收起当前项目</span></div>
+                <div class="menu-item" style="padding: 0 12px; height: 34px"><span>展开全部项目</span></div>
+              </div>
+              <div style="position: absolute; inset: 0; background: rgba(27, 27, 25, 0.06); border-radius: 10px"></div>
+            </div>
+            <figcaption><b>⌘K</b> · 所有视图动作都在这</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <div class="footer">
+        <h3>规格（五个方案共用）</h3>
+        <table class="spec">
+          <tr><th>图标钮</th><td>28×28、圆角 8、图标 15px、1.8 描边、<code>currentColor</code>；默认 <code>--fg-3</code>，悬停底 <code>--sunken</code></td></tr>
+          <tr><th>文字钮</th><td>「打开项目」保持 <code>13.5px</code> + 16px 折叠图标，不因右区变宽变窄而改尺寸</td></tr>
+          <tr><th>降级</th><td>侧栏窄于 <b>220px</b> 时，右区只留第一颗（收起/展开），其余进 ⋯；再窄则全部进 ⋯</td></tr>
+          <tr><th>无障碍</th><td>每颗 <code>aria-label</code> 写全动作名；<code>title</code> 同文案；<code>aria-expanded</code> 反映「有没有组收着」</td></tr>
+          <tr><th>第二通道</th><td>每个动作配一个快捷键，并在 ⌘K 面板里能搜到</td></tr>
+        </table>
+
+        <h3 style="margin-top: 22px">结论</h3>
+        <p>
+          <b>已定 A′：标题 + 一颗钮，操作都在浮层里。</b>它是五个方案里唯一把「以后加动作」这件事彻底解决的：
+          头部宽度封顶，浮层里加几行都不影响外面。
+        </p>
+        <p>
+          它比 A（⋯ 溢出菜单）多做了两件事：<b>把标题补回来了</b>（侧栏这块以前只有一句话说明「这一块是什么」，
+          现在有了）；<b>浮层里的行能带当前值</b>，所以它不只是动作清单，还是设置面板 ——
+          「对话筛选：全部 ›」这种行直接显示现在的状态。
+        </p>
+        <p>
+          要认的代价是<b>打开项目从一步变两步</b>：它是整个应用里唯一能加项目的路，
+          现在藏在浮层第一项。缓解办法：浮层第一项必须是它；空态提示改成「点右上角的选项」；
+          快捷键等应用有了自己的菜单再说（<code>⌘O</code> 现在被 Electron 默认菜单占着）。
+        </p>
+        <p>
+          B（图标排）、D（两行头）、E（纯 ⌘K）可以放下了：前两个是给「头部要放更多东西」用的，
+          而 A′ 的结论是头部不放东西；E 留着当补充手段 —— 每个动作配一个快捷键，<code>⌘K</code> 里能搜到。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

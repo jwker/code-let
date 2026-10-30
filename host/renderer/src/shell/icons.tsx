@@ -111,9 +111,44 @@ export const IconPlus = () => (
   </Icon>
 )
 
-export const IconFolder = () => (
-  <Icon>
+export const IconFolder = ({ size = 18 }: { size?: number }) => (
+  <Icon size={size}>
     <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z" />
+  </Icon>
+)
+
+/**
+ * 两根滑杆 —— 侧栏头部的「项目选项」入口。
+ *
+ * 刻意不用「⋯」：组头的「⋯」是「这一组的更多」，这里的 sliders 是「这一块的选项」，
+ * 形状不一样才不会认成同一个东西。
+ */
+export const IconSliders = ({ size = 16 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M4 7h6M16 7h4M4 17h4M14 17h6" />
+    <circle cx="13" cy="7" r="2.2" />
+    <circle cx="11" cy="17" r="2.2" />
+  </Icon>
+)
+
+/**
+ * 双上箭头 —— 全部收起（内容往里收）。
+ *
+ * 两道箭头的尖隔开 8 个单位（24 的画布里）：15px 下只隔 3.75px，
+ * 看着就是一个粗箭头，分不出是「双」箭头。
+ */
+export const IconCollapseAll = ({ size = 15 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="m7 10 5-5 5 5" />
+    <path d="m7 18 5-5 5 5" />
+  </Icon>
+)
+
+/** 双下箭头 —— 全部展开 */
+export const IconExpandAll = ({ size = 15 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="m7 6 5 5 5-5" />
+    <path d="m7 14 5 5 5-5" />
   </Icon>
 )
 
