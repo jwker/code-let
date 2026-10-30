@@ -105,12 +105,12 @@ export function ConversationArea() {
             不用自动同步：重建 runtime 会丢掉当前状态，而且别处还在写的话重建完很快又落后。
           */}
           {stale && (
-            <div className="mb-2 flex items-center gap-3 rounded-xl border border-warn/40 bg-warn-wash px-3.5 py-2.5">
-              <span className="flex-none text-[13px] text-warn">▲</span>
-              <span className="min-w-0 flex-1 text-[12.5px] text-fg-2">
-                这个会话在别处有更新（比如在终端里聊过）。重新加载之前不能继续输入 ——
-                这边的上下文还是旧的。
-              </span>
+            <div
+              className="mb-2 flex items-center gap-2.5 rounded-xl border border-warn/40 bg-warn-wash px-3 py-1.5"
+              title="这个会话在别处有更新（比如在终端里聊过）。这边的上下文还是旧的，重新加载之前不能继续输入。"
+            >
+              <span className="flex-none text-[12px] text-warn">▲</span>
+              <span className="min-w-0 flex-1 truncate text-[12px] text-fg-2">这个会话在别处有更新</span>
               <button
                 type="button"
                 disabled={reloading}
@@ -119,9 +119,9 @@ export function ConversationArea() {
                   setReloading(true)
                   void reloadTab(activeTabId).finally(() => setReloading(false))
                 }}
-                className="flex-none rounded-lg bg-warn px-3 py-1 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
+                className="flex-none rounded-lg bg-warn px-2.5 py-0.5 text-[11.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
               >
-                {reloading ? '正在重新加载…' : '重新加载'}
+                {reloading ? '加载中…' : '重新加载'}
               </button>
             </div>
           )}
