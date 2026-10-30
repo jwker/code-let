@@ -215,9 +215,22 @@ export class HostState extends EventEmitter {
     const picked = await this.pickDirectory()
     if (!picked) return null
     const dir = normalize(picked)
-    this.projects.add(dir)
+    await this.addProject(dir)
     await this.openTab({ cwd: dir })
     return dir
+  }
+
+  /**
+   * 把一个项目加进清单，并重读它的会话。
+   *
+   * **必须重读** —— 会话清单只列清单里的项目，而清单是刚变的。
+   * 不重读的话，新加的项目在侧栏里就是个空组，
+   * 之前跟它聊过的会话要等到下一次事件触发刷新才出现。
+   */
+  async addProject(path: string): Promise<void> {
+    this.projects.add(path)
+    await this.refreshConversations()
+    this.push()
   }
 
   /**

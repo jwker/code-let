@@ -269,6 +269,8 @@ export function createMockApi(): CodeletApi {
       if (!projects.some((p) => p.path === project.path)) {
         projects = [project, ...projects]
       }
+      // 加了项目要重读会话 —— 会话清单只列清单里的项目
+      conversations = allConversations()
       addTab({ cwd: project.path, title: '新对话' })
       return publish()
     },

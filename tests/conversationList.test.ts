@@ -134,4 +134,29 @@ describe('宿主状态：新会话要自己出现在对话列表里', () => {
     rmSync(AGENT_DIR, { recursive: true, force: true })
     rmSync(CWD, { recursive: true, force: true })
   })
+
+  it('把项目加进清单后，它之前的会话就出现在列表里', async () => {
+    const tabStore = new TabStore(join(AGENT_DIR, 'tabs.json'))
+    // 清单是空的 —— 这个项目还没被选进 Codelet
+    const projects = new ProjectStore(join(AGENT_DIR, 'projects.json'))
+    const pi = new FakePi()
+    const state = new HostState({ pi, tabStore, projects })
+    await state.init()
+
+    // 先跟 Pi 聊一句 —— 会话文件落盘了，但项目还没进清单
+    await state.newConversation(CWD)
+    const tab = state.snapshot().tabs[0]
+    await pi.prompt(tab.id, '清单之外聊的一句')
+    await new Promise((resolve) => setTimeout(resolve, 250))
+    expect(state.snapshot().conversations).toHaveLength(0)
+
+    // 加进清单 —— 会话必须立刻出现，不能等下一次事件
+    await state.addProject(CWD)
+    expect(state.snapshot().conversations).toHaveLength(1)
+    expect(state.snapshot().conversations[0].title).toBe('清单之外聊的一句')
+
+    await state.dispose()
+    rmSync(AGENT_DIR, { recursive: true, force: true })
+    rmSync(CWD, { recursive: true, force: true })
+  })
 })
