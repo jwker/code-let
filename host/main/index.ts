@@ -38,6 +38,17 @@ function createWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => win.show())
 
+  /*
+   * 窗口重新获得焦点时重读会话列表。
+   *
+   * 会话列表的刷新本来是事件驱动的，但那只覆盖「Codelet 自己的 runtime」——
+   * 用户在裸 pi 的 TUI 里说话时，那是另一个进程，我们收不到事件，
+   * 列表就一直不动，只有重启才更新。切回窗口是最自然的「我期望它是最新的」时刻。
+   */
+  win.on('focus', () => {
+    void state.refreshOnFocus()
+  })
+
   if (isDev) {
     void win.loadURL(rendererDevUrl as string)
   } else {
