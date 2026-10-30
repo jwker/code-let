@@ -49,6 +49,9 @@ class FakePi implements PiRuntimePort {
   async activateTab(): Promise<void> {
     // 不参与
   }
+  async reloadTab(): Promise<void> {
+    // 不参与
+  }
 
   tabState(tabId: string): TabRuntimeState {
     const manager = this.managers.get(tabId)

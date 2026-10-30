@@ -23,6 +23,7 @@ const api: CodeletApi = {
   newConversation: (cwd) => ipcRenderer.invoke(IPC.tabsNew, { cwd }) as Promise<HostSnapshot>,
   activateTab: (tabId) => ipcRenderer.invoke(IPC.tabsActivate, { tabId }) as Promise<HostSnapshot>,
   closeTab: (tabId) => ipcRenderer.invoke(IPC.tabsClose, { tabId }) as Promise<HostSnapshot>,
+  reloadTab: (tabId) => ipcRenderer.invoke(IPC.tabsReload, { tabId }) as Promise<HostSnapshot>,
   getTabEntries: (tabId) => ipcRenderer.invoke(IPC.tabsEntries, { tabId }) as Promise<StreamItem[]>,
   prompt: (tabId, text) => ipcRenderer.invoke(IPC.promptSend, { tabId, text }),
   copyText: (text) => ipcRenderer.invoke(IPC.clipboardWrite, { text }) as Promise<void>,

@@ -215,6 +215,7 @@ export function createMockApi(): CodeletApi {
         streaming: tab.streaming,
         ready: true,
         removed: !projects.some((p) => p.path === tab.cwd),
+        stale: false,
         model: tab.model,
         modelFallback: null,
         error: null
@@ -304,6 +305,13 @@ export function createMockApi(): CodeletApi {
 
     activateTab: async (tabId) => {
       if (tabs.some((t) => t.id === tabId)) activeTabId = tabId
+      return publish()
+    },
+
+    reloadTab: async (tabId) => {
+      // 假宿主里没有「外部修改」，重载就等于重读自己的条目
+      const tab = tabs.find((t) => t.id === tabId)
+      if (tab) tab.items = [...FAKE_ITEMS]
       return publish()
     },
 

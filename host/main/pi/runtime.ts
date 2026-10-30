@@ -69,6 +69,8 @@ export interface PiRuntimePort {
   closeTab(tabId: string): Promise<void>
   /** 激活一个标签：runtime 还没建就建 */
   activateTab(tabId: string): Promise<void>
+  /** 重建某个标签的 runtime —— 从磁盘重新读会话 */
+  reloadTab(tabId: string): Promise<void>
   /** 某个标签的运行时状态 */
   tabState(tabId: string): TabRuntimeState
   /** 某个标签的会话条目 */
@@ -207,6 +209,28 @@ export class PiRuntime implements PiRuntimePort {
   async activateTab(tabId: string): Promise<void> {
     const record = this.record(tabId)
     if (record.runtime) return
+    await this.buildRuntime(record)
+  }
+
+  /**
+   * 重建某个标签的 runtime，从磁盘重新读会话。
+   *
+   * 用于「这个会话文件在别处被改过」之后。**不自动调用** ——
+   * 重建会丢掉当前 runtime 的状态，而且如果别处还在写，重建完很快又会落后。
+   *
+   * 正在跑的话先 abort 等结算（跟关标签同一个道理：别丢半截轮次）。
+   */
+  async reloadTab(tabId: string): Promise<void> {
+    const record = this.record(tabId)
+    const runtime = record.runtime
+    if (runtime) {
+      record.unbind?.()
+      record.unbind = null
+      record.runtime = null
+      const session = runtime.session
+      if (session.isStreaming) await session.abort()
+      await runtime.dispose()
+    }
     await this.buildRuntime(record)
   }
 

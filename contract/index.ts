@@ -30,6 +30,8 @@ export const IPC = {
   tabsActivate: 'host:tabs:activate',
   /** 关掉某个标签 */
   tabsClose: 'host:tabs:close',
+  /** 重新加载某个标签（外部改过这个会话文件之后） */
+  tabsReload: 'host:tabs:reload',
   /** 读某个标签的内容流（历史重建） */
   tabsEntries: 'host:tabs:entries',
   /** 往某个标签发一条用户消息 */
@@ -118,6 +120,14 @@ export interface TabInfo {
    * Pi 存的对话一个字都没动。
    */
   removed: boolean
+  /**
+   * 这个会话文件在**别处**被改过（比如在裸 pi 的 TUI 里聊了几句）。
+   *
+   * Pi 的 `SessionManager.open()` 只在构造时把文件读进内存，之后不再重读 ——
+   * 所以别的进程写了，这个标签的内容流不知道。标出来让用户决定要不要重新加载，
+   * 不自动同步：Codelet 这边如果还基于旧上下文写，两边会冲突。
+   */
+  stale: boolean
   /** 这个标签用的模型 */
   model: ModelOption | null
   /** 恢复会话时没能恢复原模型的原因 */
@@ -305,6 +315,13 @@ export interface CodeletApi {
   activateTab(tabId: string): Promise<HostSnapshot>
   /** 关掉某个标签 */
   closeTab(tabId: string): Promise<HostSnapshot>
+  /**
+   * 重新加载某个标签：重建它的 runtime，从磁盘重新读会话。
+   *
+   * 用于「这个会话在别处被改过」（`stale`）之后 —— 不自动做，因为重建会丢掉
+   * 当前 runtime 的状态，而且如果别处还在写，重建完很快又会落后。
+   */
+  reloadTab(tabId: string): Promise<HostSnapshot>
   /** 读某个标签的内容流（历史重建，R1 R5） */
   getTabEntries(tabId: string): Promise<StreamItem[]>
   /** 往某个标签发一条消息 */

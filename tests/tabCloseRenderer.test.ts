@@ -24,6 +24,7 @@ function makeTab(overrides: Partial<TabInfo> = {}): TabInfo {
     streaming: false,
     ready: true,
     removed: false,
+    stale: false,
     model: null,
     modelFallback: null,
     error: null,

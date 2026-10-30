@@ -121,6 +121,12 @@ export function registerIpc(state: HostState): () => void {
     return state.snapshot()
   })
 
+  ipcMain.handle(IPC.tabsReload, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    await state.reloadTab(tabId)
+    return state.snapshot()
+  })
+
   ipcMain.handle(IPC.tabsEntries, async (_event, payload: unknown) => {
     const { tabId } = tabIdSchema.parse(payload)
     return state.readEntries(tabId)
@@ -157,6 +163,7 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.tabsNew)
     ipcMain.removeHandler(IPC.tabsActivate)
     ipcMain.removeHandler(IPC.tabsClose)
+    ipcMain.removeHandler(IPC.tabsReload)
     ipcMain.removeHandler(IPC.tabsEntries)
     ipcMain.removeHandler(IPC.promptSend)
     ipcMain.removeHandler(IPC.clipboardWrite)
