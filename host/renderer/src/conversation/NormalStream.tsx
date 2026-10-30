@@ -8,6 +8,7 @@ import { ReplyMeta } from './ReplyMeta'
 import { summarizeTurn, type TurnSummary } from './turnMeta'
 import { useToolOutputs } from './useToolOutputs'
 import { formatDuration } from './usageFormat'
+import { IconCaret } from '../shell/icons'
 
 /**
  * 普通模式 · 聊天流。
@@ -243,7 +244,9 @@ function ProcessBlock({
         <span className="flex-none text-[11.5px] font-medium text-fg-2">过程</span>
         <span className="min-w-0 truncate font-mono text-[11px] text-fg-3">{describe(summary)}</span>
         {/* 折叠指示放在行尾：整条的重心在左边的「过程」上，箭头在末尾读起来像「末尾还有内容」 */}
-        <span className="flex-none text-[12px] leading-none text-fg-3">{open ? '▾' : '▸'}</span>
+        <span className="flex-none text-fg-3">
+          <IconCaret open={open} />
+        </span>
       </button>
 
       {open && (
