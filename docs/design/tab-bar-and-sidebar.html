@@ -1,0 +1,957 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>标签栏与侧边栏 · 位置与结构</title>
+<style>
+:root{
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-xl:18px; --r-full:999px;
+  --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px; --sp-5:20px; --sp-6:24px; --sp-8:32px;
+  --dur:160ms; --ease:cubic-bezier(.4,0,.2,1);
+  --titlebar-h:52px; --statusbar-h:24px; --rail-w:56px; --tabbar-h:36px;
+}
+[data-theme="light"]{
+  --canvas:#F4F4F5; --panel:#FBFBFB; --surface:#FFFFFF; --insp:#FAFAFA; --raised:#FFFFFF; --sunken:#F1F1F3;
+  --hairline:#ECECEE; --hairline-strong:#DEDEE2;
+  --fg-1:#1B1B19; --fg-2:#5C5C56; --fg-3:#94948C;
+  --accent:#1F1F1D; --accent-hover:#000000; --accent-fg:#FFFFFF; --accent-wash:#EEEEF0; --accent-line:#DCDCE1;
+  --ok:#2E7D53; --ok-wash:#E8F5EE; --warn:#9C6B15; --warn-wash:#FBF2DF; --danger:#B8342A; --danger-wash:#FCEAEA;
+  --info:#2563A8; --info-wash:#E9F1FA;
+  --bubble:#262625; --bubble-fg:#FAFAF9;
+  --sh-sm:0 1px 2px rgba(20,20,16,.04); --sh-md:0 8px 24px -8px rgba(20,20,16,.10); --sh-lg:0 24px 60px -20px rgba(20,20,16,.18);
+}
+[data-theme="dark"]{
+  --canvas:#131312; --panel:#181817; --surface:#1C1C1B; --insp:#191918; --raised:#242423; --sunken:#2A2A29;
+  --hairline:#2B2B29; --hairline-strong:#3B3B38;
+  --fg-1:#EDEDEB; --fg-2:#B4B4AD; --fg-3:#7D7D76;
+  --accent:#F0F0EC; --accent-hover:#FFFFFF; --accent-fg:#151513; --accent-wash:#2A2A2C; --accent-line:#343430;
+  --ok:#5BD69A; --ok-wash:#10261D; --warn:#E5B75C; --warn-wash:#2A2113; --danger:#F2776B; --danger-wash:#2C1717;
+  --info:#6FAEF0; --info-wash:#111F2E;
+  --bubble:#F0F0EE; --bubble-fg:#171715;
+  --sh-sm:0 1px 2px rgba(0,0,0,.5); --sh-md:0 12px 30px -12px rgba(0,0,0,.65); --sh-lg:0 30px 72px -26px rgba(0,0,0,.8);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--canvas);color:var(--fg-1);font-family:var(--font-sans);font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+code{font-family:var(--font-mono);font-size:11.5px;background:var(--accent-wash);padding:1px 5px;border-radius:var(--r-xs);color:var(--fg-2)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+kbd{font-family:var(--font-mono);font-size:10.5px;border:1px solid var(--hairline-strong);border-bottom-width:2px;border-radius:var(--r-xs);padding:1px 4px;color:var(--fg-2);background:var(--surface)}
+
+.page{max-width:1100px;margin:0 auto;padding:0 28px 140px}
+.topbar{
+  position:sticky;top:0;z-index:50;height:52px;display:flex;align-items:center;gap:14px;
+  background:var(--panel);border-bottom:1px solid var(--hairline);margin:0 -28px;padding:0 28px;
+}
+.brand{font-weight:600;letter-spacing:-.015em}
+.brand span{color:var(--fg-3);font-weight:400}
+.topbar .spacer{flex:1}
+.ghost-btn{height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--hairline);color:var(--fg-2);font-size:12px;transition:all var(--dur) var(--ease)}
+.ghost-btn:hover{color:var(--fg-1);border-color:var(--hairline-strong);background:var(--surface)}
+
+.head{padding:36px 0 8px}
+.head h1{font-size:23px;margin-bottom:10px;line-height:1.35}
+.head p{color:var(--fg-2);max-width:78ch}
+.head p + p{margin-top:10px}
+
+.facts{margin:26px 0 0;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);padding:16px 18px;max-width:940px}
+.facts h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:10px}
+.facts ul{margin:0;padding-left:18px;color:var(--fg-2)}
+.facts li{margin-bottom:8px}
+.facts li:last-child{margin-bottom:0}
+.facts b{color:var(--fg-1);font-weight:600}
+
+.terms{margin:22px 0 0;max-width:940px}
+.terms h3{font-size:13px;margin-bottom:8px}
+.terms dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:12.5px;color:var(--fg-2)}
+.terms dt{color:var(--fg-1);font-weight:600;white-space:nowrap}
+.terms dd{margin:0}
+
+.sec{margin:44px 0 0;font-size:17px;letter-spacing:-.015em}
+.secled{margin:8px 0 0;color:var(--fg-2);font-size:13px;max-width:80ch}
+
+.option{margin-top:26px;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+.option-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--hairline);background:var(--panel)}
+.option-head .tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--fg-3);border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:2px 8px;white-space:nowrap}
+.option-head .tag.rec{color:var(--ok);border-color:var(--ok)}
+.option-head h2{font-size:14.5px}
+.desc{padding:16px 18px 0;color:var(--fg-2);font-size:12.5px;max-width:84ch}
+.desc b{color:var(--fg-1)}
+.frame{padding:18px}
+.verdict{padding:0 18px 18px;color:var(--fg-2);font-size:12.5px;max-width:84ch}
+.verdict b{color:var(--fg-1)}
+.warn{color:var(--warn)}
+.good{color:var(--ok)}
+
+/* ============================================================
+   外壳示意 —— 按真实比例缩放
+   ============================================================ */
+.shell{
+  --rail:34px; --side:150px; --insp:168px;
+  --t-h:34px; --tab-h:25px; --bar-h:18px;
+  border:1px solid var(--hairline-strong);border-radius:var(--r-lg);overflow:hidden;background:var(--canvas);
+  display:grid;
+  grid-template-columns:var(--rail) var(--side) minmax(0,1fr) var(--insp);
+  grid-template-rows:var(--t-h) minmax(0,1fr) var(--bar-h);
+  grid-template-areas:"title title title title" "rail side main insp" "rail side bar bar";
+  height:236px;
+}
+/* A：标签栏占一行，只盖主区 */
+.shell.has-tabs{grid-template-rows:var(--t-h) var(--tab-h) minmax(0,1fr) var(--bar-h);grid-template-areas:"title title title title" "rail side tabs insp" "rail side main insp" "rail side bar bar"}
+/* C：标签栏横跨全窗 */
+.shell.full-tabs{grid-template-rows:var(--t-h) var(--tab-h) minmax(0,1fr) var(--bar-h);grid-template-areas:"title title title title" "tabs tabs tabs tabs" "rail side main insp" "rail side bar bar"}
+
+.sh-title{grid-area:title;display:grid;grid-template-columns:calc(var(--rail) + var(--side)) minmax(0,1fr) var(--insp);background:var(--canvas);font-size:10px;color:var(--fg-2)}
+.sh-title .t-l{grid-column:1;display:flex;align-items:center;padding:0 8px}
+.sh-title .t-m{grid-column:2;display:flex;align-items:center;gap:6px;padding:0 10px;min-width:0}
+.sh-title .t-r{grid-column:3;display:flex;align-items:center;justify-content:flex-end;padding:0 8px}
+.sh-title .t-title{font-weight:600;color:var(--fg-1);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sh-title .dots{color:var(--fg-3);letter-spacing:1px}
+.sh-title .tl-btn{width:18px;height:18px;border-radius:4px;border:1px solid var(--hairline-strong);display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:9px}
+
+.sh-rail{grid-area:rail;background:var(--canvas);border-right:1px solid var(--hairline);display:flex;flex-direction:column;align-items:center;gap:5px;padding-top:7px}
+.sh-rail i{display:block;width:13px;height:13px;border:1.5px solid var(--fg-3);border-radius:3.5px;opacity:.45}
+.sh-rail i.on{background:var(--accent);border-color:var(--accent);opacity:1}
+
+.sh-side{grid-area:side;background:var(--panel);border-right:1px solid var(--hairline);overflow:hidden;display:flex;flex-direction:column}
+.sh-main{grid-area:main;background:var(--surface);padding:10px 14px;overflow:hidden}
+.sh-main .line{height:6px;border-radius:3px;background:var(--sunken);margin-bottom:6px}
+.sh-main .line.w1{width:62%} .sh-main .line.w2{width:88%} .sh-main .line.w3{width:44%}
+.sh-insp{grid-area:insp;background:var(--insp);border-left:1px solid var(--hairline);padding:10px}
+.sh-insp .card{height:42px;border:1px solid var(--hairline);border-radius:8px;background:var(--surface);margin-bottom:7px}
+.sh-bar{grid-area:bar;display:flex;align-items:center;gap:9px;padding:0 10px;background:var(--surface);border-top:1px solid var(--hairline);font-size:9px;color:var(--fg-3);font-family:var(--font-mono)}
+.sh-bar .spacer{flex:1}
+
+.hot{outline:2px solid var(--ok);outline-offset:-2px;position:relative}
+.hot::after{
+  content:attr(data-hot);position:absolute;top:-8px;right:3px;background:var(--ok);color:#fff;
+  font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 4px;border-radius:3px;white-space:nowrap;
+}
+
+/* ============================================================
+   侧栏（放大单看）
+   ============================================================ */
+.side-demo{
+  width:264px;border:1px solid var(--hairline-strong);border-radius:var(--r-lg);overflow:hidden;background:var(--panel);
+  display:flex;flex-direction:column;height:392px;
+}
+.side-top{padding:11px 10px 0}
+.side-brand{display:flex;align-items:center;gap:7px;padding:0 4px 9px}
+.side-brand .mark{width:19px;height:19px;border-radius:5px;background:var(--accent);color:var(--accent-fg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.side-brand .nm{font-size:14px;font-weight:600;letter-spacing:-.01em}
+.side-act{display:flex;align-items:center;gap:7px;height:31px;padding:0 8px;border-radius:var(--r-sm);color:var(--fg-1);font-size:12.5px}
+.side-act:hover{background:var(--sunken)}
+.side-act .ic{color:var(--fg-2);font-size:12px;width:14px;text-align:center}
+.side-rule{height:1px;background:var(--hairline);margin:9px 10px 0}
+
+.side-list{flex:1;overflow:auto;padding:5px 8px 12px}
+.grp{margin-bottom:2px}
+.grp-head{display:flex;align-items:center;gap:5px;height:26px;padding:0 4px;border-radius:var(--r-sm);color:var(--fg-2)}
+.grp-head:hover{background:var(--sunken)}
+.grp-head .caret{width:12px;flex:none;color:var(--fg-3);font-size:8px;text-align:center}
+.grp-head .nm{flex:1;min-width:0;font-size:11.5px;font-weight:600;color:var(--fg-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.grp-head .cnt{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3)}
+.grp-head .more{width:19px;height:19px;flex:none;border-radius:5px;color:var(--fg-3);display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1}
+.grp-head .more:hover{background:var(--accent-wash);color:var(--fg-1)}
+.grp-body{padding-left:12px}
+.time-h{font-size:10px;color:var(--fg-3);padding:7px 4px 3px}
+.conv{display:flex;align-items:center;gap:6px;height:25px;padding:0 6px;border-radius:var(--r-sm);color:var(--fg-2);font-size:12px}
+.conv:hover{background:var(--sunken)}
+.conv.on{background:var(--accent-wash);color:var(--fg-1);font-weight:500}
+.conv .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.conv .t{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3);flex:none}
+.conv .open{width:5px;height:5px;border-radius:50%;background:var(--fg-3);flex:none;opacity:.85}
+.conv .run{width:5px;height:5px;border-radius:50%;background:var(--info);flex:none}
+
+.side-empty{padding:14px 8px;color:var(--fg-3);font-size:11.5px;text-align:center}
+
+/* 菜单浮层 */
+.menu{width:172px;border:1px solid var(--hairline-strong);border-radius:var(--r-md);background:var(--raised);box-shadow:var(--sh-md);padding:4px}
+.menu-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--r-sm);font-size:12px;color:var(--fg-2)}
+.menu-item:hover{background:var(--sunken);color:var(--fg-1)}
+.menu-item .k{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3)}
+.menu-sep{height:1px;background:var(--hairline);margin:4px}
+
+/* ============================================================
+   标签
+   ============================================================ */
+.tabs{display:flex;align-items:stretch;height:100%;background:var(--canvas);overflow:hidden}
+.tabs.inside{background:var(--surface)}
+.tab{
+  display:flex;align-items:center;gap:6px;padding:0 8px 0 10px;min-width:0;max-width:190px;
+  border-right:1px solid var(--hairline);color:var(--fg-2);font-size:11px;position:relative;
+}
+.tab:hover{background:var(--sunken)}
+.tab.on{background:var(--surface);color:var(--fg-1)}
+.tab.on::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--accent)}
+.tabs.inside .tab.on{background:var(--raised)}
+.tabs.inside .tab.on::after{height:0;left:0;right:0;top:0}
+.tab .run{width:5px;height:5px;border-radius:50%;background:var(--info);flex:none;animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.tab .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.tab.on .nm{font-weight:600}
+.tab .proj{flex:none;font-size:9.5px;color:var(--fg-3);max-width:78px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-left:5px;border-left:1px solid var(--hairline-strong)}
+.tab .x{width:15px;height:15px;flex:none;border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:11px;line-height:1}
+.tab .x:hover{background:var(--accent-wash);color:var(--fg-1)}
+.tab-new{flex:none;width:26px;display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:13px}
+.tab-new:hover{color:var(--fg-1)}
+.tab-overflow{flex:none;width:26px;display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:12px}
+
+/* 对话框（关掉运行中的标签时） */
+.dialog{width:330px;border:1px solid var(--hairline-strong);border-radius:var(--r-lg);background:var(--raised);box-shadow:var(--sh-lg);overflow:hidden}
+.dialog-h{padding:13px 16px 0;font-size:13.5px;font-weight:600}
+.dialog-b{padding:8px 16px 0;color:var(--fg-2);font-size:12.5px}
+.dialog-f{display:flex;gap:8px;justify-content:flex-end;padding:14px 16px}
+.btn{height:28px;padding:0 12px;border-radius:var(--r-sm);font-size:12.5px;border:1px solid var(--hairline-strong);color:var(--fg-1)}
+.btn:hover{background:var(--sunken)}
+.btn.pri{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+.btn.pri:hover{background:var(--accent-hover)}
+.btn.danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+
+/* 表格 */
+table.spec{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
+table.spec th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);font-weight:600;padding:9px 12px;background:var(--panel);border-bottom:1px solid var(--hairline)}
+table.spec td{padding:9px 12px;border-bottom:1px solid var(--hairline);color:var(--fg-2);vertical-align:top}
+table.spec tr:last-child td{border-bottom:none}
+table.spec td:first-child{color:var(--fg-1);font-weight:600}
+table.spec .mid{color:var(--warn);font-weight:600}
+table.spec .ok{color:var(--ok);font-weight:600}
+table.spec .no{color:var(--danger);font-weight:600}
+
+.rec-card{margin-top:26px;border:1px solid var(--ok);border-radius:var(--r-lg);background:var(--surface);padding:18px 20px;max-width:940px}
+.rec-card h3{font-size:14.5px;color:var(--ok);margin-bottom:10px}
+.rec-card ol{margin:0;padding-left:20px;color:var(--fg-2)}
+.rec-card li{margin-bottom:7px}
+.rec-card p{margin-top:10px;color:var(--fg-2)}
+.rec-card b{color:var(--fg-1)}
+
+.note{margin-top:16px;border:1px solid var(--hairline);border-left:3px solid var(--warn);border-radius:var(--r-sm);background:var(--warn-wash);padding:12px 14px;color:var(--fg-2);font-size:12.5px;max-width:940px}
+.note b{color:var(--fg-1)}
+
+.api{margin-top:14px;border:1px solid var(--hairline);border-radius:var(--r-md);background:var(--surface);padding:12px 14px;font-family:var(--font-mono);font-size:11.5px;color:var(--fg-2);white-space:pre;overflow:auto;line-height:1.7}
+.api b{color:var(--fg-1);font-weight:600}
+
+.row2{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+.row2 > *{flex:1;min-width:280px}
+.row2 > .side-demo{flex:none;width:264px;min-width:264px}
+/* 高亮框：角标要露出来，所以不能放在 overflow:hidden 的元素上 */
+.spot{position:relative;min-width:0}
+.spot > .tabs{height:100%}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brand">标签栏与侧边栏 <span>· 位置与结构</span></div>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="theme">切换明暗</button>
+  </div>
+
+  <div class="head">
+    <h1>标签放哪、侧栏长什么样</h1>
+    <p>
+      这份稿只做两件事：给标签栏选一个位置，给改造后的侧栏选一个结构。
+      标签栏的视觉（一个标签长什么样、怎么关、怎么表示在跑）已经定了的部分不再重复讨论，
+      只在方案里画出来。
+    </p>
+    <p>
+      侧栏的结构大方向也定了：顶部是应用名 +「打开项目」，下面按项目分组列全部会话，
+      组头带一个「…」（里面是「新建对话」）。这份稿比的是<b>组头怎么做、分组怎么排、
+      「打开项目」这个按钮怎么放</b> —— 这些还没定。
+    </p>
+  </div>
+
+  <div class="facts">
+    <h3>先摆事实（已定的与已核实的）</h3>
+    <ul>
+      <li>
+        <b>切换标签不能打断正在跑的 agent。</b>所以每个标签背后是一个独立的 Pi runtime 实例，
+        切标签只换「哪个是活动的」。这条决定了标签栏不能是「切过去重新加载」的形态。
+      </li>
+      <li>
+        <b>标签可以跨项目。</b>侧栏要列出全部项目的会话（<code>SessionManager.listAll()</code>），
+        按项目分组。所以标签上要标出所属项目 —— 跨项目时两个会话可能同名。
+      </li>
+      <li>
+        <b>标题栏中间那一段的宽度，正好等于主区的宽度。</b>
+        <code>.shell-title</code> 的三列是 <code>calc(rail + side) | minmax(0,1fr) | insp</code>，
+        与外壳的 <code>rail | side | minmax(0,1fr) | insp</code> 一一对齐 —— 这是 D15/D16 定的。
+        换句话说：<b>标签栏放在标题栏中间，宽度天然就是主区的宽度</b>。
+      </li>
+      <li>
+        <b>标题栏是拖动区，可点元素要排在它 DOM 的最后。</b>
+        <code>-webkit-app-region</code> 往下继承，Electron 按 DOM 顺序把拖动区一块块加回来、
+        <code>no-drag</code> 一块块抠掉。D16 记过：面板开关排在前面会被后面的拖动区重新盖住，
+        肉眼看得到、真机点不动。
+      </li>
+      <li>
+        <b>左上角圆角现在是主区自己带的。</b>侧栏收起时圆角从侧栏挪到主区
+        （<code>.shell.is-side-hidden .shell-main</code>），全程位置不动。
+        如果标签栏变成独立的一行，这个角要跟着挪。
+      </li>
+      <li>
+        <b>没有「当前项目」了。</b>标签栏之后每个标签自带自己的目录，宿主不再维护当前项目；
+        项目切换器没有归处，侧栏顶部改成静态的「Codelet」（应用名）。
+      </li>
+    </ul>
+  </div>
+
+  <div class="terms">
+    <h3>这份稿里的几个词</h3>
+    <dl>
+      <dt>标签栏</dt>
+      <dd>顶部那一条，一排标签，每个标签是一个打开的会话。</dd>
+      <dt>活动标签</dt>
+      <dd>当前正在看的那个标签。它对应唯一一个「活动会话」。</dd>
+      <dt>组</dt>
+      <dd>侧栏里按项目分出来的一组会话。组头是项目名。</dd>
+      <dt>组头「…」</dt>
+      <dd>组头右侧那个按钮，点开是这一组的操作菜单。已定：里面至少有「新建对话」。</dd>
+      <dt>在跑</dt>
+      <dd>这个会话的 agent 正在生成。标签和侧栏行上都要能看出一件事在跑。</dd>
+    </dl>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 class="sec">一 · 侧栏：三种结构</h2>
+  <p class="secled">
+    三个方案都遵守已定的部分：顶部静态「Codelet」+「打开项目」，下面按项目分组，组头带「…」。
+    差的是<b>组头怎么做</b>、<b>组内排几层</b>、<b>「打开项目」这个按钮怎么放</b>。
+  </p>
+
+  <!-- ============ S1 ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag rec">S1 · 推荐</span>
+      <h2>可折叠的组头，组内保留时间分组</h2>
+    </div>
+    <p class="desc">
+      组头一行：折叠箭头 + 项目名 + 会话数 + 「…」。箭头收放整组，状态记住（存在宿主设置里）。
+      组内保持<b>今天 / 昨天 / 更早</b>两层。
+    </p>
+    <div class="frame row2">
+      <div class="side-demo">
+        <div class="side-top">
+          <div class="side-brand">
+            <span class="mark">C</span>
+            <span class="nm">Codelet</span>
+          </div>
+          <div class="side-act"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>打开项目</span></div>
+        </div>
+        <div class="side-rule"></div>
+        <div class="side-list">
+          <div class="grp">
+            <div class="grp-head"><span class="caret">▼</span><span class="nm">Codelet</span><span class="cnt">2</span><span class="more">⋯</span></div>
+            <div class="grp-body">
+              <div class="time-h">今天</div>
+              <div class="conv on"><span class="run"></span><span class="nm">记忆索引重构</span><span class="t">2m</span></div>
+              <div class="conv"><span class="open"></span><span class="nm">类型声明生成</span><span class="t">1h</span></div>
+              <div class="time-h">昨天</div>
+              <div class="conv"><span class="open"></span><span class="nm">扫描依赖关系</span><span class="t">1d</span></div>
+            </div>
+          </div>
+          <div class="grp">
+            <div class="grp-head"><span class="caret">▼</span><span class="nm">pi-chat-box</span><span class="cnt">15</span><span class="more">⋯</span></div>
+            <div class="grp-body">
+              <div class="time-h">今天</div>
+              <div class="conv"><span class="nm">流式输出的三种写法</span><span class="t">20m</span></div>
+              <div class="conv"><span class="nm">工具结果太长怎么办</span><span class="t">3h</span></div>
+              <div class="time-h">昨天</div>
+              <div class="conv"><span class="nm">扩展怎么拿事件</span><span class="t">1d</span></div>
+            </div>
+          </div>
+          <div class="grp">
+            <div class="grp-head"><span class="caret">▶</span><span class="nm">pi-observer</span><span class="cnt">8</span><span class="more">⋯</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p style="font-size:12.5px;color:var(--fg-2);margin-bottom:10px"><b style="color:var(--fg-1)">组头「…」菜单里有什么</b></p>
+        <div class="menu" style="width:180px">
+          <div class="menu-item"><span>新建对话</span><span class="k">⌘N</span></div>
+          <div class="menu-item"><span>复制项目路径</span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item"><span>收起此组</span></div>
+        </div>
+        <p style="font-size:12.5px;color:var(--fg-2);margin-top:14px"><b style="color:var(--fg-1)">会话行上的两个记号</b></p>
+        <p style="font-size:12px;color:var(--fg-3);margin-top:6px">
+          <span style="color:var(--info)">●</span> 正在跑 ·
+          <span style="color:var(--fg-3)">●</span> 已在标签栏打开（还没在跑） ·
+          活动会话整行高亮
+        </p>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：组可以收起来 —— 你这台机器上有 9 个项目、38 个会话，全展开要滚很久；
+      箭头在组头左边，收放是「看这一组」的自然动作；时间分组让「刚才聊的」浮到最上面。<br>
+      <b>代价</b>：<span class="warn">三层缩进</span>（项目 → 时间 → 会话），组一多侧栏会显得碎；
+      组头的会话数（<code>2</code> / <code>15</code>）是额外信息，跟侧栏顶部的总数重复。
+    </div>
+  </section>
+
+  <!-- ============ S2 ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">S2</span>
+      <h2>组头更安静：没有折叠箭头，组内保留时间分组</h2>
+    </div>
+    <p class="desc">
+      组头只有项目名 + 「…」，不可折叠。项目名本身就是分组的意思，不需要再配一个箭头去说「这里可以展开」。
+    </p>
+    <div class="frame row2">
+      <div class="side-demo">
+        <div class="side-top">
+          <div class="side-brand">
+            <span class="mark">C</span>
+            <span class="nm">Codelet</span>
+          </div>
+          <div class="side-act"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>打开项目</span></div>
+        </div>
+        <div class="side-rule"></div>
+        <div class="side-list">
+          <div class="grp">
+            <div class="grp-head" style="padding-left:6px"><span class="nm">Codelet</span><span class="more">⋯</span></div>
+            <div class="grp-body">
+              <div class="time-h">今天</div>
+              <div class="conv on"><span class="run"></span><span class="nm">记忆索引重构</span><span class="t">2m</span></div>
+              <div class="conv"><span class="open"></span><span class="nm">类型声明生成</span><span class="t">1h</span></div>
+              <div class="time-h">昨天</div>
+              <div class="conv"><span class="open"></span><span class="nm">扫描依赖关系</span><span class="t">1d</span></div>
+            </div>
+          </div>
+          <div class="grp">
+            <div class="grp-head" style="padding-left:6px"><span class="nm">pi-chat-box</span><span class="more">⋯</span></div>
+            <div class="grp-body">
+              <div class="time-h">今天</div>
+              <div class="conv"><span class="nm">流式输出的三种写法</span><span class="t">20m</span></div>
+              <div class="time-h">更早</div>
+              <div class="conv"><span class="nm">扩展怎么拿事件</span><span class="t">3d</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p style="font-size:12.5px;color:var(--fg-2);margin-bottom:10px"><b style="color:var(--fg-1)">组头「…」菜单里有什么</b></p>
+        <div class="menu" style="width:180px">
+          <div class="menu-item"><span>新建对话</span><span class="k">⌘N</span></div>
+          <div class="menu-item"><span>复制项目路径</span></div>
+          <div class="menu-sep"></div>
+          <div class="menu-item"><span>在此项目打开终端</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：最安静。组头没有多余控件，整列视线只有「项目名 → 会话」两级；
+      菜单里可以放跟项目相关的动作（打开终端之类），因为「…」一直都在。<br>
+      <b>代价</b>：<span class="warn">9 个项目没法收</span> —— 想看某一个项目，只能滚；
+      项目名不重复时（比如两个都叫 <code>blog</code>），组头分不出是哪个，得靠路径。
+    </div>
+  </section>
+
+  <!-- ============ S3 ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">S3</span>
+      <h2>组内平铺：去掉时间分组，组头可折叠</h2>
+    </div>
+    <p class="desc">
+      组头带折叠箭头，但组内只按时间倒序排会话，不再分「今天 / 昨天 / 更早」。
+      时间信息移到行尾（悬停显示相对时间，和现在一样）。
+    </p>
+    <div class="frame row2">
+      <div class="side-demo">
+        <div class="side-top">
+          <div class="side-brand">
+            <span class="nm" style="font-size:14px;font-weight:600;letter-spacing:-.01em">Codelet</span>
+            <span style="flex:1"></span>
+            <svg style="color:var(--fg-3);width:15px;height:15px" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+        </div>
+        <div class="side-rule"></div>
+        <div class="side-list">
+          <div class="grp">
+            <div class="grp-head"><span class="caret">▼</span><span class="nm">Codelet</span><span class="more">⋯</span></div>
+            <div class="grp-body">
+              <div class="conv on"><span class="run"></span><span class="nm">记忆索引重构</span><span class="t">2m</span></div>
+              <div class="conv"><span class="open"></span><span class="nm">类型声明生成</span><span class="t">1h</span></div>
+              <div class="conv"><span class="open"></span><span class="nm">扫描依赖关系</span><span class="t">1d</span></div>
+            </div>
+          </div>
+          <div class="grp">
+            <div class="grp-head"><span class="caret">▼</span><span class="nm">pi-chat-box</span><span class="more">⋯</span></div>
+            <div class="grp-body">
+              <div class="conv"><span class="nm">流式输出的三种写法</span><span class="t">20m</span></div>
+              <div class="conv"><span class="nm">工具结果太长怎么办</span><span class="t">3h</span></div>
+              <div class="conv"><span class="nm">扩展怎么拿事件</span><span class="t">1d</span></div>
+            </div>
+          </div>
+          <div class="grp">
+            <div class="grp-head"><span class="caret">▶</span><span class="nm">pi-observer</span><span class="more">⋯</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <p style="font-size:12.5px;color:var(--fg-2);margin-bottom:10px"><b style="color:var(--fg-1)">「打开项目」变成了标题右边的一个图标</b></p>
+        <p style="font-size:12px;color:var(--fg-3)">
+          顶下只留一行：左「Codelet」，右一个 📂 图标。省一行高度，但「打开项目」变成了没有文字的图标 ——
+          发现性差，而且它现在承担着「加新项目」这件事。
+        </p>
+        <p style="font-size:12.5px;color:var(--fg-2);margin-top:14px"><b style="color:var(--fg-1)">组头「…」菜单里有什么</b></p>
+        <div class="menu" style="width:180px">
+          <div class="menu-item"><span>新建对话</span><span class="k">⌘N</span></div>
+          <div class="menu-item"><span>复制项目路径</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="good">一屏能看的东西最多</span> —— 每行都是一条会话，没有中间的时间标题；
+      项目一多、组一多的时候差别很明显。<br>
+      <b>代价</b>：<span class="warn">「什么时候聊的」看不见了</span> —— 组内只剩一串会话，
+      要知道新旧得逐行看行尾的时间。
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <h2 class="sec">二 · 标签栏：四个位置</h2>
+  <p class="secled">
+    四个位置都遵守已定的部分：标签栏里每个标签是一个会话，标签上标出所属项目，
+      关掉在跑的标签要问一句。差的是<b>这条标签栏放在哪</b>。
+  </p>
+
+  <!-- ============ A ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag rec">A · 推荐</span>
+      <h2>标题栏下方独立一行，只盖主区</h2>
+    </div>
+    <p class="desc">
+      在标题栏和内容之间插一行 36px，横向只占主区那一列（检视器在它右边，侧栏在它左边）。
+      视觉上它跟主区是<b>同一块面板</b> —— 标签栏是主面板的顶边。
+      这是 VS Code 的做法。
+    </p>
+    <div class="frame">
+      <div class="shell has-tabs">
+        <div class="sh-title">
+          <div class="t-l"><span class="tl-btn">◧</span></div>
+          <div class="t-m"><span class="t-title">记忆索引重构</span><span class="dots">⋯</span></div>
+          <div class="t-r"><span class="tl-btn">◨</span></div>
+        </div>
+        <div class="spot hot" data-hot="标签栏" style="grid-area:tabs"><div class="tabs" data-hot="标签栏" style="grid-area:tabs">
+          <div class="tab on"><span class="run"></span><span class="nm">记忆索引重构</span><span class="proj">Codelet</span><span class="x">×</span></div>
+          <div class="tab"><span class="nm">类型声明生成</span><span class="proj">Codelet</span><span class="x">×</span></div>
+          <div class="tab"><span class="nm">流式输出的三种写法</span><span class="proj">pi-chat-box</span><span class="x">×</span></div>
+          <div class="tab-new">＋</div>
+        </div></div>
+        <div class="sh-rail"><i class="on"></i><i></i><i></i><i></i></div>
+        <div class="sh-side" style="padding:8px 10px">
+          <div style="font-size:11px;font-weight:600;margin-bottom:7px">Codelet</div>
+          <div style="height:20px;border-radius:5px;background:var(--sunken);margin-bottom:5px"></div>
+          <div style="font-size:9.5px;color:var(--fg-3);margin:8px 0 3px">Codelet ▾</div>
+          <div style="height:14px;border-radius:4px;background:var(--accent-wash);margin-bottom:4px"></div>
+          <div style="height:14px;border-radius:4px;background:var(--sunken);margin-bottom:4px"></div>
+        </div>
+        <div class="sh-main"><div class="line w1"></div><div class="line w2"></div><div class="line w3"></div></div>
+        <div class="sh-insp"><div class="card"></div><div class="card"></div></div>
+        <div class="sh-bar"><span>codelet</span><span>session 01a18731</span><span class="spacer"></span><span>普通</span><span>events 214</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：标签有整整一行的高度和宽度，可以放标题 + 项目标识 + 关闭按钮 + 运行指示，不挤；
+      标签栏是普通区域，<b>不是拖动区</b>，<code>-webkit-app-region</code> 那套坑完全绕开；
+      只盖主区，侧栏和导航轨保持满高，跟现在的面板结构（底槽 + 浮起的面板）不冲突。<br>
+      <b>代价</b>：<span class="warn">多占 36px 高度</span>；标签栏要跟主面板共用左上角圆角，
+      圆角得从 <code>.shell-main</code> 挪到标签栏这一行（侧栏收起时也要跟着挪）。
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">B</span>
+      <h2>标题栏中间那一段就是标签栏</h2>
+    </div>
+    <p class="desc">
+      不加行 —— 把标题栏中间那段（现在显示会话标题的地方）直接换成标签栏。
+      标题栏中间段的宽度<b>天生就等于主区宽度</b>，这一点很省心。
+    </p>
+    <div class="frame">
+      <div class="shell">
+        <div class="sh-title" style="grid-template-columns:calc(var(--rail) + var(--side)) minmax(0,1fr) var(--insp)">
+          <div class="t-l"><span class="tl-btn">◧</span></div>
+          <div class="t-m" style="padding:0">
+            <div class="spot hot" data-hot="标签栏" style=""><div class="tabs inside" data-hot="标签栏" style="height:100%">
+              <div class="tab on"><span class="run"></span><span class="nm">记忆索引重构</span><span class="proj">Codelet</span><span class="x">×</span></div>
+              <div class="tab"><span class="nm">类型声明生成</span><span class="proj">Codelet</span><span class="x">×</span></div>
+              <div class="tab"><span class="nm">流式输出的三种写法</span><span class="proj">pi-chat-box</span><span class="x">×</span></div>
+            </div></div>
+          </div>
+          <div class="t-r"><span class="tl-btn">◨</span></div>
+        </div>
+        <div class="sh-rail"><i class="on"></i><i></i><i></i><i></i></div>
+        <div class="sh-side" style="padding:8px 10px">
+          <div style="font-size:11px;font-weight:600;margin-bottom:7px">Codelet</div>
+          <div style="height:20px;border-radius:5px;background:var(--sunken);margin-bottom:5px"></div>
+          <div style="font-size:9.5px;color:var(--fg-3);margin:8px 0 3px">Codelet ▾</div>
+          <div style="height:14px;border-radius:4px;background:var(--accent-wash);margin-bottom:4px"></div>
+        </div>
+        <div class="sh-main"><div class="line w1"></div><div class="line w2"></div><div class="line w3"></div></div>
+        <div class="sh-insp"><div class="card"></div><div class="card"></div></div>
+        <div class="sh-bar"><span>codelet</span><span>session 01a18731</span><span class="spacer"></span><span>普通</span><span>events 214</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="good">一行高度都不多占</span>；宽度天然等于主区；
+      标签栏和标题栏一体，最像浏览器。<br>
+      <b>代价</b>：<span class="warn">跟拖动区的坑正面撞上</span>。
+      标题栏整条是拖动区，标签必须标 <code>no-drag</code>；而且 D16 的规则是
+      「可点元素必须排在标题栏 DOM 的最后」，否则会被后面的拖动区重新盖住 ——
+      检视器开关在右端、标签在中间，<b>两者只能有一个排在最后</b>。
+      标签只能靠绝对定位去「排最后」，而 D16 记过：绝对定位的元素在面板收放时会跑出格子。
+      标题栏 52px 高，标签只有 32px，两边都是拖动区，拖动窗口时容易误触。
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">C</span>
+      <h2>标题栏下方一行，横跨整个窗口</h2>
+    </div>
+    <p class="desc">
+      标签栏占满整个宽度 —— 导航轨、侧栏、主区、检视器都在它下面。
+      这是浏览器最接近的样子：标签从窗口左边一直排到右边。
+    </p>
+    <div class="frame">
+      <div class="shell full-tabs">
+        <div class="sh-title">
+          <div class="t-l"><span class="tl-btn">◧</span></div>
+          <div class="t-m"><span class="t-title">记忆索引重构</span><span class="dots">⋯</span></div>
+          <div class="t-r"><span class="tl-btn">◨</span></div>
+        </div>
+        <div class="spot hot" data-hot="标签栏" style="grid-area:tabs;border-bottom:1px solid var(--hairline)"><div class="tabs" data-hot="标签栏" style="grid-area:tabs;border-bottom:1px solid var(--hairline)">
+          <div class="tab on"><span class="run"></span><span class="nm">记忆索引重构</span><span class="proj">Codelet</span><span class="x">×</span></div>
+          <div class="tab"><span class="nm">类型声明生成</span><span class="proj">Codelet</span><span class="x">×</span></div>
+          <div class="tab"><span class="nm">流式输出的三种写法</span><span class="proj">pi-chat-box</span><span class="x">×</span></div>
+          <div class="tab-new">＋</div>
+        </div></div>
+        <div class="sh-rail"><i class="on"></i><i></i><i></i><i></i></div>
+        <div class="sh-side" style="padding:8px 10px">
+          <div style="font-size:11px;font-weight:600;margin-bottom:7px">Codelet</div>
+          <div style="height:20px;border-radius:5px;background:var(--sunken);margin-bottom:5px"></div>
+          <div style="font-size:9.5px;color:var(--fg-3);margin:8px 0 3px">Codelet ▾</div>
+          <div style="height:14px;border-radius:4px;background:var(--accent-wash);margin-bottom:4px"></div>
+        </div>
+        <div class="sh-main"><div class="line w1"></div><div class="line w2"></div><div class="line w3"></div></div>
+        <div class="sh-insp"><div class="card"></div><div class="card"></div></div>
+        <div class="sh-bar"><span>codelet</span><span>session 01a18731</span><span class="spacer"></span><span>普通</span><span>events 214</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="good">横向空间最大</span>，标签能排得开；最像浏览器。
+      它和「底槽」的概念也合得上 —— 导航轨 + 标题栏 + 标签栏是一整块底槽，面板浮在上面（D18）。
+      <br>
+      <b>代价</b>：<span class="warn">导航轨的图标起点下移 36px</span>，轨看起来不再是「从窗口顶开始」；
+      侧栏顶部的「打开项目」也被推下去；第一个标签悬在导航轨正上方，位置有点怪。
+      另外标签栏属于底槽（<code>--canvas</code>）而主面板是 <code>--surface</code>，
+      两者不同色，标签栏和主区之间要补一条界线才分得开。
+    </div>
+  </section>
+
+  <!-- ============ D ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">D</span>
+      <h2>主区内部：对话流的上方</h2>
+    </div>
+    <p class="desc">
+      不动窗口结构。标签栏是主面板里的第一行，在对话内容上方、输入框上方。
+      标签栏和主面板同色，像内容的一部分。
+    </p>
+    <div class="frame">
+      <div class="shell">
+        <div class="sh-title">
+          <div class="t-l"><span class="tl-btn">◧</span></div>
+          <div class="t-m"><span class="t-title">记忆索引重构</span><span class="dots">⋯</span></div>
+          <div class="t-r"><span class="tl-btn">◨</span></div>
+        </div>
+        <div class="sh-rail"><i class="on"></i><i></i><i></i><i></i></div>
+        <div class="sh-side" style="padding:8px 10px">
+          <div style="font-size:11px;font-weight:600;margin-bottom:7px">Codelet</div>
+          <div style="height:20px;border-radius:5px;background:var(--sunken);margin-bottom:5px"></div>
+          <div style="font-size:9.5px;color:var(--fg-3);margin:8px 0 3px">Codelet ▾</div>
+          <div style="height:14px;border-radius:4px;background:var(--accent-wash);margin-bottom:4px"></div>
+        </div>
+        <div class="sh-main" style="padding:0;display:flex;flex-direction:column">
+          <div class="spot hot" data-hot="标签栏" style="height:25px;flex:none;border-bottom:1px solid var(--hairline)"><div class="tabs inside" data-hot="标签栏" style="height:25px;flex:none;border-bottom:1px solid var(--hairline)">
+            <div class="tab on"><span class="run"></span><span class="nm">记忆索引重构</span><span class="proj">Codelet</span><span class="x">×</span></div>
+            <div class="tab"><span class="nm">类型声明生成</span><span class="proj">Codelet</span><span class="x">×</span></div>
+            <div class="tab"><span class="nm">流式输出的三种写法</span><span class="proj">pi-chat-box</span><span class="x">×</span></div>
+            <div class="tab-new">＋</div>
+          </div></div>
+          <div style="flex:1;padding:10px 14px;overflow:hidden"><div class="line w1"></div><div class="line w2"></div><div class="line w3"></div></div>
+        </div>
+        <div class="sh-insp"><div class="card"></div><div class="card"></div></div>
+        <div class="sh-bar"><span>codelet</span><span>session 01a18731</span><span class="spacer"></span><span>普通</span><span>events 214</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<b>实现最省事</b> —— 不用改外壳网格、不用动圆角、不碰拖动区；
+      标签栏和主面板同色，天然是一体。<br>
+      <b>代价</b>：<span class="warn">空间关系是反的</span> —— 标签在内容的上方，但它不是窗口的一层，
+      跟「标题栏 / 内容 / 状态栏」的三段结构对不上；对话区被压掉 36px，
+      而这条标签栏换来的信息量，值不值这 36px 不好说。
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <h2 class="sec">三 · 标签栏自己：几个细节</h2>
+  <p class="secled">
+    位置定了之后，标签「长什么样」还有几处要定。这些跟位置无关，四个位置通用。
+  </p>
+
+  <div class="option">
+    <div class="option-head"><h3 style="font-size:14px">3.1 一个标签里有什么</h3></div>
+    <div class="frame row2">
+      <div>
+        <div class="tabs" style="border:1px solid var(--hairline-strong);border-radius:var(--r-md);height:36px;width:max-content;max-width:100%">
+          <div class="tab on"><span class="run"></span><span class="nm">记忆索引重构</span><span class="proj">Codelet</span><span class="x">×</span></div>
+          <div class="tab"><span class="nm">类型声明生成</span><span class="proj">Codelet</span><span class="x">×</span></div>
+        </div>
+        <p style="font-size:12px;color:var(--fg-3);margin-top:10px">
+          活动标签：底色 <code>--surface</code>，标题加粗，底部一条 2px 短线（<code>--accent</code>）。
+          非活动：透明底，标题常规字重。
+        </p>
+      </div>
+      <div>
+        <div class="tabs" style="border:1px solid var(--hairline-strong);border-radius:var(--r-md);height:36px;width:max-content;max-width:100%">
+          <div class="tab on"><span class="nm">记忆索引重构</span><span class="x">×</span></div>
+          <div class="tab"><span class="run"></span><span class="nm">流式输出的三种写法</span><span class="proj">pi-chat-box</span><span class="x">×</span></div>
+        </div>
+        <p style="font-size:12px;color:var(--fg-3);margin-top:10px">
+          <b>运行指示</b>：标签最左边一个小圆点（<code>--info</code>），正在生成时呼吸。
+          它放在标题左边而不是右边 —— 右边是关闭按钮，两个小控件挤在一起会看不清。
+        </p>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>项目标识</b>用一条竖线隔开、放在标题右边（<code>--fg-3</code> 9.5px），跟标题一起省略号截断。
+      两个项目重名时，悬停的 <code>title</code> 给全路径。
+    </div>
+  </div>
+
+  <div class="option">
+    <div class="option-head"><h3 style="font-size:14px">3.2 标签太多的时候怎么办</h3></div>
+    <div class="frame">
+      <div class="tabs" style="border:1px solid var(--hairline-strong);border-radius:var(--r-md);height:36px;width:100%;max-width:560px">
+        <div class="tab on"><span class="nm">记忆索引重构</span><span class="proj">Codelet</span><span class="x">×</span></div>
+        <div class="tab"><span class="nm">类型声明生成</span><span class="proj">Codelet</span><span class="x">×</span></div>
+        <div class="tab"><span class="nm">流式输出的三种写法</span><span class="proj">pi-chat-box</span><span class="x">×</span></div>
+        <div class="tab"><span class="nm">工具结果太长怎么…</span><span class="proj">pi-observer</span><span class="x">×</span></div>
+        <div class="tab"><span class="nm">扩展怎么拿事件</span><span class="proj">pi-chat-box</span><span class="x">×</span></div>
+        <div class="tab"><span class="nm">再开一个</span><span class="proj">Codelet</span><span class="x">×</span></div>
+        <div class="tab-overflow">⋯</div>
+      </div>
+      <p style="font-size:12px;color:var(--fg-3);margin-top:10px">
+        排不下的标签<b>先省略</b>（标题截断），实在排不下时右边出一个「⋯」，
+        点开是全部标签的列表（带项目名，可以搜）。
+      </p>
+    </div>
+    <div class="verdict">
+      <b>为什么不用横向滚动</b>：浏览器可以滚，因为浏览器标签是「浏览历史」，你很少需要回头找一个特定的标签。
+      这里不一样 —— 标签是「你正在同时盯着几件事」，被滚动藏起来的那个恰恰是你想找的。
+      溢出菜单比横向滚动更容易定位。
+    </div>
+  </div>
+
+  <div class="option">
+    <div class="option-head"><h3 style="font-size:14px">3.3 关掉一个正在跑的标签</h3></div>
+    <div class="frame row2">
+      <div class="dialog">
+        <div class="dialog-h">这个对话还在生成</div>
+        <div class="dialog-b">
+          「记忆索引重构」的 agent 正在跑。关掉标签会中止这一轮 —— 已经生成的内容会留在会话文件里，
+          但这一轮不会跑完。
+        </div>
+        <div class="dialog-f">
+          <button class="btn">取消</button>
+          <button class="btn danger">中止并关闭</button>
+        </div>
+      </div>
+      <div>
+        <p style="font-size:12.5px;color:var(--fg-2)">
+          确认之后不是直接 <code>dispose()</code> —— 那样那一轮不会被结算，
+          半截内容可能没落盘。顺序是：<b>先 <code>abort()</code> 等它结算，再 <code>dispose()</code></b>。
+        </p>
+        <p style="font-size:12px;color:var(--fg-3);margin-top:10px">
+          不在跑的标签直接关，没有确认。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="option">
+    <div class="option-head"><h3 style="font-size:14px">3.4 标签栏上的「＋」是什么</h3></div>
+    <div class="frame row2">
+      <div class="menu" style="width:210px">
+        <div class="menu-item"><span>在 Codelet 里新建对话</span></div>
+        <div class="menu-item"><span>在 pi-chat-box 里新建对话</span></div>
+        <div class="menu-sep"></div>
+        <div class="menu-item"><span>打开项目…</span></div>
+      </div>
+      <div>
+        <p style="font-size:12.5px;color:var(--fg-2)">
+          新建对话需要一个目录，而「当前项目」这个概念已经没有了。
+          所以「＋」点开是一个<b>按项目列的菜单</b>：每个项目一行，外加「打开项目…」。
+        </p>
+        <p style="font-size:12px;color:var(--fg-3);margin-top:10px">
+          也可以不要这个「＋」—— 侧栏每个项目组头的「…」里已经有「新建对话」了。
+          但标签栏是「我现在要开一件事」的地方，放一个「＋」符合直觉。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 class="sec">四 · 放在一起比</h2>
+  <table class="spec">
+    <thead><tr><th>位置</th><th>横向空间</th><th>纵向代价</th><th>拖动区风险</th><th>圆角 / 结构改动</th><th>像浏览器吗</th></tr></thead>
+    <tbody>
+      <tr><td>A 标题栏下 · 只盖主区</td><td class="ok">主区宽度，够</td><td class="mid">36px</td><td class="ok">无（非拖动区）</td><td class="mid">圆角挪一行</td><td class="mid">像 VS Code</td></tr>
+      <tr><td>B 标题栏中间</td><td class="ok">主区宽度，够</td><td class="ok">0</td><td class="no">高（no-drag + DOM 顺序）</td><td class="ok">几乎不动</td><td class="ok">最像</td></tr>
+      <tr><td>C 标题栏下 · 横跨全窗</td><td class="ok">整行，最宽</td><td class="mid">36px</td><td class="ok">无</td><td class="no">导航轨起点下移</td><td class="ok">最像</td></tr>
+      <tr><td>D 主区内部</td><td class="ok">主区宽度</td><td class="mid">36px（吃对话区）</td><td class="ok">无</td><td class="ok">几乎不动</td><td class="no">像聊天应用</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">五 · 侧栏三个结构放在一起比</h2>
+  <table class="spec">
+    <thead><tr><th>结构</th><th>一屏能看多少</th><th>能不能收放项目</th><th>看不看得出新旧</th><th>层数</th></tr></thead>
+    <tbody>
+      <tr><td>S1 可折叠 + 时间分组</td><td class="mid">中</td><td class="ok">能</td><td class="ok">看得出</td><td class="mid">三层</td></tr>
+      <tr><td>S2 安静组头 + 时间分组</td><td class="mid">中</td><td class="no">不能</td><td class="ok">看得出</td><td class="mid">三层</td></tr>
+      <tr><td>S3 可折叠 + 平铺</td><td class="ok">多</td><td class="ok">能</td><td class="no">看不出</td><td class="ok">两层</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 class="sec">六 · 推荐</h2>
+  <div class="rec-card">
+    <h3>推荐：标签栏 A（标题栏下方，只盖主区） + 侧栏 S1（可折叠的组头）</h3>
+    <ol>
+      <li>
+        <b>标签栏放 A。</b>理由不是「像 VS Code」，是<b>它是唯一一个不跟已有结构打架的位置</b>：
+        不是拖动区（D16 的两条坑全绕开）、不挪导航轨的起点（C 的代价）、不改标题栏的 DOM 顺序（B 的代价）、
+        标签和主面板连成一块（视觉上是一体的，不是浮在上面的一层）。
+      </li>
+      <li>
+        <b>侧栏用 S1。</b>你有 9 个项目、38 个会话，<b>能不能收放项目是刚需</b> ——
+        S2 收不了，38 条会话全摊着要滚很久。组内保留时间分组，是因为「刚才聊的」和「上周聊的」
+        在对话工具里差得很远，而每行 9.5px 的相对时间只精确到小时，看不出「昨天还是前天」。
+      </li>
+    </ol>
+    <p>
+      两个方案合起来有一处要一起定：<b>组头里的会话数（<code>2</code> / <code>15</code>）去掉</b>。
+      侧栏顶部不再有「对话 N」的总数（分组本身就是结构，那一行可以去掉），
+      组头再挂一个数字就是第三处重复。
+    </p>
+    <p>
+      还有一处 S1、S2、S3 都没解决的：<b>「打开项目」这个按钮放哪</b>。
+      S1、S2 把它放在应用名下面独占一行；S3 压成标题右边的一个图标。
+      推荐<b>独占一行</b> —— 它现在承担「加一个新项目」这件事，是个低频但需要被看见的动作，
+      压成图标会埋掉。
+    </p>
+  </div>
+
+  <div class="note">
+    <b>有一处 A 方案的代价还没解决，得单独想：左上角那个圆角。</b>
+    现在圆角在 <code>.shell-main</code> 上，侧栏收起时它从侧栏挪到主区（D16）。
+    标签栏变成独立的一行之后，<b>主区的顶上多了一条标签栏</b>，圆角应该长在标签栏这一行 ——
+    否则标签栏的左端是直角、主区是圆角，接缝会很怪。
+    也就是说 <code>.shell-main</code> 的圆角要挪到标签栏那一行，而且侧栏收放时那套
+    「延后 180ms 交接」的逻辑要跟着挪。这条要在实现前单独验一次。
+  </div>
+
+  <!-- ============================================================ -->
+  <h2 class="sec">七 · 实现上要动的东西</h2>
+  <p class="secled">
+    外壳网格要多一行；侧栏和标题栏的圆角、拖动区规则都要重新对一遍。
+  </p>
+  <div class="api">host/renderer/src/styles/global.css
+.shell{
+  grid-template-rows: var(--titlebar-h) var(--tabbar-h) minmax(0,1fr) var(--statusbar-h);
+  grid-template-areas:
+    'title title title title'
+    'rail  side  tabs  insp'      ← A 方案：标签栏只占主区那一列
+    'rail  side  main  insp'
+    'rail  side  bar   bar';
+}
+/* 圆角从 .shell-main 挪到 .shell-tabs（侧栏收起时也跟着一块挪） */
+.shell-tabs{grid-area:tabs;border-top-left-radius:calc(var(--panel-radius) - 1px);overflow:hidden}
+.shell.is-side-hidden .shell-tabs{border-top-left-radius:calc(var(--panel-radius) - 1px)}
+.shell.is-side-hidden .shell-main{border-top-left-radius:0}
+
+host/renderer/src/App.tsx
++ &lt;TabBar /&gt;          ← 插在 &lt;TitleBar /&gt; 和 &lt;MainArea /&gt; 之间
+  切标签只换 store 里的活动标签 id
+  内容流按标签 id 存（items / streaming / expandedTools）
+
+host/renderer/src/store.ts
+  items:        StreamItem[]            → Record&lt;tabId, StreamItem[]&gt;
+  streaming:    boolean                 → Record&lt;tabId, boolean&gt;
+  expandedTools:Record&lt;string,boolean&gt; → Record&lt;tabId, Record&lt;string,boolean&gt;&gt;
+
+host/renderer/src/shell/
++ TabBar.tsx              标签栏
+  Sidebar.tsx             顶部换掉项目切换器，改成静态「Codelet」+「打开项目」
+  ConversationList.tsx    改成按项目分组渲染
+- ProjectSwitcher.tsx     删掉</div>
+
+  <!-- ============================================================ -->
+  <h2 class="sec">八 · 这一稿不做</h2>
+  <table class="spec">
+    <thead><tr><th>项</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td>标签拖拽排序</td><td>浏览器支持，但这轮不需要；先把「能切换」做扎实。</td></tr>
+      <tr><td>标签拖出成新窗口</td><td>多窗口这一整层都不做（D4 修订时写了）。</td></tr>
+      <tr><td>标签垂直堆叠（多行）</td><td>VS Code 那种。横向一行够用；真需要再说。</td></tr>
+      <tr><td>标签上的模型名</td><td>模型是「进去之后才关心」的信息，标签栏已经很挤。</td></tr>
+      <tr><td>每个标签独立的滚动位置与草稿</td><td>内容流按标签留着（切回来不丢），但滚动位置回到顶部、草稿不保留。</td></tr>
+      <tr><td>侧栏里的会话搜索</td><td>有了标签栏之后，「找最近聊过的」更可能靠标签；搜索是另一件事。</td></tr>
+      <tr><td>改终端 / HTML 模式的界面</td><td>普通模式优先（D14）。</td></tr>
+    </tbody>
+  </table>
+
+  <!-- ============================================================ -->
+  <h2 class="sec">九 · 怎么算做对了</h2>
+  <p class="secled">
+    拿你现在这个状态试：9 个项目、38 个会话、至少开 5 个标签。
+  </p>
+  <table class="spec">
+    <thead><tr><th>#</th><th>标准</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>开 5 个跨项目的对话 → 标签栏上一排标签，每个都标着所属项目；标签挤不下时标题省略，最右边出「⋯」。</td></tr>
+      <tr><td>2</td><td>标签 A 的 agent 跑到一半 → 切到 B → 切回 A，A 的输出接着长，且 A 的标签上有呼吸的蓝点。</td></tr>
+      <tr><td>3</td><td>点标签栏上的「×」关掉一个不在跑的标签 → 标签没了，侧栏里那个会话还在（列表读的是磁盘）。</td></tr>
+      <tr><td>4</td><td>点标签栏上的「×」关掉一个正在跑的标签 → 弹确认；确认后那一轮结算完再关，会话文件里留着已经生成的部分。</td></tr>
+      <tr><td>5</td><td>侧栏按项目分组，组头点「…」能在这个项目下新建对话；新建后多一个标签，标签上写着这个项目。</td></tr>
+      <tr><td>6</td><td>9 个项目全展开时侧栏能滚；把几个组收起来之后，一屏能看到更多别的项目。</td></tr>
+      <tr><td>7</td><td>侧栏收起时，左上角圆角仍然在原来的位置（标签栏那一行的左端），全程不跳。</td></tr>
+      <tr><td>8</td><td>标题栏拖动窗口、点面板开关，都不受标签栏影响（标签栏不是拖动区）。</td></tr>
+      <tr><td>9</td><td>主区被压到 160px 时，标签栏不出现横向滚动条；标签挤不下时走「⋯」溢出。</td></tr>
+      <tr><td>10</td><td>亮暗两套主题下，标签栏与主面板的边界、组头、项目标识、关闭按钮都读得清。</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.getElementById('theme').addEventListener('click', () => {
+    const root = document.documentElement
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'
+  })
+</script>
+</body>
+</html>
