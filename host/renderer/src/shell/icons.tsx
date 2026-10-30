@@ -80,6 +80,31 @@ export const IconChevron = () => (
   </Icon>
 )
 
+/**
+ * 折叠指示：实心三角，收起时向右，展开时向下。
+ *
+ * 之前用的是文字字符 ▸ / ▾ —— 那是 U+25B8「小三角」，字形墨迹只占 em 盒
+ * 一小部分（12px 字号下实际墨迹只有 5.6px），而且贴着基线画，上下不居中。
+ * 改用 SVG：尺寸就是实际尺寸，位置由 flex 对齐控制。
+ *
+ * viewBox 是 24，但路径只占中间的 14×17 —— 墨迹实际约 7.6×9.2px。
+ */
+export const IconCaret = ({ open }: { open: boolean }) => (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden="true"
+    style={{
+      transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+      transition: 'transform 140ms ease',
+    }}
+  >
+    <path d="M5 3.5 L19 12 L5 20.5 Z" />
+  </svg>
+)
+
 export const IconPlus = () => (
   <Icon>
     <path d="M12 5v14M5 12h14" />
