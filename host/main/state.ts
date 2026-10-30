@@ -273,9 +273,12 @@ export class HostState extends EventEmitter {
     const token = ++this.refreshToken
     try {
       const list = await PiRuntime.listConversations((partial) => {
-        // 分段出结果：listAll 要读并解析每一个 jsonl，先给一部分，别让侧栏干等
+        // 分段出结果：listAll 要读并解析每一个 jsonl，先给一部分，别让侧栏干等。
+        //
+        // **只加不删** —— 拿部分结果替换整个列表，侧栏会先塌下去再涨回来，
+        // 看着就是闪一下（实测：58 条塌成 4 条再回到 61 条）。
         if (token !== this.refreshToken) return
-        this.conversations = partial
+        this.conversations = mergeConversations(this.conversations, partial)
         this.push()
       })
       if (token !== this.refreshToken) return
@@ -347,4 +350,16 @@ export class HostState extends EventEmitter {
     this.conversationsRefresh.dispose()
     await this.pi.stop()
   }
+}
+
+/**
+ * 把分段读出来的结果并进现有列表。
+ *
+ * **只加不删** —— 列表已有的会话保留，缺的是补上，标题/时间变了的用新的。
+ * 顺序按修改时间倒序（新的在前），跟完整列表一致。
+ */
+function mergeConversations(existing: ConversationInfo[], incoming: ConversationInfo[]): ConversationInfo[] {
+  const byPath = new Map(existing.map((conversation) => [conversation.path, conversation]))
+  for (const conversation of incoming) byPath.set(conversation.path, conversation)
+  return [...byPath.values()].sort((a, b) => b.modified.localeCompare(a.modified))
 }
