@@ -6,7 +6,7 @@
  */
 export function Inspector() {
   return (
-    <aside className="shell-insp bg-insp">
+    <aside className="shell-card insp">
       <div className="insp-body">
         <section className="rounded-xl border border-hairline bg-raised shadow-[var(--sh-sm)]">
           <header className="flex h-10 items-center px-3 text-[13px] font-medium text-fg-1">

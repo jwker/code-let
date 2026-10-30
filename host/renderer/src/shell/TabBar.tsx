@@ -60,8 +60,8 @@ export function TabBar() {
   const projects = useProjects(conversations, tabs)
 
   return (
-    <div ref={containerRef} className="shell-tabs flex min-w-0 items-stretch">
-      <div ref={stripRef} className="flex min-w-0 flex-1 overflow-hidden">
+    <div ref={containerRef} className="shell-tabs">
+      <div ref={stripRef} className="flex min-w-0 items-center gap-1.5 overflow-hidden">
         {tabs.map((tab, index) => (
           <Tab
             key={tab.id}
@@ -110,34 +110,19 @@ function Tab({ tab, active, clipped }: { tab: TabInfo; active: boolean; clipped:
         onClick={() => void host.activateTab(tab.id)}
         title={`${tab.title} · ${tab.projectName}`}
         className={[
-          'tab group/tab relative flex max-w-[190px] flex-none items-center gap-1.5 border-r border-hairline px-2.5 text-left text-[11.5px] transition-colors',
-          active ? 'bg-surface text-fg-1' : 'text-fg-2 hover:bg-sunken',
+          'tab group/tab no-drag flex items-center gap-1.5 px-2 text-left transition-colors',
           clipped ? 'invisible' : ''
         ].join(' ')}
       >
         {tab.streaming ? (
           <span className="h-1.5 w-1.5 flex-none animate-pulse rounded-full bg-info" />
         ) : null}
-        <span
-          className={[
-            'min-w-0 truncate',
-            active ? 'font-semibold' : 'font-medium'
-          ].join(' ')}
-        >
-          {tab.title}
+        <span className="min-w-0 truncate">{tab.title}</span>
+        {/* 项目标识：药丸里用圆点分隔，不用竖线（竖线跟药丸边框会读成双线） */}
+        <span aria-hidden="true" className="flex-none text-[11px] leading-none text-fg-3 opacity-70">
+          ·
         </span>
-        {/*
-          项目标识用中间点，不画竖线。
-          竖线跟标签之间的分隔线（border-r）挨着会读成双竖线 ——
-          标签里只剩一条竖线时，它就只表示「标签边界」，不再有歧义。
-          中间点也是应用里已有的分隔语言（元信息行、摘要行都用「·」）。
-        */}
-        <span className="flex flex-none items-center gap-1 text-[9.5px] text-fg-3">
-          <span aria-hidden="true" className="text-[11px] leading-none opacity-70">
-            ·
-          </span>
-          <span className="max-w-[78px] truncate">{tab.projectName}</span>
-        </span>
+        <span className="max-w-[72px] flex-none truncate text-[9.5px] text-fg-3">{tab.projectName}</span>
         <span
           role="button"
           tabIndex={0}
@@ -201,7 +186,7 @@ function OverflowMenu({ tabs, onPick }: { tabs: TabInfo[]; onPick: (id: string) 
         aria-label="其他标签"
         title="其他标签"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-full w-[26px] items-center justify-center text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1"
+        className="no-drag flex h-6 w-6 flex-none items-center justify-center rounded text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1"
       >
         ⋯
       </button>
@@ -265,7 +250,7 @@ function NewTabMenu({ projects }: { projects: ProjectEntry[] }) {
         aria-label="新建标签"
         title="新建标签"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-full w-[26px] items-center justify-center text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1"
+        className="no-drag flex h-6 w-6 flex-none items-center justify-center rounded border border-dashed border-hairline-strong text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1"
       >
         ＋
       </button>

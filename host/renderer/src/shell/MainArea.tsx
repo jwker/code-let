@@ -1,6 +1,7 @@
 import type { NavEntry } from '@contract/index'
 import { ConversationArea } from '../conversation/ConversationArea'
 import { useStore } from '../store'
+import { StatusBar } from './StatusBar'
 
 const TITLES: Record<NavEntry, string> = {
   session: '会话',
@@ -10,24 +11,27 @@ const TITLES: Record<NavEntry, string> = {
   terminal: '终端'
 }
 
-/** 主工作区 —— 一个入口一个视图，位置写死（PLAN.md D5） */
+/**
+ * 主工作区 —— 一张卡，内容按入口换（PLAN.md D5）。
+ *
+ * 状态栏收在这张卡的底部当页脚 —— 它显示的是这个会话的状态。
+ */
 export function MainArea() {
   const nav = useStore((s) => s.nav)
 
-  if (nav === 'session') {
-    return (
-      <main className="shell-main flex min-h-0 flex-col bg-surface">
-        <ConversationArea />
-      </main>
-    )
-  }
-
   return (
-    <main className="shell-main flex min-h-0 flex-col bg-surface">
-      <div className="placeholder">
-        <div>{TITLES[nav]} · 视图还没接</div>
-        <div className="text-[11.5px]">组件放在 ext/ + view/，一个组件一视图</div>
+    <main className="shell-card main">
+      <div className="shell-main">
+        {nav === 'session' ? (
+          <ConversationArea />
+        ) : (
+          <div className="placeholder">
+            <div>{TITLES[nav]} · 视图还没接</div>
+            <div className="text-[11.5px]">组件放在 ext/ + view/，一个组件一视图</div>
+          </div>
+        )}
       </div>
+      {nav === 'session' && <StatusBar />}
     </main>
   )
 }

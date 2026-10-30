@@ -6,8 +6,6 @@ import { ModelPicker } from './shell/ModelPicker'
 import { PaneResizer } from './shell/PaneResizer'
 import { Rail } from './shell/Rail'
 import { Sidebar } from './shell/Sidebar'
-import { StatusBar } from './shell/StatusBar'
-import { TabBar } from './shell/TabBar'
 import { TitleBar } from './shell/TitleBar'
 import {
   INSPECTOR_DEFAULT,
@@ -141,12 +139,12 @@ export function App() {
   return (
     <div ref={shellRef} className={shellClass}>
       <TitleBar />
-      <TabBar />
       <Rail />
-      <Sidebar />
-      <MainArea />
-      <Inspector />
-      <StatusBar />
+      <div className="shell-deck">
+        <Sidebar />
+        <MainArea />
+        <Inspector />
+      </div>
 
       <PaneResizer
         edge="left"
