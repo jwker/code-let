@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react'
 import type { NavEntry } from '@contract/index'
 import { useStore } from '../store'
-import { IconBoard, IconCode, IconMemory, IconSession, IconTerminal } from './icons'
+import { IconBoard, IconCode, IconMemory, IconTerminal } from './icons'
 
 /**
  * 导航栏 —— 原来在左边的导航轨，现在放在右侧面板顶部。
@@ -14,7 +14,6 @@ import { IconBoard, IconCode, IconMemory, IconSession, IconTerminal } from './ic
  */
 
 const ENTRIES: Array<{ key: NavEntry; label: string; icon: () => ReactElement }> = [
-  { key: 'session', label: '会话', icon: IconSession },
   { key: 'board', label: '看板', icon: IconBoard },
   { key: 'memory', label: '记忆', icon: IconMemory },
   { key: 'code', label: '代码', icon: IconCode },
@@ -24,6 +23,18 @@ const ENTRIES: Array<{ key: NavEntry; label: string; icon: () => ReactElement }>
 export function NavBar({ compact }: { compact: boolean }) {
   const nav = useStore((s) => s.nav)
   const setNav = useStore((s) => s.setNav)
+  const inspectorOpen = useStore((s) => s.inspectorOpen)
+  const toggleInspector = useStore((s) => s.toggleInspector)
+
+  /**
+   * 点导航项：切到那个视图。
+   *
+   * 右侧面板收着的话自动展开 —— 不然点了没反应，用户会以为坏了。
+   */
+  function pick(key: NavEntry): void {
+    setNav(key)
+    if (!inspectorOpen) toggleInspector()
+  }
 
   return (
     <div className={compact ? 'nav-rail' : 'nav-bar'}>
@@ -37,7 +48,7 @@ export function NavBar({ compact }: { compact: boolean }) {
             title={entry.label}
             aria-label={entry.label}
             aria-current={active}
-            onClick={() => setNav(entry.key)}
+            onClick={() => pick(entry.key)}
             className={[
               'flex items-center justify-center rounded-lg transition-colors',
               compact ? 'h-7 w-7 flex-none' : 'h-6 flex-1',

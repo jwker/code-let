@@ -18,7 +18,6 @@ const MODES: Array<{ key: ConversationMode; label: string }> = [
  * 整条可拖动；可点的部分标 no-drag。
  */
 export function TitleBar() {
-  const nav = useStore((s) => s.nav)
   const mode = useStore((s) => s.mode)
   const setMode = useStore((s) => s.setMode)
   const inspectorOpen = useStore((s) => s.inspectorOpen)
@@ -76,15 +75,6 @@ export function TitleBar() {
   // 卸载时把悬停关闭的定时器清掉
   useEffect(() => () => clearSubTimer(), [])
 
-  // 离开会话页时把菜单收起来
-  useEffect(() => {
-    if (nav !== 'session') {
-      clearSubTimer()
-      setMenuOpen(false)
-      setSubOpen(false)
-    }
-  }, [nav])
-
   // Esc 关闭菜单
   useEffect(() => {
     if (!menuOpen) return
@@ -120,7 +110,11 @@ export function TitleBar() {
 
       {/* 右按钮板块 */}
       <div className="titlebar-zone right no-drag">
-        {nav === 'session' && (
+        {/*
+          主区永远是对话，「⋯」菜单（侧栏 / 主题 / 设置 / 模式切换）一直有意义。
+          以前它只在 nav === 'session' 时出现，因为主区会被导航换成别的视图。
+        */}
+        {(
           <div className="titlebar-more relative">
             <button
               type="button"

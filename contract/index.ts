@@ -73,8 +73,13 @@ export const EVENT_COALESCE_MS = 16
 /** 对话区的三种排版模式（PLAN.md D10） */
 export type ConversationMode = 'normal' | 'terminal' | 'html'
 
-/** 导航轨入口 */
-export type NavEntry = 'session' | 'board' | 'memory' | 'code' | 'terminal'
+/**
+ * 右侧面板的导航入口。
+ *
+ * **没有「会话」** —— 主区永远是对话，不跟着导航切；
+ * 导航只决定右侧面板显示什么。
+ */
+export type NavEntry = 'board' | 'memory' | 'code' | 'terminal'
 
 /** 一个项目 = 一个目录 */
 export interface ProjectInfo {
