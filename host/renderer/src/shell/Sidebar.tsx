@@ -95,13 +95,27 @@ export function Sidebar() {
     <aside className="shell-card side">
       <div className="side-panel">
         {/*
-          头部：标题 + 一颗选项钮。
-          标题就是标题 —— 看着是个分区标题，点它没反应；
-          所有动作在浮层里（打开项目、收起/展开全部）。
+          头部：标题 + 两颗按钮。
+          标题就是标题 —— 看着是个分区标题，点它没反应。
+          右边两颗：收放全部（直接生效，不藏在菜单里）、选项（浮层里是「打开项目」）。
+          收放全部单独拎出来，因为它是一次性动作，跟「打开项目」那种会开浮层的不是一类；
+          而且常收常展，每次点两下太绕。
         */}
         <div className="relative px-2.5 pt-3" ref={optionsRef}>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             <span className="flex-1 pl-1.5 text-[12.5px] font-semibold text-fg-2">项目</span>
+            {/* 一个项目都没有时没有可收放的东西 */}
+            {projects.length > 0 && (
+              <button
+                type="button"
+                aria-label={expandAllShown ? '展开全部项目' : '收起全部项目'}
+                title={expandAllShown ? '展开全部项目' : '收起全部项目'}
+                onClick={toggleAll}
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1"
+              >
+                {expandAllShown ? <IconExpandAll /> : <IconCollapseAll />}
+              </button>
+            )}
             <button
               type="button"
               aria-haspopup="menu"
@@ -121,7 +135,7 @@ export function Sidebar() {
           {optionsOpen && (
             <div
               role="menu"
-              className="absolute right-2.5 top-full z-30 mt-1 w-[232px] rounded-xl border border-hairline bg-raised p-1"
+              className="absolute right-2.5 top-full z-30 mt-1 w-[168px] rounded-xl border border-hairline bg-raised p-1"
               style={{ boxShadow: 'var(--sh-md)' }}
             >
               <button
@@ -138,27 +152,6 @@ export function Sidebar() {
                 </span>
                 <span>打开项目…</span>
               </button>
-
-              {/* 一个项目都没有时没有可收放的东西，这一项不出现 */}
-              {projects.length > 0 && (
-                <>
-                  <div className="my-1 h-px bg-hairline" />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setOptionsOpen(false)
-                      toggleAll()
-                    }}
-                    className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken"
-                  >
-                    <span className="flex-none text-fg-2">
-                      {expandAllShown ? <IconExpandAll /> : <IconCollapseAll />}
-                    </span>
-                    <span>{expandAllShown ? '展开全部项目' : '收起全部项目'}</span>
-                  </button>
-                </>
-              )}
             </div>
           )}
         </div>
