@@ -53,15 +53,9 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="shell-side">
+    <aside className="shell-card side">
       <div className="side-panel">
         <div className="px-2.5 pt-3">
-          <div className="flex items-center gap-2 px-2 pb-2">
-            <span className="flex-none text-fg-2">
-              <IconFolder />
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-fg-1">Codelet</span>
-          </div>
           <button
             type="button"
             title="打开项目"
@@ -295,7 +289,7 @@ function groupByProject(conversations: ConversationInfo[]): ProjectGroupData[] {
 }
 
 /** 老会话的 cwd 可能是空字符串（Pi 的注释里写了）—— 归到「未知项目」 */
-const UNKNOWN_PROJECT = ' unknown'
+const UNKNOWN_PROJECT = 'unknown'
 
 function basenameOf(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean)

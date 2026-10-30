@@ -26,7 +26,8 @@ function createWindow(): BrowserWindow {
     backgroundColor: '#f4f4f5',
     // macOS：标题栏整条交给渲染进程，红绿灯压在自绘标题栏左侧
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
-    trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 18 } : undefined,
+    // 标题栏 44px，红绿灯 12px —— 居中放（(44-12)/2 = 16）
+    trafficLightPosition: process.platform === 'darwin' ? { x: 18, y: 16 } : undefined,
     webPreferences: {
       preload: join(currentDir, '../preload/index.cjs'),
       sandbox: true,

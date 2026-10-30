@@ -123,32 +123,83 @@
 
   position: relative;
   display: grid;
-  grid-template-columns: var(--rail-w) var(--side-track) minmax(0, 1fr) var(--insp-track);
   /*
-   * 标签栏占一行，横向只盖主区那一列（PLAN.md D4 修订 · 设计稿 A 方案）。
-   * 侧栏和导航轨保持满高 —— 标签栏只属于主区，跟主面板是同一块。
+   * 轨 100% 高、标题栏 100% 宽 —— 两者是画布色，连成一个 L 形。
+   * 轨和标题栏之外的区域是卡片区（deck）：三张卡浮在画布上。
    */
-  grid-template-rows: var(--titlebar-h) var(--tabbar-h) minmax(0, 1fr) var(--statusbar-h);
+  grid-template-columns: var(--rail-w) minmax(0, 1fr);
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr);
   grid-template-areas:
-    'title title title title'
-    'rail side tabs insp'
-    'rail side main insp'
-    'rail side bar bar';
+    'title title'
+    'rail  deck';
   height: 100vh;
   background: var(--canvas);
   transition:
-    --side-track 180ms ease,
-    --insp-track 180ms ease;
+    --side-w 180ms ease,
+    --insp-w 180ms ease;
 }
 
-/* 收起检视器：只改占位宽度，面板自己滑出去（见 .shell-insp） */
+/*
+ * 卡片区：侧栏 / 主对话区 / 右侧检视器各一张卡。
+ *
+ * 卡之间 7px 的画布缝，窗口右边和下边也留 7px；顶上不留 ——
+ * 卡片的上边框紧贴标题栏下沿（跟参考图一致）。
+ */
+.shell-deck {
+  grid-area: deck;
+  display: flex;
+  gap: 7px;
+  padding: 0 7px 7px 7px;
+  min-height: 0;
+}
+
+/* 一张卡：白底 + 1px 边框 + 大圆角 */
+.shell-card {
+  background: var(--surface);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--panel-radius);
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+.shell-card.side {
+  flex: none;
+  width: var(--side-w);
+}
+.shell-card.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.shell-card.insp {
+  flex: none;
+  width: var(--insp-w);
+  background: var(--insp);
+}
+
+/* 收起侧栏：卡片宽度归零、边框收掉，并把��条缝也吃掉 */
+.shell.is-side-hidden .shell-card.side {
+  width: 0;
+  border-width: 0;
+  margin-right: -7px;
+}
+.shell.is-side-hidden .shell-deck {
+  padding-left: 0;
+}
+/* 收起检视器：同理，它右边那条缝也要吃掉 */
+.shell.is-insp-hidden .shell-card.insp {
+  width: 0;
+  border-width: 0;
+  margin-left: -7px;
+}
+
+/* 收起检视器 / 侧栏：卡片的宽度归零（见上面 .shell-card.insp / .side） */
 .shell.is-insp-hidden {
-  --insp-track: 0px;
+  --insp-w: 0px;
 }
 
-/* 收起左侧栏：同上，面板从右边裁掉（见 .side-panel） */
 .shell.is-side-hidden {
-  --side-track: 0px;
+  --side-w: 0px;
 }
 
 /* 拖拽中不要 180ms 过渡，否则宽度跟不上鼠标 */
@@ -164,8 +215,49 @@
   grid-area: title;
   position: relative;
   z-index: 30;
-  display: grid;
-  grid-template-columns: calc(var(--rail-w) + var(--side-track)) minmax(0, 1fr) var(--insp-track);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-right: 12px;
+}
+/* 红绿灯占的那一片：轨的宽度，让轨和标题栏连成 L 形 */
+.titlebar-gutter {
+  flex: none;
+  width: var(--rail-w);
+  align-self: stretch;
+}
+[data-platform='darwin'] .titlebar-gutter {
+  width: var(--traffic-light-gutter);
+}
+/* 左 / 右按钮板块 */
+.titlebar-zone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.titlebar-zone.right {
+  margin-left: auto;
+}
+.titlebar-app {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-1);
+  white-space: nowrap;
+}
+.titlebar-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  color: var(--fg-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.titlebar-icon-btn:hover {
+  color: var(--fg-1);
+  background: var(--sunken);
 }
 /*
  * 标题栏不画底边线：它和导航轨是同一块底槽（都是 --canvas 一档的灰），
@@ -272,10 +364,10 @@
  */
 
 .shell-side {
-  grid-area: side;
-  /* 收起时列宽归零，面板按 --side-w 排版后从右边裁掉 */
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  overflow: hidden;
+  min-height: 0;
 }
 /*
  * 面板本体：宽度固定成设计宽度，收起过程中只被裁、不重排 ——
@@ -283,73 +375,67 @@
  */
 .side-panel {
   display: flex;
-  width: var(--side-w);
-  height: 100%;
+  flex: 1;
   min-height: 0;
   flex-direction: column;
-  border-right: 1px solid var(--hairline);
-  border-top-left-radius: calc(var(--panel-radius) - 1px);
   background: var(--panel);
 }
-.shell.is-side-hidden .shell-side {
-  visibility: hidden;
-  /* 收起时延后隐藏，让滑出动画看得见；展开时立刻显示 */
-  transition: visibility 0s linear 180ms;
-}
 /*
- * 标签栏 —— 标题栏下方一行，横向只盖主区那一列（设计稿 A 方案）。
+ * 标签栏 —— 标题栏里的一段，标签是画布上的圆角药丸（照 pi-web 的做法）。
  *
- * 它是底槽色（--canvas），活动标签是面板色（--surface）——
- * 看着像活动标签从底槽里「拉出来」接上了下面的主面板。
+ * 不是浏览器那种贴边填满高度的标签：药丸浮在画布上，活动的那颗用面板色 + 描边。
  */
 .shell-tabs {
-  grid-area: tabs;
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
-  background: var(--canvas);
-  border-bottom: 1px solid var(--hairline);
+  flex: 1;
+  overflow: hidden;
 }
-/* 活动标签：底部一条 2px 短线 */
-.shell-tabs .tab[aria-current='page']::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--accent);
+.shell-tabs .tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  max-width: 190px;
+  flex: none;
+  padding: 0 6px 0 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-sm);
+  background: var(--sunken);
+  color: var(--fg-2);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.shell-tabs .tab:hover {
+  background: var(--panel);
+  color: var(--fg-1);
+}
+/* 活动标签：面板色 + 深一点的描边 */
+.shell-tabs .tab[aria-current='page'] {
+  background: var(--surface);
+  border-color: var(--accent-line);
+  color: var(--fg-1);
 }
 
 .shell-main {
-  grid-area: main;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   /*
    * 主区宽度受两侧拖拽影响，窄到什么程度都可能有；
    * 让内部按自身宽度收缩（见下面的 @container），别让内容列贴边。
    */
   container-type: inline-size;
 }
-/*
- * 侧栏收起后，左上角那块圆角由主区自己带着 —— 位置跟侧栏的角完全重合，
- * 所以收放全程这个角都在原地，只是从侧栏换到主区。
- *
- * overflow: hidden 是必需的：主区里的 <section> 也铺了 bg-surface，
- * 不裁的话会把这张圆角盖回直角。
- *
- * 收起时延后 180ms 才挂上：面板滑走的过程中角还是侧栏自己的，最后一帧无缝交接。
- * 展开时立刻摘掉 —— 那一刻侧栏刚好 0 宽、主区贴边，下一帧侧栏就盖过来了。
- */
-.shell.is-side-hidden .shell-main {
-  border-top-left-radius: calc(var(--panel-radius) - 1px);
-  overflow: hidden;
-  transition: border-radius 0s linear 180ms;
-}
 .shell-insp {
-  grid-area: insp;
   position: relative;
-  /* 收起时列宽归零，内容按 --insp-w 排版后靠右裁掉 */
+  display: flex;
+  flex: 1;
   min-width: 0;
-  overflow: hidden;
+  min-height: 0;
 }
 /* 左分隔线单独画，别用 border —— border 会占掉 1px，面板就比列宽宽 1px */
 .shell-insp::before {
@@ -388,7 +474,7 @@
   }
 }
 .shell-bar {
-  grid-area: bar;
+  flex: none;
 }
 
 /* 标题栏里的小图标比导航轨的再小一号 */
@@ -417,11 +503,12 @@
   -webkit-app-region: no-drag;
   outline: none;
 }
+/* 手柄贴在卡片的外缘：左边是侧栏卡的右缘，右边是检视器卡的左缘 */
 .shell-grip-left {
-  left: calc(var(--rail-w) + var(--side-track));
+  left: calc(var(--rail-w) + 7px + var(--side-w));
 }
 .shell-grip-right {
-  left: calc(100% - var(--insp-track));
+  left: calc(100% - 7px - var(--insp-w));
 }
 /* 收起的一侧没有可拖的缝 */
 .shell.is-insp-hidden .shell-grip-right,

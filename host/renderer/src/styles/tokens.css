@@ -32,8 +32,7 @@
 
   /* 主区内容列宽、窗口标题栏高度、标签栏高度 */
   --content-max: 720px;
-  --titlebar-h: 52px;
-  --tabbar-h: 36px;
+  --titlebar-h: 44px;
   --statusbar-h: 24px;
   /* macOS 红绿灯占掉的那一段 —— 标题栏内容从这里起 */
   --traffic-light-gutter: 84px;
