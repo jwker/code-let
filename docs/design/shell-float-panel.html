@@ -116,6 +116,15 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .card .zone-main{flex:1;padding:11px 14px;min-width:0;overflow:hidden;position:relative}
 .card .zone-insp{flex:1;padding:10px;overflow:hidden;background:var(--insp)}
 .card.split .zone-insp{border-left:1px solid var(--card-line)}
+.deck.three{gap:var(--gap)}
+.card.third{flex:none;width:var(--side);flex-direction:column}
+.card.mainc{flex:1;min-width:0}
+.card.mainc.with-status{flex-direction:column}
+.card.mainc .zone-main{flex:1}
+.card.mainc .zstatus{flex:none;display:flex;align-items:center;gap:12px;padding:0 14px;border-top:1px solid var(--card-line);font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3)}
+.deck.above-status{bottom:calc(var(--gap) + 18px)}
+.statusbar{position:absolute;left:calc(var(--rail) + var(--gap));right:var(--gap);bottom:0;height:18px;display:flex;align-items:center;gap:12px;padding:0 4px;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3)}
+.title .tl-status{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3);white-space:nowrap;flex:none}
 
 /* 两张卡的分割（方案 B） */
 .deck.two .card.left{flex:1;display:flex}
@@ -233,20 +242,20 @@ table.spec .no{color:#B8342A;font-weight:600}
     </div>
   </div>
 
-  <h2 class="sec">二 · 两个方案</h2>
+  <h2 class="sec">二 · 三张卡</h2>
   <p class="secled">
-    两个方案都是「标题栏 + 卡片」。差的是<b>侧栏跟谁住一张卡</b>。
+    侧栏、主对话区、右侧检视器<strong>各自一张卡</strong>，卡之间留 7px 的缝 ——
+    跟参考图里两张卡的做法一样。轨和标题栏仍是画布，连成 L 形。
   </p>
 
-  <!-- ============ A ============ -->
   <section class="option">
     <div class="option-head">
-      <span class="tag rec">A · 推荐</span>
-      <h2>侧栏、主区、检视器住同一张卡</h2>
+      <span class="tag rec">已定</span>
+      <h2>三张卡，状态栏进主区卡底部</h2>
     </div>
     <p class="desc">
-      一张卡，卡内三条竖线分成三块 —— 跟参考图里「右侧那块面板内部也分两格」是同一个做法。
-      卡的四周离画布 7px，跟参考图一致。
+      状态栏收进主区卡里当页脚 —— 它显示的本来就是这个会话的状态（session id、模式、事件数、Pi 状态），
+      放在会话这一格里面，语义也对得上。
     </p>
     <div class="frame">
       <div class="app">
@@ -263,9 +272,9 @@ table.spec .no{color:#B8342A;font-weight:600}
           <div class="tbtn">◨</div>
         </div>
         <div class="rail"><i class="on"></i><i></i><i></i><i></i><i></i></div>
-        <div class="deck">
-          <div class="card one">
-            <div class="zone-side" style="width:196px">
+        <div class="deck three">
+          <div class="card third">
+            <div style="padding:9px 8px;overflow:hidden">
               <div style="height:18px;border-radius:var(--r-sm);background:var(--sunken);margin-bottom:9px"></div>
               <div class="grp">Codelet <span>▾</span></div>
               <div class="crow on"><span class="dot"></span>记忆索引重构</div>
@@ -274,109 +283,102 @@ table.spec .no{color:#B8342A;font-weight:600}
               <div class="grp">pi-chat-box <span>▾</span></div>
               <div class="crow">流式输出的三种写法</div>
             </div>
+          </div>
+          <div class="card mainc with-status">
             <div class="zone-main">
-              <div class="bubble" style="width:72%"></div>
-              <div class="bubble" style="width:88%"></div>
+              <div class="bubble" style="width:66%"></div>
+              <div class="bubble" style="width:82%"></div>
               <div class="user-b"></div>
-              <div class="bubble" style="width:60%"></div>
+              <div class="bubble" style="width:56%"></div>
               <div style="width:150px;height:19px;border:1px solid var(--card-line);border-radius:var(--r-full);margin-top:10px"></div>
               <div class="composer"><span class="chip">◇ MiniMax-M3.1-Flash</span><span class="send"></span></div>
             </div>
-            <div class="zone-insp" style="flex:none;width:210px;border-left:1px solid var(--card-line)">
-              <div class="icard"></div><div class="icard"></div>
-            </div>
+            <div class="zstatus"><span>Codelet</span><span>session 01a18b42</span><span style="margin-left:auto">普通 · events 214 · Pi 就绪</span></div>
+          </div>
+          <div class="card third" style="width:var(--insp)">
+            <div style="padding:10px"><div class="icard"></div><div class="icard"></div></div>
           </div>
         </div>
       </div>
     </div>
     <div class="verdict">
-      <b>好处</b>：<strong>跟参考图最像</strong> —— 参考图里右侧那块面板内部也是用竖线分格的
-      （文件树 | 代码），我们这里是（侧栏 | 主区 | 检视器），做法一致；
-      整块只有一条边框、一个轮廓，最接近「一张卡片」的读法；收起侧栏时左边界右移，跟今天的逻辑接得上。<br>
-      <b>代价</b>：三块共用一张卡，<span class="warn">侧栏和检视器的宽度就锁死在卡上</span> ——
-      现在两栏是各自拖的，改成一张卡之后「拖哪条边」要重新定义。
+      <b>好处</b>：三块各自独立，<strong>宽度互不牵连</strong> —— 侧栏拖宽不会挤到检视器；
+      每张卡都有自己的边框和圆角，读起来是「三块面板」而不是「一块大板切三刀」。<br>
+      <b>代价</b>：<span class="warn">侧栏卡又窄又高</span> —— 一张 196px 宽、几乎满高的白卡片浮在画布上，
+      四个角都是圆的，跟另外两张大卡不太像一家人。
     </div>
   </section>
 
-  <!-- ============ B ============ -->
+  <h2 class="sec">三 · 状态栏的三个去处</h2>
+  <p class="secled">
+    两张卡的时候状态栏能横跨主区和检视器；<strong>三张卡之后它没地方横跨了</strong> —— 必须重新挑一个。
+  </p>
+
   <section class="option">
     <div class="option-head">
-      <span class="tag">B</span>
-      <h2>侧栏跟主区一张卡，检视器另一张卡</h2>
+      <span class="tag rec">推荐</span>
+      <h2>进主区卡底部（就是上面那个）</h2>
     </div>
     <p class="desc">
-      直接照搬参考图的两张卡，只是左边那张卡里多了侧栏一格。
-      两张卡之间留 7px 的缝，跟参考图一样。
+      状态栏变成主区卡的页脚。它显示的是这个会话的状态，跟着会话走最合理；画布上只剩轨和标题栏。
     </p>
-    <div class="frame">
-      <div class="app">
-        <div class="title">
-          <div class="traffic"><i></i><i></i><i></i></div>
-          <div class="tbtn">◧</div>
-          <div class="tbtn">⌕</div>
-          <div class="pills">
-            <div class="pill on"><span class="mk">P</span><span class="nm">记忆索引重构</span><span class="x">×</span></div>
-            <div class="pill"><span class="mk">P</span><span class="nm">类型声明生成</span><span class="x">×</span></div>
-            <div class="pill add">＋</div>
-          </div>
-          <div style="flex:1"></div>
-          <div class="tbtn">◨</div>
-        </div>
-        <div class="rail"><i class="on"></i><i></i><i></i><i></i><i></i></div>
-        <div class="deck two">
-          <div class="card left">
-            <div class="zone-side" style="width:196px">
-              <div style="height:18px;border-radius:var(--r-sm);background:var(--sunken);margin-bottom:9px"></div>
-              <div class="grp">Codelet <span>▾</span></div>
-              <div class="crow on"><span class="dot"></span>记忆索引重构</div>
-              <div class="crow"><span class="dot"></span>类型声明生成</div>
-              <div class="grp">pi-chat-box <span>▾</span></div>
-              <div class="crow">流式输出的三种写法</div>
-            </div>
-            <div class="zone-main">
-              <div class="bubble" style="width:72%"></div>
-              <div class="bubble" style="width:88%"></div>
-              <div class="user-b"></div>
-              <div class="bubble" style="width:60%"></div>
-              <div style="width:150px;height:19px;border:1px solid var(--card-line);border-radius:var(--r-full);margin-top:10px"></div>
-              <div class="composer"><span class="chip">◇ MiniMax-M3.1-Flash</span><span class="send"></span></div>
-            </div>
-          </div>
-          <div class="card insp">
-            <div class="zone-insp">
-              <div class="icard"></div><div class="icard"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
     <div class="verdict">
-      <b>好处</b>：<strong>跟参考图一模一样</strong>（两张卡、两卡之间留缝），
-      而且检视器那张卡可以整体收起、整体移动，跟今天的拖拽逻辑对得上。<br>
-      <b>代价</b>：<span class="warn">左边那张卡里塞了两格</span>（侧栏 + 主区），
-      卡内的分界跟卡外的缝长得不一样 —— 侧栏和主区之间是一条线，主区和检视器之间是一道缝。
+      <b>代价</b>：状态栏只在主区卡里，看不到检视器那一侧的状态 —— 但那些状态本来就是会话的。
     </div>
   </section>
 
-  <h2 class="sec">三 · 两个方案比</h2>
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">备选</span>
+      <h2>留在画布底部，三张卡下面一条</h2>
+    </div>
+    <p class="desc">
+      状态栏跟标题栏对称，都在画布上，卡片浮在中间。整窗是「上边条 + 中间三张卡 + 下边条」。
+    </p>
+    <div class="verdict">
+      <b>好处</b>：状态栏横跨整个宽度，什么都能看见。<br>
+      <b>代价</b>：画布上多了一条横贯的带子，三张卡被上下夹住；而且状态栏跟侧栏卡并排时，
+      它属于哪一块变得含糊。
+    </div>
+  </section>
+
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">备选</span>
+      <h2>并进标题栏右侧</h2>
+    </div>
+    <p class="desc">
+      标题栏右边空着（参考图也是空的），状态信息放那儿。三张卡从标题栏下面一直到底，主区最大。
+    </p>
+    <div class="verdict">
+      <b>好处</b>：<strong>主区多出 18px</strong>，而且画布上只剩轨和标题栏，最干净。<br>
+      <b>代价</b>：标题栏右侧本来是检视器开关的地盘，一块放状态、一块放开关会挤；
+      标签多的时候状态那串字还得让位。
+    </div>
+  </section>
+
+  <h2 class="sec">四 · 状态栏三个去处比</h2>
   <table class="spec">
-    <thead><tr><th>方案</th><th>跟参考图的接近度</th><th>卡内分界的一致性</th><th>两栏还能各自拖吗</th><th>收起侧栏</th></tr></thead>
+    <thead><tr><th>去处</th><th>主区可用高度</th><th>状态看得全吗</th><th>画布上有什么</th><th>跟参考图的接近度</th></tr></thead>
     <tbody>
-      <tr><td>A 三块一张卡</td><td class="ok">高（参考图右侧面板也是卡内分格）</td><td class="ok">三块都是竖线</td><td class="no">不能</td><td class="ok">左边界右移</td></tr>
-      <tr><td>B 两张卡</td><td class="ok">最高（跟参考图一样）</td><td class="no">侧栏|主区 是线，主区|检视器 是缝</td><td class="ok">能</td><td class="ok">左边界右移</td></tr>
+      <tr><td>进主区卡底部</td><td class="ok">满高</td><td class="mid">只有主区那一格</td><td>轨 + 标题栏</td><td class="ok">高</td></tr>
+      <tr><td>画布底部一条</td><td class="mid">少 18px</td><td class="ok">横跨全宽</td><td>轨 + 标题栏 + 底部条</td><td class="mid">中</td></tr>
+      <tr><td>并进标题栏右侧</td><td class="ok">满高（还多 18px）</td><td class="mid">挤在标题栏里</td><td>轨 + 标题栏</td><td class="ok">高</td></tr>
     </tbody>
   </table>
 
   <div class="rec-card">
-    <h3>推荐：A —— 三块住同一张卡</h3>
+    <h3>推荐：三张卡 + 状态栏进主区卡底部</h3>
     <ol>
-      <li><b>卡内分界全部用竖线。</b>参考图里右侧那块面板内部就是用竖线分格（文件树 | 代码），
-      我们这里是侧栏 | 主区 | 检视器 —— 做法一致，读起来是「一张卡里的三格」。</li>
-      <li><b>参考图本身就是混着的：</b>左边是大卡，右边是另一张卡；卡内用竖线、卡外用缝。
-      照搬成 B 的话，我们这边就会出现「侧栏|主区 是线、主区|检视器 是缝」的不一致。</li>
-      <li><b>代价是明确的：</b>两栏不能再各自拖宽度。检视器的宽度得定死，或者改成只拖一条边。
-      这条要么接受，要么改成「检视器宽度固定、只拖侧栏那条边」。</li>
+      <li><b>三张卡</b> —— 宽度互不牵连：侧栏拖宽不会挤到检视器；每张卡有自己的边框和圆角，
+      读起来是三块面板，不是一块大板切三刀。</li>
+      <li><b>状态栏进主区卡底部</b> —— 它显示的是这个会话的状态（session id、模式、事件数、Pi 状态），
+      跟着会话走最合理；画布上只剩轨和标题栏，跟参考图一样干净。</li>
     </ol>
+    <p>
+      唯一要接受的是：<b>侧栏卡又窄又高</b> —— 一张 196px 宽、几乎满高的白卡片浮在画布上，
+      四个角都圆着。另一条路是让侧栏不单独成卡、跟主区合一张（但那就回到两栏不能各自拖的问题）。
+    </p>
   </div>
 
   <div class="note">
@@ -390,7 +392,7 @@ table.spec .no{color:#B8342A;font-weight:600}
     </ol>
   </div>
 
-  <h2 class="sec">四 · 要动的东西</h2>
+  <h2 class="sec">五 · 要动的东西</h2>
   <div class="api">host/renderer/src/styles/tokens.css
   --canvas:#FAFAFA          /* 参考图的值，现在是 #F4F4F5 */
   --card-edge:#D6D6D6       /* 卡片边框，新增 */
@@ -429,25 +431,25 @@ host/renderer/src/styles/global.css
     标签栏要从 <code>.shell-tabs</code>（独立一行）改成标题栏里的药丸。
   </p>
 
-  <h2 class="sec">五 · 这一稿不做</h2>
+  <h2 class="sec">六 · 这一稿不做</h2>
   <table class="spec">
     <thead><tr><th>项</th><th>为什么</th></tr></thead>
     <tbody>
-      <tr><td>两栏各自拖宽度</td><td>A 方案下三块共用一张卡，宽度得重新定。这一稿先按固定宽度画。</td></tr>
+      <tr><td>拖拽手柄的具体位置</td><td>三张卡各自有边界，拖哪条边要定。这一稿先按固定宽度画。</td></tr>
       <tr><td>浮板四周留缝（真正「浮」起来）</td><td>参考图就是四周留缝的卡片，按它来。</td></tr>
       <tr><td>检视器改成抽屉</td><td>另一件事（主区宽度问题）。</td></tr>
       <tr><td>动终端 / HTML 两档排版</td><td>普通模式优先（D14）。</td></tr>
     </tbody>
   </table>
 
-  <h2 class="sec">六 · 怎么算做对了</h2>
+  <h2 class="sec">七 · 怎么算做对了</h2>
   <table class="spec">
     <thead><tr><th>#</th><th>标准</th></tr></thead>
     <tbody>
       <tr><td>1</td><td>标题栏是画布色、铺满整宽，标签是画布上的圆角药丸</td></tr>
       <tr><td>2</td><td>面板是白底 + 1px 边框 + 大圆角的卡片，四周离画布约 7px</td></tr>
       <tr><td>3</td><td>轨 100% 高，和标题栏连成 L 形，中间没有缝</td></tr>
-      <tr><td>4</td><td>卡片内部三块用竖线分，不留缝</td></tr>
+      <tr><td>4</td><td>侧栏、主区、检视器各是一张卡，卡之间留 7px 的缝</td></tr>
       <tr><td>5</td><td>标签栏不再单独占一行 —— 主区多出 36px</td></tr>
       <tr><td>6</td><td>侧栏收起时，卡片左边界右移到轨边，圆角跟着移，全程不跳</td></tr>
       <tr><td>7</td><td>亮暗两套主题下，卡片边框、药丸、竖线都读得清</td></tr>
