@@ -15,6 +15,10 @@ import { createTabCloseController, runningTabCloseCopy } from './tabClose'
 
 /** 「＋」按钮宽度 —— 量可用宽度时要给它留出位置 */
 const NEW_W = 26
+/** 「⋯」按钮宽度 */
+const OVERFLOW_W = 26
+/** 药丸之间的间隙 */
+const GAP = 6
 
 export function TabBar() {
   const tabs = useStore((s) => s.snapshot.tabs)
@@ -24,12 +28,18 @@ export function TabBar() {
   const containerRef = useRef<HTMLDivElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
   const [visibleCount, setVisibleCount] = useState(Number.MAX_SAFE_INTEGER)
+  const [hasOverflow, setHasOverflow] = useState(false)
 
   /**
    * 排不下的标签进「⋯」菜单。
    *
-   * 量法：所有标签都摆在一条不换行的行里（`overflow: hidden` 裁掉多余的），
-   * 逐个看它的右边缘有没有超出容器的可用宽度 —— 超出的第一个开始就是排不下的。
+   * 量法：把每个标签的自然宽度加起来，跟**可用宽度**比。
+   * 可用宽度要扣掉右侧固定占位的两个按钮（「⋯」「＋」）和它们之间的间隙 ——
+   * 早先只扣了「＋」，多算进来的那截正好是「⋯」的位置，
+   * 于是最后一个标签压在按钮底下，看着像「被挡住」。
+   *
+   * 「⋯」出现与否要先定下来再算宽度：不然「算宽度 → 出按钮 → 宽度变了 → 再算」会来回抖。
+   * 所以分两种情况各算一次，一次定死。
    */
   useLayoutEffect(() => {
     const strip = stripRef.current
@@ -38,30 +48,44 @@ export function TabBar() {
 
     function recompute(): void {
       if (!strip || !container) return
-      const children = [...strip.children] as HTMLElement[]
-      const limit = container.clientWidth - NEW_W
-      let count = children.length
-      for (let i = 0; i < children.length; i++) {
-        if (children[i].offsetLeft + children[i].offsetWidth > limit) {
-          count = i
-          break
-        }
+      const widths = ([...strip.children] as HTMLElement[]).map((el) => el.offsetWidth)
+      // 「＋」按钮 + 间隙：一直都在
+      let avail = container.clientWidth - NEW_W - GAP
+      const total = widths.reduce((sum, w) => sum + w + GAP, 0)
+
+      if (total <= avail) {
+        // 全部放得下 —— 不需要「⋯」
+        setHasOverflow(false)
+        setVisibleCount(widths.length)
+        return
       }
+      // 放不下 —— 「⋯」按钮也要占地方（它自己 + 间隙）
+      avail -= OVERFLOW_W + GAP
+      let used = 0
+      let count = 0
+      for (const width of widths) {
+        if (used + width + GAP > avail) break
+        used += width + GAP
+        count += 1
+      }
+      setHasOverflow(true)
       setVisibleCount(Math.max(1, count))
     }
 
     recompute()
     const observer = new ResizeObserver(recompute)
     observer.observe(container)
+    observer.observe(strip)
     return () => observer.disconnect()
-  }, [tabs.length])
+    // 标签的标题变了，宽度也跟着变 —— 得重量
+  }, [tabs.map((t) => `${t.title}|${t.projectName}`).join('\u0001')])
 
-  const hidden = visibleCount < tabs.length ? tabs.slice(visibleCount) : []
+  const hidden = hasOverflow && visibleCount < tabs.length ? tabs.slice(visibleCount) : []
   const projects = useProjects(conversations, tabs)
 
   return (
     <div ref={containerRef} className="shell-tabs">
-      <div ref={stripRef} className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+      <div ref={stripRef} className="shell-tabs-strip flex min-w-0 items-center overflow-hidden">
         {tabs.map((tab, index) => (
           <Tab
             key={tab.id}

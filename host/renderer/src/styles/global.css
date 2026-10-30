@@ -391,6 +391,20 @@
   gap: 6px;
   min-width: 0;
   flex: 1;
+  /*
+   * 这里不能裁（overflow: hidden）—— 下拉菜单（标签溢出菜单、「＋」的项目菜单）
+   * 是这一段的子元素，一裁就看不见了，「⋯」点了像没反应。
+   * 裁切交给里面那条 .shell-tabs-strip。
+   */
+  overflow: visible;
+}
+/* 裁切只在这一条上：排不下的标签在这里被裁掉，不影响外面的下拉菜单 */
+.shell-tabs-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
 }
 .shell-tabs .tab {
