@@ -140,7 +140,13 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .nav-v .nav-item{width:28px;height:26px;padding:0;justify-content:center}
 
 /* 窄导航栏（检视器收起时） */
-.insp-nav.rail-mode{width:38px;flex-direction:column;border-bottom:0;border-right:1px solid var(--hairline);height:100%}
+/* 收起态（方案 A）：右侧一条 38px 宽的窄轨，竖排图标 */
+.card.rail{flex:none;width:38px;background:var(--insp);border-left:1px solid var(--hairline);align-items:center;padding:6px 0;gap:2px}
+.card.rail .nav-item{width:28px;height:26px;padding:0;justify-content:center}
+/* 收起态（方案 B）：导航图标挤进标题栏右侧 */
+.tnav{display:flex;align-items:center;gap:1px;flex:none}
+.tnav .nav-item{width:24px;height:24px;padding:0;justify-content:center;font-size:10px}
+.subcap{font-size:11.5px;color:var(--fg-3);padding:16px 18px 0;font-weight:600}
 
 .hot{outline:2px solid var(--ok);outline-offset:-2px;position:relative}
 .hot::after{content:attr(data-hot);position:absolute;top:-8px;right:3px;background:var(--ok);color:#fff;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 4px;border-radius:3px;white-space:nowrap}
@@ -294,6 +300,57 @@ table.spec .mid{color:var(--warn);font-weight:600}
         </div>
       </div>
     </div>
+    <p class="subcap">检视器收起时 —— 导航栏变成右边一条 38px 的窄轨，入口位置不变</p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span><span class="proj">· Codelet</span></div>
+            <div class="pill"><span class="nm">类型声明生成</span><span class="proj">· pi-sdk</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side">
+            <div class="side-head">
+              <div class="side-title"><span class="nm">项目</span><span style="color:var(--fg-3);font-size:11px">⌃⌃</span><span style="color:var(--fg-3);font-size:11px">⚙</span></div>
+            </div>
+            <div class="side-body">
+              <div class="grp">Codelet <span class="cnt">3</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构<span class="t">2m</span></div>
+              <div class="crow"><span class="dot"></span>类型声明生成<span class="t">1h</span></div>
+              <div class="grp">pi-chat-box <span class="cnt">16</span></div>
+              <div class="crow">流式输出的三种写法<span class="t">20m</span></div>
+            </div>
+          </div>
+          <div class="card main">
+            <div class="main-body">
+              <div class="bubble" style="width:66%"></div>
+              <div class="bubble" style="width:82%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:56%"></div>
+              <div class="composer"></div>
+            </div>
+          </div>
+          <div class="card rail hot" data-hot="窄轨">
+            <div class="nav-item on"><span class="ico">▢</span></div>
+            <div class="nav-item"><span class="ico">▤</span></div>
+            <div class="nav-item"><span class="ico">◈</span></div>
+            <div class="nav-item"><span class="ico">‹›</span></div>
+            <div class="nav-item"><span class="ico">›_</span></div>
+          </div>
+        </div>
+        <div class="sbar">
+          <span>Codelet</span><span>session 01a18b42</span>
+          <span style="margin-left:auto">普通 · events 214 · Pi 就绪</span>
+        </div>
+      </div>
+    </div>
     <div class="verdict">
       <b>好处</b>：图标 + 文字，一眼认得出；5 项正好铺满面板宽度，不用换行；
       <b>检视器收起时导航还在</b>（变成窄轨），入口不会消失。<br>
@@ -359,6 +416,57 @@ table.spec .mid{color:var(--warn);font-weight:600}
               </div>
             </div>
             <div class="insp-body"><div class="icard"></div><div class="icard"></div></div>
+          </div>
+        </div>
+        <div class="sbar">
+          <span>Codelet</span><span>session 01a18b42</span>
+          <span style="margin-left:auto">普通 · events 214 · Pi 就绪</span>
+        </div>
+      </div>
+    </div>
+    <p class="subcap">检视器收起时 —— 导航栏整条消失，5 个入口临时挤到标题栏右侧</p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span><span class="proj">· Codelet</span></div>
+            <div class="pill"><span class="nm">类型声明生成</span><span class="proj">· pi-sdk</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tnav hot" data-hot="挤在这里">
+            <div class="nav-item on"><span class="ico">▢</span></div>
+            <div class="nav-item"><span class="ico">▤</span></div>
+            <div class="nav-item"><span class="ico">◈</span></div>
+            <div class="nav-item"><span class="ico">‹›</span></div>
+            <div class="nav-item"><span class="ico">›_</span></div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side">
+            <div class="side-head">
+              <div class="side-title"><span class="nm">项目</span><span style="color:var(--fg-3);font-size:11px">⌃⌃</span><span style="color:var(--fg-3);font-size:11px">⚙</span></div>
+            </div>
+            <div class="side-body">
+              <div class="grp">Codelet <span class="cnt">3</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构<span class="t">2m</span></div>
+              <div class="crow"><span class="dot"></span>类型声明生成<span class="t">1h</span></div>
+              <div class="grp">pi-chat-box <span class="cnt">16</span></div>
+              <div class="crow">流式输出的三种写法<span class="t">20m</span></div>
+            </div>
+          </div>
+          <div class="card main">
+            <div class="main-body">
+              <div class="bubble" style="width:66%"></div>
+              <div class="bubble" style="width:82%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:56%"></div>
+              <div class="composer"></div>
+            </div>
           </div>
         </div>
         <div class="sbar">
