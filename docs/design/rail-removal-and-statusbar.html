@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>去掉导航轨 · 状态栏到底层</title>
+<style>
+:root{
+  --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-code:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-xl:18px; --r-full:999px;
+  --dur:160ms; --ease:cubic-bezier(.4,0,.2,1);
+}
+[data-theme="light"]{
+  --canvas:#F4F4F5; --panel:#FBFBFB; --surface:#FFFFFF; --insp:#FAFAFA; --raised:#FFFFFF; --sunken:#F1F1F3;
+  --hairline:#ECECEE; --hairline-strong:#DEDEE2;
+  --fg-1:#1B1B19; --fg-2:#5C5C56; --fg-3:#94948C;
+  --accent:#1F1F1D; --accent-fg:#FFFFFF; --accent-wash:#EEEEF0; --accent-line:#DCDCE1;
+  --ok:#2E7D53; --warn:#9C6B15; --warn-wash:#FBF2DF; --info:#2563A8;
+  --bubble:#262625; --bubble-fg:#FAFAF9;
+  --sh-sm:0 1px 2px rgba(20,20,16,.04); --sh-md:0 8px 24px -8px rgba(20,20,16,.10);
+}
+[data-theme="dark"]{
+  --canvas:#131312; --panel:#181817; --surface:#1C1C1B; --insp:#191918; --raised:#242423; --sunken:#2A2A29;
+  --hairline:#2B2B29; --hairline-strong:#3B3B38;
+  --fg-1:#EDEDEB; --fg-2:#B4B4AD; --fg-3:#7D7D76;
+  --accent:#F0F0EC; --accent-fg:#151513; --accent-wash:#2A2A2C; --accent-line:#343430;
+  --ok:#5BD69A; --warn:#E5B75C; --warn-wash:#2A2113; --info:#6FAEF0;
+  --bubble:#F0F0EE; --bubble-fg:#171715;
+  --sh-sm:0 1px 2px rgba(0,0,0,.5); --sh-md:0 12px 30px -12px rgba(0,0,0,.65);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--canvas);color:var(--fg-1);font-family:var(--font-ui);font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+code{font-family:var(--font-code);font-size:11.5px;background:var(--accent-wash);padding:1px 5px;border-radius:var(--r-xs);color:var(--fg-2)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+
+.page{max-width:1200px;margin:0 auto;padding:0 28px 140px}
+.topbar{position:sticky;top:0;z-index:50;height:52px;display:flex;align-items:center;gap:14px;background:var(--panel);border-bottom:1px solid var(--hairline);margin:0 -28px;padding:0 28px}
+.brand{font-weight:600;letter-spacing:-.015em}
+.brand span{color:var(--fg-3);font-weight:400}
+.topbar .spacer{flex:1}
+.ghost-btn{height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--hairline);color:var(--fg-2);font-size:12px;transition:all var(--dur) var(--ease)}
+.ghost-btn:hover{color:var(--fg-1);border-color:var(--hairline-strong);background:var(--surface)}
+
+.head{padding:36px 0 8px}
+.head h1{font-size:23px;margin-bottom:10px;line-height:1.35}
+.head p{color:var(--fg-2);max-width:84ch}
+.head p + p{margin-top:10px}
+
+.facts{margin:26px 0 0;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);padding:16px 18px;max-width:1000px}
+.facts h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:10px}
+.facts ul{margin:0;padding-left:18px;color:var(--fg-2)}
+.facts li{margin-bottom:7px}
+.facts b{color:var(--fg-1);font-weight:600}
+
+.sec{margin:44px 0 0;font-size:17px;letter-spacing:-.015em}
+.secled{margin:8px 0 0;color:var(--fg-2);font-size:13px;max-width:88ch}
+
+.option{margin-top:26px;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+.option-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--hairline);background:var(--panel)}
+.option-head .tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--fg-3);border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:2px 8px;white-space:nowrap}
+.option-head .tag.rec{color:var(--ok);border-color:var(--ok)}
+.option-head h2{font-size:14.5px}
+.desc{padding:16px 18px 0;color:var(--fg-2);font-size:12.5px;max-width:90ch}
+.desc b{color:var(--fg-1)}
+.frame{padding:18px}
+.verdict{padding:0 18px 18px;color:var(--fg-2);font-size:12.5px;max-width:90ch}
+.verdict b{color:var(--fg-1)}
+.warn{color:var(--warn)}
+.good{color:var(--ok)}
+
+/* ============================================================
+   应用外壳
+   ============================================================ */
+.app{
+  position:relative;height:420px;background:var(--canvas);
+  border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;
+  display:flex;flex-direction:column;
+  --title:44px; --status:22px; --side:180px; --insp:242px; --gap:7px;
+}
+/* 标题栏：画布色，铺满整宽 */
+.t{flex:none;height:var(--title);display:flex;align-items:center;gap:8px;padding:0 11px}
+.traffic{display:flex;gap:6px;flex:none}
+.traffic i{width:10px;height:10px;border-radius:50%;display:block}
+.traffic i:nth-child(1){background:#FF5F57}.traffic i:nth-child(2){background:#FEBC2E}.traffic i:nth-child(3){background:#28C840}
+.tbtn{width:24px;height:24px;border-radius:var(--r-sm);color:var(--fg-3);display:flex;align-items:center;justify-content:center;font-size:11px;flex:none}
+.tbtn:hover{background:var(--sunken);color:var(--fg-2)}
+.tapp{font-size:12.5px;font-weight:600;color:var(--fg-1);white-space:nowrap}
+.pills{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
+.pill{display:flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:var(--r-sm);border:1px solid var(--hairline-strong);background:var(--sunken);color:var(--fg-2);font-size:11.5px;white-space:nowrap;max-width:170px}
+.pill.on{background:var(--surface);border-color:var(--accent-line);color:var(--fg-1)}
+.pill .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill .proj{font-size:9.5px;color:var(--fg-3);white-space:nowrap}
+.pill.add{width:24px;padding:0;justify-content:center;border-style:dashed;color:var(--fg-3)}
+
+/* 卡片区 */
+.deck{flex:1;min-height:0;display:flex;gap:var(--gap);padding:0 var(--gap) var(--gap)}
+.card{background:var(--surface);border:1px solid var(--hairline-strong);border-radius:var(--r-lg);overflow:hidden;min-width:0;min-height:0;display:flex;flex-direction:column}
+.card.side{flex:none;width:var(--side);background:var(--panel)}
+.card.main{flex:1}
+.card.insp{flex:none;width:var(--insp);background:var(--insp)}
+
+/* 侧栏 */
+.side-head{padding:9px 8px 0;flex:none}
+.side-title{display:flex;align-items:center;gap:4px;padding:0 4px 6px}
+.side-title .nm{flex:1;font-size:12.5px;font-weight:600;color:var(--fg-2)}
+.side-body{flex:1;overflow:hidden;padding:0 8px}
+.grp{display:flex;align-items:center;gap:5px;height:24px;padding:0 4px;font-size:11.5px;font-weight:600;color:var(--fg-1)}
+.grp .cnt{margin-left:auto;font-family:var(--font-code);font-size:9.5px;color:var(--fg-3);font-weight:400}
+.crow{display:flex;align-items:center;gap:5px;height:22px;padding:0 6px;border-radius:var(--r-sm);font-size:11.5px;color:var(--fg-2)}
+.crow.on{background:var(--accent-wash);color:var(--fg-1);font-weight:500}
+.crow .dot{width:5px;height:5px;border-radius:50%;background:var(--fg-3);flex:none}
+.crow .t{margin-left:auto;font-family:var(--font-code);font-size:9.5px;color:var(--fg-3)}
+
+/* 主区 */
+.main-body{flex:1;padding:11px 14px;position:relative;overflow:hidden}
+.bubble{height:8px;border-radius:4px;background:var(--sunken);margin-bottom:7px}
+.user-b{width:100px;height:18px;border-radius:9px;background:var(--fg-1);margin-left:auto;margin-bottom:9px}
+.composer{position:absolute;left:14px;right:14px;bottom:12px;height:50px;border:1px solid var(--hairline);border-radius:14px;background:var(--surface);box-shadow:var(--sh-sm)}
+
+/* 右侧：导航栏 + 面板 */
+.insp-nav{flex:none;border-bottom:1px solid var(--hairline);display:flex;align-items:center;background:var(--insp)}
+.insp-body{flex:1;padding:9px;overflow:hidden}
+.icard{height:32px;border:1px solid var(--hairline);border-radius:var(--r-sm);background:var(--surface);margin-bottom:6px}
+
+/* 状态栏：画布上，全宽，无背景 */
+.sbar{flex:none;height:var(--status);display:flex;align-items:center;gap:12px;padding:0 12px;font-family:var(--font-code);font-size:9.5px;color:var(--fg-3)}
+
+/* 导航栏的三种排法 */
+.nav-h{display:flex;align-items:center;gap:0;padding:4px 5px;width:100%}
+.nav-item{display:flex;align-items:center;gap:4px;height:24px;padding:0 6px;border-radius:var(--r-sm);color:var(--fg-3);font-size:10.5px;white-space:nowrap}
+.nav-item.on{background:var(--accent-wash);color:var(--fg-1);font-weight:600}
+.nav-item .ico{font-size:11px;line-height:1}
+
+.nav-icon-only .nav-item{padding:0;width:30px;justify-content:center}
+.nav-v{display:flex;flex-direction:column;gap:2px;padding:5px;width:38px}
+.nav-v .nav-item{width:28px;height:26px;padding:0;justify-content:center}
+
+/* 窄导航栏（检视器收起时） */
+.insp-nav.rail-mode{width:38px;flex-direction:column;border-bottom:0;border-right:1px solid var(--hairline);height:100%}
+
+.hot{outline:2px solid var(--ok);outline-offset:-2px;position:relative}
+.hot::after{content:attr(data-hot);position:absolute;top:-8px;right:3px;background:var(--ok);color:#fff;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 4px;border-radius:3px;white-space:nowrap}
+
+/* 层级示意 */
+.zstack{position:relative;height:210px;margin-top:10px}
+.z-layer{position:absolute;border-radius:var(--r-lg)}
+.z-l0{inset:0;background:#EDEEF0;border:1px dashed var(--hairline-strong)}
+.z-l1{left:14px;top:52px;right:14px;bottom:30px;background:var(--surface);border-top-left-radius:12px;box-shadow:var(--sh-md)}
+.z-cap{position:absolute;font-size:10px;color:var(--fg-3);font-family:var(--font-code);line-height:1.35}
+
+table.spec{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
+table.spec th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);font-weight:600;padding:9px 12px;background:var(--panel);border-bottom:1px solid var(--hairline)}
+table.spec td{padding:9px 12px;border-bottom:1px solid var(--hairline);color:var(--fg-2);vertical-align:top}
+table.spec tr:last-child td{border-bottom:none}
+table.spec td:first-child{color:var(--fg-1);font-weight:600}
+table.spec .ok{color:var(--ok);font-weight:600}
+table.spec .no{color:#B8342A;font-weight:600}
+table.spec .mid{color:var(--warn);font-weight:600}
+
+.rec-card{margin-top:26px;border:1px solid var(--ok);border-radius:var(--r-lg);background:var(--surface);padding:18px 20px;max-width:1000px}
+.rec-card h3{font-size:14.5px;color:var(--ok);margin-bottom:10px}
+.rec-card ol{margin:0;padding-left:20px;color:var(--fg-2)}
+.rec-card li{margin-bottom:7px}
+.rec-card p{margin-top:10px;color:var(--fg-2)}
+.rec-card b{color:var(--fg-1)}
+
+.note{margin-top:16px;border:1px solid var(--hairline);border-left:3px solid var(--info);border-radius:var(--r-sm);background:#E9F1FA;padding:12px 14px;color:var(--fg-2);font-size:12.5px;max-width:1000px}
+.note b{color:var(--fg-1)}
+.note ol{margin:6px 0 0;padding-left:20px}
+.note li{margin-bottom:5px}
+
+.api{margin-top:14px;border:1px solid var(--hairline);border-radius:var(--r-md);background:var(--canvas);padding:12px 14px;font-family:var(--font-code);font-size:11.5px;color:var(--fg-2);white-space:pre;overflow:auto;line-height:1.7}
+.api b{color:var(--fg-1);font-weight:600}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brand">去掉导航轨 <span>· 状态栏到底层</span></div>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="theme">切换明暗</button>
+  </div>
+
+  <div class="head">
+    <h1>轨没了，导航去哪</h1>
+    <p>
+      两件事：<strong>状态栏从卡片里提出来</strong>，铺满整宽写在画布上（不要背景）；
+      <strong>导航轨整个去掉</strong> —— logo 不要，主题/设置进标题栏右侧的「⋯」，
+      会话/看板/记忆/代码/终端挪到右侧面板顶部的一条导航栏里。
+    </p>
+    <p>
+      这份稿子主要比的是<b>右侧那条导航栏怎么排</b>，以及<b>检视器收起时它去哪</b> ——
+      后者是个真问题：导航入口不能因为收起面板就没了。
+    </p>
+  </div>
+
+  <div class="facts">
+    <h3>改动清单</h3>
+    <ul>
+      <li><b>状态栏</b>：从主区卡底部提到画布最底部，100% 宽，<b>不占卡片、不要背景</b>。</li>
+      <li><b>导航轨整条去掉</b>（56px 宽那一列消失，侧栏成为最左）。</li>
+      <li><b>logo（π）</b>去掉。</li>
+      <li><b>主题切换 + 设置</b> → 标题栏右侧「⋯」菜单里。</li>
+      <li><b>会话 / 看板 / 记忆 / 代码 / 终端</b> → 右侧面板顶部的一条导航栏。</li>
+    </ul>
+  </div>
+
+  <h2 class="sec">一 · 层级变化</h2>
+  <p class="secled">
+    状态栏从「浮板内部的一条」变成「写在背景上的一条」—— 跟标题栏对称，上下各一条边。
+  </p>
+  <div class="zstack">
+    <div class="z-layer z-l0"></div>
+    <div class="z-layer z-l1"></div>
+    <span class="z-cap" style="left:20px;top:18px">标题栏（画布上）</span>
+    <span class="z-cap" style="left:24px;top:60px">三张卡浮在画布上</span>
+    <span class="z-cap" style="left:20px;bottom:8px">状态栏（画布上，全宽，无背景）</span>
+  </div>
+
+  <h2 class="sec">二 · 三个方案</h2>
+  <p class="secled">
+    三个方案都遵守上面那五条改动。差的是<b>右侧导航栏的排法</b>，
+    以及<b>检视器收起时导航去哪</b>（这个每个方案都得回答）。
+  </p>
+
+  <!-- ============ A ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag rec">A · 推荐</span>
+      <h2>图标 + 文字横排；检视器收起时导航栏留在右边一条窄轨</h2>
+    </div>
+    <p class="desc">
+      导航栏横排在右侧面板顶部：图标 + 文字，5 项共约 300px，正好铺满 300px 宽的面板。
+      检视器收起时，导航栏<b>不跟着消失</b> —— 它变成右边一条 38px 的窄轨（竖排图标），
+      面板内容收起来。
+    </p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span><span class="proj">· Codelet</span></div>
+            <div class="pill"><span class="nm">类型声明生成</span><span class="proj">· pi-sdk</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side">
+            <div class="side-head">
+              <div class="side-title"><span class="nm">项目</span><span style="color:var(--fg-3);font-size:11px">⌃⌃</span><span style="color:var(--fg-3);font-size:11px">⚙</span></div>
+            </div>
+            <div class="side-body">
+              <div class="grp">Codelet <span class="cnt">3</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构<span class="t">2m</span></div>
+              <div class="crow"><span class="dot"></span>类型声明生成<span class="t">1h</span></div>
+              <div class="crow">扫描依赖关系<span class="t">1d</span></div>
+              <div class="grp">pi-chat-box <span class="cnt">16</span></div>
+              <div class="crow">流式输出的三种写法<span class="t">20m</span></div>
+            </div>
+          </div>
+          <div class="card main">
+            <div class="main-body">
+              <div class="bubble" style="width:66%"></div>
+              <div class="bubble" style="width:82%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:56%"></div>
+              <div class="composer"></div>
+            </div>
+          </div>
+          <div class="card insp">
+            <div class="insp-nav hot" data-hot="导航栏">
+              <div class="nav-h">
+                <div class="nav-item on"><span class="ico">▢</span>会话</div>
+                <div class="nav-item"><span class="ico">▤</span>看板</div>
+                <div class="nav-item"><span class="ico">◈</span>记忆</div>
+                <div class="nav-item"><span class="ico">‹›</span>代码</div>
+                <div class="nav-item"><span class="ico">›_</span>终端</div>
+              </div>
+            </div>
+            <div class="insp-body"><div class="icard"></div><div class="icard"></div></div>
+          </div>
+        </div>
+        <div class="sbar">
+          <span>Codelet</span><span>session 01a18b42</span>
+          <span style="margin-left:auto">普通 · events 214 · Pi 就绪</span>
+        </div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：图标 + 文字，一眼认得出；5 项正好铺满面板宽度，不用换行；
+      <b>检视器收起时导航还在</b>（变成窄轨），入口不会消失。<br>
+      <b>代价</b>：<span class="warn">要维护两种形态</span> —— 横排（面板展开）和竖排窄轨（面板收起），
+      两套图标尺寸和间距。收起时右边仍占 38px。
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">B</span>
+      <h2>纯图标横排；检视器收起时导航栏整条消失，入口挪到标题栏</h2>
+    </div>
+    <p class="desc">
+      导航栏只放图标（5 × 30px ≈ 160px，面板 300px 宽，左边留白）。
+      检视器收起时导航栏跟着消失，5 个入口临时挪到标题栏右侧（跟「⋯」并排）。
+    </p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span><span class="proj">· Codelet</span></div>
+            <div class="pill"><span class="nm">类型声明生成</span><span class="proj">· pi-sdk</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side">
+            <div class="side-head">
+              <div class="side-title"><span class="nm">项目</span><span style="color:var(--fg-3);font-size:11px">⌃⌃</span><span style="color:var(--fg-3);font-size:11px">⚙</span></div>
+            </div>
+            <div class="side-body">
+              <div class="grp">Codelet <span class="cnt">3</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构<span class="t">2m</span></div>
+              <div class="crow"><span class="dot"></span>类型声明生成<span class="t">1h</span></div>
+              <div class="grp">pi-chat-box <span class="cnt">16</span></div>
+              <div class="crow">流式输出的三种写法<span class="t">20m</span></div>
+            </div>
+          </div>
+          <div class="card main">
+            <div class="main-body">
+              <div class="bubble" style="width:66%"></div>
+              <div class="bubble" style="width:82%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:56%"></div>
+              <div class="composer"></div>
+            </div>
+          </div>
+          <div class="card insp">
+            <div class="insp-nav nav-icon-only hot" data-hot="导航栏">
+              <div class="nav-h">
+                <div class="nav-item on"><span class="ico">▢</span></div>
+                <div class="nav-item"><span class="ico">▤</span></div>
+                <div class="nav-item"><span class="ico">◈</span></div>
+                <div class="nav-item"><span class="ico">‹›</span></div>
+                <div class="nav-item"><span class="ico">›_</span></div>
+              </div>
+            </div>
+            <div class="insp-body"><div class="icard"></div><div class="icard"></div></div>
+          </div>
+        </div>
+        <div class="sbar">
+          <span>Codelet</span><span>session 01a18b42</span>
+          <span style="margin-left:auto">普通 · events 214 · Pi 就绪</span>
+        </div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="good">只有一种形态</span>，不用维护两套；导航栏只占 160px，右边留白。<br>
+      <b>代价</b>：<span class="warn">纯图标认不出</span>（「▤」是看板还是列表？只能靠悬停）；
+      <b>收起检视器后入口要搬家</b>到标题栏 —— 位置会跳，而且标题栏右侧已经有「⋯」和检视器开关，
+      再塞 5 个图标会很挤。
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">C</span>
+      <h2>图标 + 文字横排；检视器收起时导航栏缩成只有「当前项」</h2>
+    </div>
+    <p class="desc">
+      跟 A 一样横排。检视器收起时，导航栏不整条留下，也不搬家 ——
+      只留<b>当前那一项</b>（图标 + 文字）做成一个可点的胶囊，点开是一个列出全部 5 项的菜单。
+    </p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span><span class="proj">· Codelet</span></div>
+            <div class="pill"><span class="nm">类型声明生成</span><span class="proj">· pi-sdk</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side">
+            <div class="side-head">
+              <div class="side-title"><span class="nm">项目</span><span style="color:var(--fg-3);font-size:11px">⌃⌃</span><span style="color:var(--fg-3);font-size:11px">⚙</span></div>
+            </div>
+            <div class="side-body">
+              <div class="grp">Codelet <span class="cnt">3</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构<span class="t">2m</span></div>
+              <div class="crow"><span class="dot"></span>类型声明生成<span class="t">1h</span></div>
+              <div class="grp">pi-chat-box <span class="cnt">16</span></div>
+              <div class="crow">流式输出的三种写法<span class="t">20m</span></div>
+            </div>
+          </div>
+          <div class="card main">
+            <div class="main-body">
+              <div class="bubble" style="width:66%"></div>
+              <div class="bubble" style="width:82%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:56%"></div>
+              <div class="composer"></div>
+            </div>
+          </div>
+          <div class="card insp" style="width:120px">
+            <div class="insp-nav hot" data-hot="只剩当前项">
+              <div class="nav-h">
+                <div class="nav-item on" style="flex:1;justify-content:center"><span class="ico">▢</span>会话<span style="color:var(--fg-3);font-size:9px">▾</span></div>
+              </div>
+            </div>
+            <div class="insp-body"><div class="icard"></div></div>
+          </div>
+        </div>
+        <div class="sbar">
+          <span>Codelet</span><span>session 01a18b42</span>
+          <span style="margin-left:auto">普通 · events 214 · Pi 就绪</span>
+        </div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：收起时只占 120px（比 A 的 38px 宽，但比整条导航栏省）；
+      当前在哪一项一直看得见。<br>
+      <b>代价</b>：<span class="warn">收起时切视图要多点一次</span>（先点胶囊再选）。
+      而且面板收起后通常是想「腾地方」，留 120px 不算腾出来。
+    </div>
+  </section>
+
+  <h2 class="sec">三 · 三个方案比</h2>
+  <table class="spec">
+    <thead><tr><th>方案</th><th>认得出吗</th><th>收起检视器后</th><th>要维护几种形态</th><th>收起后右侧占宽</th></tr></thead>
+    <tbody>
+      <tr><td>A 图标+文字 · 收起成窄轨</td><td class="ok">一眼认得出</td><td class="ok">变成 38px 竖排窄轨</td><td class="mid">两种</td><td class="ok">38px</td></tr>
+      <tr><td>B 纯图标 · 收起后搬到标题栏</td><td class="no">只能靠悬停</td><td class="no">搬家到标题栏（位置会跳）</td><td class="ok">一种</td><td class="ok">0</td></tr>
+      <tr><td>C 图标+文字 · 收起成胶囊</td><td class="ok">一眼认得出</td><td class="mid">缩成当前项胶囊</td><td class="mid">两种</td><td class="no">120px</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rec-card">
+    <h3>推荐：A</h3>
+    <ol>
+      <li><b>图标 + 文字</b>。5 个入口里「看板 / 记忆 / 代码」光看图标分不出来，加文字才认得。</li>
+      <li><b>收起时留一条 38px 窄轨</b>，而不是搬家或者缩成胶囊 ——
+      入口<b>位置不变</b>（一直在右边），只是从横排变竖排。搬家的代价是「收起之后不知道去哪点」。</li>
+      <li>5 项 × (图标 + 文字 + padding) ≈ 300px，<b>正好铺满 300px 的面板</b>，不用换行也不用留白。</li>
+    </ol>
+    <p>
+      代价是维护两种形态（横排 / 竖排窄轨）。但这两个形态只差 <code>flex-direction</code> 和尺寸，
+      同一个组件加一个 <code>compact</code> 属性就能覆盖。
+    </p>
+  </div>
+
+  <div class="note">
+    <b>三个需要你确认的：</b>
+    <ol>
+      <li><b>「右侧边栏」我理解成现在的检视器</b>（Git / Agent 那块面板）。
+      如果你指的是别的，这条整个要重画。</li>
+      <li><b>导航栏放在检视器里，意味着「切视图」的入口在右边</b>。
+      主区在左边，视线要跨过整个窗口。要不要把导航栏也放到主区顶部？</li>
+      <li><b>状态栏不要背景</b> —— 那它跟画布同色。滚动条、卡片底边都贴着它，
+      要不要在它上面加一条极淡的分隔线，不然会和卡片粘在一起？</li>
+    </ol>
+  </div>
+
+  <h2 class="sec">四 · 要动的东西</h2>
+  <div class="api">host/renderer/src/styles/global.css
+.shell{
+  /* 轨那一列去掉；标题栏 + 卡片区 + 状态栏 三行 */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr) var(--statusbar-h);
+  grid-template-areas: 'title' 'deck' 'bar';
+}
+/* 状态栏：画布上，全宽，无背景 */
+.shell-bar{grid-area:bar;background:transparent}
+
+host/renderer/src/shell/
+- Rail.tsx               删掉
+  TitleBar.tsx          「⋯」菜单里加「主题 / 设置」
+  Inspector.tsx         顶部加导航栏（横排 / 窄轨两种形态）
+  StatusBar.tsx         从 MainArea 里挪回 App 的根
+
+host/renderer/src/App.tsx
+- &lt;Rail /&gt;                去掉
+  &lt;StatusBar /&gt;           从 MainArea 内部挪到这里（deck 之后）</div>
+
+  <h2 class="sec">五 · 这一稿不做</h2>
+  <table class="spec">
+    <thead><tr><th>项</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td>导航项的内容（看板/记忆/代码/终端到底显示什么）</td><td>它们现在都是「视图还没接」的占位。这轮只动外壳位置。</td></tr>
+      <tr><td>快捷键</td><td>导航没有快捷键，这轮不引入。</td></tr>
+      <tr><td>状态栏显示什么内容</td><td>还是那几项（Codelet / session / 模式 / events / Pi 状态），只换位置和背景。</td></tr>
+      <tr><td>侧栏和检视器的拖拽</td><td>轨去掉不影响拖拽手柄，它们的定位从「轨右边」改成「窗口左边」。</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">六 · 怎么算做对了</h2>
+  <table class="spec">
+    <thead><tr><th>#</th><th>标准</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>导航轨那一列彻底没有 —— 侧栏贴着窗口左边缘</td></tr>
+      <tr><td>2</td><td>状态栏铺满整宽、在最底部、<b>没有背景色</b>（跟画布同色）</td></tr>
+      <tr><td>3</td><td>状态栏不再属于任何一张卡片</td></tr>
+      <tr><td>4</td><td>logo 没了；主题切换和设置在标题栏「⋯」菜单里，能点</td></tr>
+      <tr><td>5</td><td>右侧面板顶部有导航栏，5 项都在，当前项高亮</td></tr>
+      <tr><td>6</td><td>点导航项，主区跟着换（现在是占位，也要能切）</td></tr>
+      <tr><td>7</td><td>收起检视器后导航入口还在（按选的方案）</td></tr>
+      <tr><td>8</td><td>拖拽手柄位置跟着轨消失调整，能正常拖</td></tr>
+      <tr><td>9</td><td>亮暗两套主题下，状态栏跟画布、卡片跟画布都分得清</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.getElementById('theme').addEventListener('click', () => {
+    const root = document.documentElement
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'
+  })
+</script>
+</body>
+</html>
