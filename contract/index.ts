@@ -18,8 +18,10 @@
 export const IPC = {
   /** 取一次完整快照 */
   snapshotGet: 'host:snapshot:get',
-  /** 系统目录选择器：打开新项目（在那儿开一个新标签） */
+  /** 系统目录选择器：打开新项目（加进清单 + 在那儿开一个新标签） */
   projectsOpen: 'host:projects:open',
+  /** 从清单里移除一个项目（对话文件不动） */
+  projectsRemove: 'host:projects:remove',
   /** 打开一个已有会话 → 开成新标签 */
   tabsOpen: 'host:tabs:open',
   /** 在某个目录里新建会话 → 开成新标签 */
@@ -109,6 +111,13 @@ export interface TabInfo {
   streaming: boolean
   /** runtime 建好了没（懒加载：恢复出来的标签先不建） */
   ready: boolean
+  /**
+   * 这个标签所属的项目已经从 Codelet 的项目清单里移除了。
+   *
+   * 标签还能点开、还能用 —— 移走的只是「这个项目出现在清单里」这件事，
+   * Pi 存的对话一个字都没动。
+   */
+  removed: boolean
   /** 这个标签用的模型 */
   model: ModelOption | null
   /** 恢复会话时没能恢复原模型的原因 */
@@ -171,7 +180,13 @@ export interface HostSnapshot {
   tabs: TabInfo[]
   /** 当前活动的标签 */
   activeTabId: string | null
-  /** 全部项目的对话列表（按修改时间倒序） */
+  /**
+   * 用户选的项目清单（PLAN.md D4 修订）。
+   *
+   * 侧栏只列这些项目的会话 —— 不是 Pi 聊过的所有项目。
+   */
+  projects: ProjectInfo[]
+  /** 清单里这些项目的对话列表（按修改时间倒序） */
   conversations: ConversationInfo[]
   /**
    * **活动标签**的会话状态。
@@ -274,8 +289,14 @@ export interface CodeletApi {
   readonly platform: string
   /** 取一次完整快照 */
   getSnapshot(): Promise<HostSnapshot>
-  /** 打开项目（系统目录选择器）→ 在那儿开一个新标签 */
+  /** 打开项目（系统目录选择器）→ 加进清单 → 在那儿开一个新标签 */
   openProject(): Promise<HostSnapshot>
+  /**
+   * 从清单里移除一个项目。
+   *
+   * **Pi 存的对话不动** —— 只是这个目录不再出现在清单里。
+   */
+  removeProject(path: string): Promise<HostSnapshot>
   /** 打开一个已有会话 → 开成新标签 */
   openConversation(path: string, cwd: string): Promise<HostSnapshot>
   /** 在某个目录里新建会话 → 开成新标签 */

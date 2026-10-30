@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { HostState } from '../host/main/state'
+import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
 import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
 import type { HostSnapshot, ModelOption, StreamItem } from '@contract/index'
@@ -92,8 +93,11 @@ class FakePi implements PiRuntimePort {
 describe('宿主状态：新会话要自己出现在对话列表里', () => {
   it('发完第一条消息后，新会话就进列表 —— 不用切别的会话才冒出来', async () => {
     const tabStore = new TabStore(join(AGENT_DIR, 'tabs.json'))
+    // 会话清单只列**清单里的项目** —— 把测试用的目录加进去
+    const projects = new ProjectStore(join(AGENT_DIR, 'projects.json'))
+    projects.add(CWD)
     const pi = new FakePi()
-    const state = new HostState({ pi, tabStore })
+    const state = new HostState({ pi, tabStore, projects })
 
     const snapshots: string[][] = []
     state.on('snapshot', (snapshot: HostSnapshot) => {

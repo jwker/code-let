@@ -9,6 +9,7 @@ import {
 import {
   clipboardWriteSchema,
   modelSelectSchema,
+  projectPathSchema,
   promptSchema,
   tabIdSchema,
   tabNewSchema,
@@ -90,6 +91,12 @@ export function registerIpc(state: HostState): () => void {
     return state.snapshot()
   })
 
+  ipcMain.handle(IPC.projectsRemove, async (_event, payload: unknown) => {
+    const { path } = projectPathSchema.parse(payload)
+    await state.removeProject(path)
+    return state.snapshot()
+  })
+
   ipcMain.handle(IPC.tabsOpen, async (_event, payload: unknown) => {
     const { path, cwd } = tabOpenSchema.parse(payload)
     await state.openConversation(path, cwd)
@@ -145,6 +152,7 @@ export function registerIpc(state: HostState): () => void {
     coalescer.dispose()
     ipcMain.removeHandler(IPC.snapshotGet)
     ipcMain.removeHandler(IPC.projectsOpen)
+    ipcMain.removeHandler(IPC.projectsRemove)
     ipcMain.removeHandler(IPC.tabsOpen)
     ipcMain.removeHandler(IPC.tabsNew)
     ipcMain.removeHandler(IPC.tabsActivate)

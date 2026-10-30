@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { HostState } from '../host/main/state'
+import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
 import { PiRuntime } from '../host/main/pi/runtime'
 import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
@@ -86,8 +87,8 @@ class FakePi implements PiRuntimePort {
  * `init()` 会开一个「退路标签」—— 接着最近的那个会话，没有会话就在当前目录里开新的。
  * 这里要的是空标签栏，所以先把它关掉。
  */
-async function emptyState(pi: FakePi, store: TabStore): Promise<HostState> {
-  const state = new HostState({ pi, tabStore: store })
+async function emptyState(pi: FakePi, store: TabStore, projects: ProjectStore): Promise<HostState> {
+  const state = new HostState({ pi, tabStore: store, projects })
   await state.init()
   for (const tab of state.snapshot().tabs) {
     await state.closeTab(tab.id)
@@ -99,8 +100,11 @@ describe('宿主状态：关掉正在跑的标签', () => {
   it('标签从列表里去掉，快照里也不再是 streaming', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'codelet-tabclose-'))
     const store = new TabStore(join(dir, 'tabs.json'))
+    // 项目清单：会话清单只列清单里的项目
+    const projects = new ProjectStore(join(dir, 'projects.json'))
+    projects.add(dir)
     const pi = new FakePi()
-    const state = await emptyState(pi, store)
+    const state = await emptyState(pi, store, projects)
     await state.newConversation(dir)
     const tab = state.snapshot().tabs[0]
     pi.markStreaming(tab.id)
@@ -120,8 +124,11 @@ describe('宿主状态：关掉正在跑的标签', () => {
   it('关掉活动标签 → 活动标签落到相邻的一个，并且激活它', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'codelet-tabclose-'))
     const store = new TabStore(join(dir, 'tabs.json'))
+    // 项目清单：会话清单只列清单里的项目
+    const projects = new ProjectStore(join(dir, 'projects.json'))
+    projects.add(dir)
     const pi = new FakePi()
-    const state = await emptyState(pi, store)
+    const state = await emptyState(pi, store, projects)
     await state.newConversation(dir)
     await state.newConversation(dir)
     await state.newConversation(dir)
@@ -145,8 +152,11 @@ describe('宿主状态：关掉正在跑的标签', () => {
   it('关掉的不是活动标签 → 活动标签不动', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'codelet-tabclose-'))
     const store = new TabStore(join(dir, 'tabs.json'))
+    // 项目清单：会话清单只列清单里的项目
+    const projects = new ProjectStore(join(dir, 'projects.json'))
+    projects.add(dir)
     const pi = new FakePi()
-    const state = await emptyState(pi, store)
+    const state = await emptyState(pi, store, projects)
     await state.newConversation(dir)
     await state.newConversation(dir)
     const tabs = state.snapshot().tabs
@@ -165,8 +175,11 @@ describe('宿主状态：关掉正在跑的标签', () => {
     const dir = mkdtempSync(join(tmpdir(), 'codelet-tabclose-'))
     const file = join(dir, 'tabs.json')
     const store = new TabStore(file)
+    // 项目清单：会话清单只列清单里的项目
+    const projects = new ProjectStore(join(dir, 'projects.json'))
+    projects.add(dir)
     const pi = new FakePi()
-    const state = await emptyState(pi, store)
+    const state = await emptyState(pi, store, projects)
     await state.newConversation(dir)
     const tab = state.snapshot().tabs[0]
     await state.closeTab(tab.id)
