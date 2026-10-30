@@ -126,8 +126,17 @@ function Tab({ tab, active, clipped }: { tab: TabInfo; active: boolean; clipped:
         >
           {tab.title}
         </span>
-        <span className="max-w-[78px] flex-none truncate border-l border-hairline-strong pl-1.5 text-[9.5px] text-fg-3">
-          {tab.projectName}
+        {/*
+          项目标识用中间点，不画竖线。
+          竖线跟标签之间的分隔线（border-r）挨着会读成双竖线 ——
+          标签里只剩一条竖线时，它就只表示「标签边界」，不再有歧义。
+          中间点也是应用里已有的分隔语言（元信息行、摘要行都用「·」）。
+        */}
+        <span className="flex flex-none items-center gap-1 text-[9.5px] text-fg-3">
+          <span aria-hidden="true" className="text-[11px] leading-none opacity-70">
+            ·
+          </span>
+          <span className="max-w-[78px] truncate">{tab.projectName}</span>
         </span>
         <span
           role="button"
