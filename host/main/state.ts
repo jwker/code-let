@@ -85,6 +85,13 @@ export class HostState extends EventEmitter {
   private refreshToken = 0
   /** 标签 id 的序号 —— 宿主自己发，与会话 id 解耦 */
   private tabSeq = 0
+  /**
+   * 正在进行的重读操作数。
+   *
+   * 用计数不用布尔：会话列表刷新和标签重载可能同时发生，
+   * 布尔会在第一个结束时就把「刷新中」关掉。
+   */
+  private pendingRefreshes = 0
   /** init() 跑完了没 —— 没跑完之前不响应焦点刷新（init 自己会读一次） */
   private initialized = false
   /** 窗口上次失去焦点的时刻 —— 回来时用「离开多久」决定要不要重读 */
@@ -115,6 +122,7 @@ export class HostState extends EventEmitter {
       activeTabId: this.activeTabId,
       projects: this.projects.list(),
       conversations: this.conversations,
+      refreshing: this.pendingRefreshes > 0,
       session: this.session
     }
   }
@@ -381,7 +389,28 @@ export class HostState extends EventEmitter {
    * 它要读并解析每一个 jsonl —— 实测 38 个会话 212ms，随会话数线性增长。
    * 所以用 `onProgress` 分段出结果：先给一部分，别让侧栏干等。
    */
+  /**
+   * 包一层：进出都改一次计数并推快照 —— 渲染进程靠它显示「刷新中」。
+   *
+   * 只包真正读盘的操作（重读会话列表、重建 runtime）。
+   * `readSession()` 那种读内存的微秒级操作不包，显示出来只会闪。
+   */
+  private async trackRefresh<T>(run: () => Promise<T>): Promise<T> {
+    this.pendingRefreshes += 1
+    this.push()
+    try {
+      return await run()
+    } finally {
+      this.pendingRefreshes -= 1
+      this.push()
+    }
+  }
+
   async refreshConversations(): Promise<void> {
+    await this.trackRefresh(() => this.readConversations())
+  }
+
+  private async readConversations(): Promise<void> {
     const token = ++this.refreshToken
     try {
       // 只读用户选中的那几个项目的目录 —— 不是 Pi 聊过的所有项目
@@ -454,7 +483,7 @@ export class HostState extends EventEmitter {
   async reloadTab(tabId: string): Promise<void> {
     const tab = this.tabs.find((t) => t.id === tabId)
     if (!tab) return
-    await this.pi.reloadTab(tabId)
+    await this.trackRefresh(() => this.pi.reloadTab(tabId))
     // 重建后路径可能变了（原来是「没说过话的空标签」的话）
     const state = this.pi.tabState(tabId)
     if (state.sessionFile) tab.path = state.sessionFile

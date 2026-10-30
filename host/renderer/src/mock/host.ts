@@ -223,6 +223,7 @@ export function createMockApi(): CodeletApi {
       activeTabId,
       projects,
       conversations,
+      refreshing: false,
       session: {
         ready: Boolean(active),
         cwd: active?.cwd ?? null,
