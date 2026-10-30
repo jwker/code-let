@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>外壳重排 · 一整块浮板</title>
+<title>外壳布局 · 参考 pi-web</title>
 <style>
 :root{
   --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
@@ -12,20 +12,23 @@
   --dur:160ms; --ease:cubic-bezier(.4,0,.2,1);
 }
 [data-theme="light"]{
-  --canvas:#F4F4F5; --panel:#FBFBFB; --surface:#FFFFFF; --insp:#FAFAFA; --raised:#FFFFFF; --sunken:#F1F1F3;
-  --hairline:#ECECEE; --hairline-strong:#DEDEE2;
+  /* 参考图量出来的值 */
+  --canvas:#FAFAFA; --card:#FFFFFF; --card-edge:#D6D6D6; --card-line:#E5E5E5;
+  --pill:#E6E6E7; --pill-edge:#DBDBDB;
+  --sunken:#F3F3F4; --insp:#FCFCFC;
   --fg-1:#1B1B19; --fg-2:#5C5C56; --fg-3:#94948C;
   --accent:#1F1F1D; --accent-fg:#FFFFFF; --accent-wash:#EEEEF0;
-  --ok:#2E7D53; --warn:#9C6B15; --info:#2563A8;
-  --sh-md:0 8px 24px -8px rgba(20,20,16,.10); --sh-lg:0 24px 60px -20px rgba(20,20,16,.18);
+  --ok:#2E7D53; --info:#2563A8;
+  --sh-sm:0 1px 2px rgba(20,20,16,.05); --sh-md:0 8px 24px -8px rgba(20,20,16,.12);
 }
 [data-theme="dark"]{
-  --canvas:#131312; --panel:#181817; --surface:#1C1C1B; --insp:#191918; --raised:#242423; --sunken:#2A2A29;
-  --hairline:#2B2B29; --hairline-strong:#3B3B38;
+  --canvas:#131312; --card:#1C1C1B; --card-edge:#33332F; --card-line:#2B2B29;
+  --pill:#262625; --pill-edge:#3B3B38;
+  --sunken:#242423; --insp:#191918;
   --fg-1:#EDEDEB; --fg-2:#B4B4AD; --fg-3:#7D7D76;
   --accent:#F0F0EC; --accent-fg:#151513; --accent-wash:#2A2A2C;
-  --ok:#5BD69A; --warn:#E5B75C; --info:#6FAEF0;
-  --sh-md:0 12px 30px -12px rgba(0,0,0,.65); --sh-lg:0 30px 72px -26px rgba(0,0,0,.8);
+  --ok:#5BD69A; --info:#6FAEF0;
+  --sh-sm:0 1px 2px rgba(0,0,0,.4); --sh-md:0 12px 30px -12px rgba(0,0,0,.6);
 }
 *,*::before,*::after{box-sizing:border-box}
 html,body{margin:0;padding:0}
@@ -36,30 +39,30 @@ code{font-family:var(--font-mono);font-size:11.5px;background:var(--accent-wash)
 button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 
 .page{max-width:1180px;margin:0 auto;padding:0 28px 140px}
-.topbar{position:sticky;top:0;z-index:50;height:52px;display:flex;align-items:center;gap:14px;background:var(--panel);border-bottom:1px solid var(--hairline);margin:0 -28px;padding:0 28px}
+.topbar{position:sticky;top:0;z-index:50;height:52px;display:flex;align-items:center;gap:14px;background:var(--card);border-bottom:1px solid var(--card-line);margin:0 -28px;padding:0 28px}
 .brand{font-weight:600;letter-spacing:-.015em}
 .brand span{color:var(--fg-3);font-weight:400}
 .topbar .spacer{flex:1}
-.ghost-btn{height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--hairline);color:var(--fg-2);font-size:12px;transition:all var(--dur) var(--ease)}
-.ghost-btn:hover{color:var(--fg-1);border-color:var(--hairline-strong);background:var(--surface)}
+.ghost-btn{height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--card-line);color:var(--fg-2);font-size:12px;transition:all var(--dur) var(--ease)}
+.ghost-btn:hover{color:var(--fg-1);border-color:var(--card-edge);background:var(--canvas)}
 
 .head{padding:36px 0 8px}
 .head h1{font-size:23px;margin-bottom:10px;line-height:1.35}
-.head p{color:var(--fg-2);max-width:82ch}
+.head p{color:var(--fg-2);max-width:84ch}
 .head p + p{margin-top:10px}
 
-.facts{margin:26px 0 0;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);padding:16px 18px;max-width:980px}
+.facts{margin:26px 0 0;border:1px solid var(--card-line);border-radius:var(--r-lg);background:var(--card);padding:16px 18px;max-width:980px}
 .facts h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:10px}
 .facts ul{margin:0;padding-left:18px;color:var(--fg-2)}
-.facts li{margin-bottom:8px}
+.facts li{margin-bottom:7px}
 .facts b{color:var(--fg-1);font-weight:600}
 
 .sec{margin:44px 0 0;font-size:17px;letter-spacing:-.015em}
-.secled{margin:8px 0 0;color:var(--fg-2);font-size:13px;max-width:84ch}
+.secled{margin:8px 0 0;color:var(--fg-2);font-size:13px;max-width:86ch}
 
-.option{margin-top:26px;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
-.option-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--hairline);background:var(--panel)}
-.option-head .tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--fg-3);border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:2px 8px;white-space:nowrap}
+.option{margin-top:26px;border:1px solid var(--card-line);border-radius:var(--r-lg);background:var(--card);overflow:hidden}
+.option-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--card-line);background:var(--canvas)}
+.option-head .tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--fg-3);border:1px solid var(--card-edge);border-radius:var(--r-full);padding:2px 8px;white-space:nowrap}
 .option-head .tag.rec{color:var(--ok);border-color:var(--ok)}
 .option-head h2{font-size:14.5px}
 .desc{padding:16px 18px 0;color:var(--fg-2);font-size:12.5px;max-width:88ch}
@@ -67,209 +70,231 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
 .frame{padding:18px}
 .verdict{padding:0 18px 18px;color:var(--fg-2);font-size:12.5px;max-width:88ch}
 .verdict b{color:var(--fg-1)}
-.warn{color:var(--warn)}
+.warn{color:#9C6B15}
 .good{color:var(--ok)}
 
 /* ============================================================
-   外壳示意
+   应用外壳（照参考图的比例）
    ============================================================ */
-.win{
-  --rail:44px; --title:40px; --status:20px; --side:186px; --insp:206px;
-  position:relative;display:grid;
-  grid-template-columns:var(--rail) minmax(0,1fr);
-  grid-template-rows:var(--title) minmax(0,1fr);
-  grid-template-areas:"chrome chrome" "rail panel";
-  height:400px;background:var(--canvas);border:1px solid var(--hairline-strong);border-radius:var(--r-lg);overflow:hidden;
+.app{
+  --rail:44px; --title:44px; --gap:7px; --side:196px; --insp:210px;
+  position:relative;height:392px;
+  background:var(--canvas);
+  border:1px solid var(--card-line);border-radius:var(--r-lg);overflow:hidden;
 }
-/* 标题栏：底槽色，横跨全宽 */
-.chrome{grid-area:chrome;display:grid;grid-template-columns:var(--rail) var(--side) minmax(0,1fr) var(--insp);align-items:center;background:var(--canvas)}
-.tl-traffic{grid-column:1;display:flex;align-items:center;gap:5px;padding-left:11px}
-.tl-traffic i{width:9px;height:9px;border-radius:50%;background:var(--hairline-strong);display:block}
-.tl-left{grid-column:2;display:flex;align-items:center;gap:8px;padding:0 10px;min-width:0}
-.tl-tabs{grid-column:3;display:flex;align-items:stretch;height:100%;min-width:0;overflow:hidden}
-.tl-right{grid-column:4;display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:0 10px}
-.tl-btn{width:22px;height:22px;border-radius:var(--r-sm);border:1px solid var(--hairline-strong);display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:10px;flex:none}
-.tl-title{font-size:12px;font-weight:600;color:var(--fg-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 标题栏：画布色，铺满整宽 */
+.title{position:absolute;left:0;right:0;top:0;height:var(--title);display:flex;align-items:center;gap:9px;padding:0 11px}
+.traffic{display:flex;gap:6px;flex:none}
+.traffic i{width:10px;height:10px;border-radius:50%;display:block}
+.traffic i:nth-child(1){background:#FF5F57}.traffic i:nth-child(2){background:#FEBC2E}.traffic i:nth-child(3){background:#28C840}
+.tbtn{width:22px;height:22px;border-radius:var(--r-sm);color:var(--fg-3);display:flex;align-items:center;justify-content:center;font-size:11px;flex:none}
+.tbtn:hover{background:var(--sunken);color:var(--fg-2)}
 
-/* 导航轨：底槽色，100% 高 */
-.rail{grid-area:rail;background:var(--canvas);display:flex;flex-direction:column;align-items:center;gap:7px;padding-top:14px}
+/* 标签药丸 */
+.pills{display:flex;align-items:center;gap:6px;min-width:0}
+.pill{display:flex;align-items:center;gap:6px;height:24px;padding:0 10px 0 4px;border-radius:var(--r-sm);border:1px solid var(--pill-edge);background:var(--pill);color:var(--fg-1);font-size:11.5px;white-space:nowrap;max-width:190px}
+.pill.on{background:var(--card);border-color:var(--card-edge)}
+.pill .mk{width:15px;height:15px;border-radius:4px;background:var(--fg-1);color:var(--card);font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.pill .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill .x{width:14px;height:14px;border-radius:4px;color:var(--fg-3);font-size:10px;display:flex;align-items:center;justify-content:center;flex:none}
+.pill .x:hover{background:var(--sunken);color:var(--fg-1)}
+.pill.add{width:24px;padding:0;justify-content:center;border-style:dashed;color:var(--fg-3)}
+
+/* 导航轨：画布色，100% 高 */
+.rail{position:absolute;left:0;top:var(--title);bottom:0;width:var(--rail);display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:11px}
 .rail i{display:block;width:15px;height:15px;border:1.5px solid var(--fg-3);border-radius:4px;opacity:.45}
-.rail i.on{background:var(--accent);border-color:var(--accent);opacity:1}
+.rail i.on{background:var(--fg-1);border-color:var(--fg-1);opacity:1}
 
-/* 大浮板：一整块 */
-.panel{grid-area:panel;position:relative;background:var(--surface);border-top-left-radius:12px;overflow:hidden;display:grid;
-  grid-template-columns:var(--side) minmax(0,1fr) var(--insp);
-  grid-template-rows:minmax(0,1fr) auto;}
-.panel.three{grid-template-columns:var(--side) minmax(0,1fr) var(--insp);grid-template-rows:minmax(0,1fr) auto}
-.z-side{grid-column:1;grid-row:1;background:var(--panel);border-right:1px solid var(--hairline);padding:11px 9px;font-size:11px;color:var(--fg-3);min-width:0;overflow:hidden}
-.z-main{grid-column:2;grid-row:1;padding:12px 16px;min-width:0;overflow:hidden}
-.z-insp{grid-column:3;grid-row:1;background:var(--insp);border-left:1px solid var(--hairline);padding:11px;font-size:11px;color:var(--fg-3);min-width:0;overflow:hidden}
-.z-status{grid-column:2 / 4;grid-row:2;display:flex;align-items:center;gap:12px;padding:0 16px;border-top:1px solid var(--hairline);font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3)}
-/* 变体：状态栏移到标题栏右侧 */
-.win.status-in-chrome .z-status{display:none}
-.win.status-in-chrome .chrome{grid-template-columns:var(--rail) var(--side) minmax(0,1fr) auto}
-.win.status-in-chrome .tl-right{grid-column:4;background:var(--canvas);gap:14px}
-.win.status-in-chrome .tl-status{font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3);white-space:nowrap}
+/* 卡片区 */
+.deck{position:absolute;left:calc(var(--rail) + var(--gap));right:var(--gap);top:var(--title);bottom:var(--gap);display:flex;gap:var(--gap)}
+.card{background:var(--card);border:1px solid var(--card-edge);border-radius:var(--r-lg);overflow:hidden;position:relative;min-width:0;display:flex}
+.card.side{flex:none;width:var(--side);flex-direction:column}
+.card.one{flex:1;flex-direction:row}
+.card.main{flex:1}
+.card.insp{flex:none;width:var(--insp);flex-direction:column}
+.card .zone-side{flex:none;width:var(--side);border-right:1px solid var(--card-line);padding:9px 8px;overflow:hidden}
+.card .zone-main{flex:1;padding:11px 14px;min-width:0;overflow:hidden;position:relative}
+.card .zone-insp{flex:1;padding:10px;overflow:hidden;background:var(--insp)}
+.card.split .zone-insp{border-left:1px solid var(--card-line)}
 
-/* 标签 */
-.tab{display:flex;max-width:180px;flex:none;align-items:center;gap:6px;padding:0 10px;font-size:11px;color:var(--fg-2);white-space:nowrap}
-.tab.on{background:var(--surface);color:var(--fg-1);border-radius:var(--r-sm) var(--r-sm) 0 0}
-.tab .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
-.tab .proj{font-size:9.5px;color:var(--fg-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:74px}
-.tab .x{width:14px;height:14px;flex:none;border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:10px}
-.tabbar-rail{width:26px;flex:none;display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-size:13px}
+/* 两张卡的分割（方案 B） */
+.deck.two .card.left{flex:1;display:flex}
+.deck.two .zone-side{flex:none;width:var(--side);border-right:1px solid var(--card-line);padding:9px 8px}
 
-/* 主区内容示意 */
+/* 内容示意 */
+.crow{height:20px;border-radius:var(--r-sm);padding:2px 5px;margin-bottom:2px;display:flex;gap:5px;align-items:center;color:var(--fg-2);font-size:11px}
+.crow.on{background:var(--accent-wash);color:var(--fg-1);font-weight:500}
+.crow .dot{width:5px;height:5px;border-radius:50%;background:var(--fg-3);flex:none}
+.crow .t{margin-left:auto;font-family:var(--font-mono);font-size:9.5px;color:var(--fg-3)}
+.grp{font-size:10px;color:var(--fg-3);margin:8px 0 3px;display:flex;align-items:center;gap:4px}
 .bubble{height:9px;border-radius:5px;background:var(--sunken);margin-bottom:8px}
-.user-bubble{width:120px;height:22px;border-radius:10px;background:var(--fg-1);margin-left:auto;margin-bottom:10px}
-.meta{width:150px;height:20px;border:1px solid var(--hairline);border-radius:var(--r-full);margin-top:12px}
-.composer{position:absolute;left:16px;right:16px;bottom:14px;height:56px;border:1px solid var(--hairline);border-radius:14px;background:var(--surface);box-shadow:var(--sh-md)}
-.composer .chip{position:absolute;left:12px;bottom:9px;height:16px;border:1px solid var(--hairline);border-radius:var(--r-full);padding:0 7px;font-size:9.5px;color:var(--fg-3);display:flex;align-items:center}
-.composer .send{position:absolute;right:10px;bottom:9px;width:20px;height:20px;border-radius:50%;background:var(--hairline-strong)}
-.side-item{height:20px;border-radius:var(--r-sm);padding:2px 5px;margin-bottom:2px;display:flex;gap:5px;align-items:center;color:var(--fg-2);font-size:11px}
-.side-item.on{background:var(--accent-wash);color:var(--fg-1);font-weight:500}
-.side-item .dot{width:5px;height:5px;border-radius:50%;background:var(--fg-3);flex:none}
-.insp-card{height:38px;border:1px solid var(--hairline);border-radius:var(--r-sm);background:var(--surface);margin-bottom:7px}
+.user-b{width:110px;height:20px;border-radius:10px;background:var(--fg-1);margin-left:auto;margin-bottom:10px}
+.composer{position:absolute;left:14px;right:14px;bottom:12px;height:52px;border:1px solid var(--card-line);border-radius:14px;background:var(--card);box-shadow:var(--sh-sm)}
+.composer .chip{position:absolute;left:10px;bottom:8px;height:15px;border:1px solid var(--card-line);border-radius:var(--r-full);padding:0 6px;font-size:9px;color:var(--fg-3);display:flex;align-items:center}
+.composer .send{position:absolute;right:9px;bottom:8px;width:19px;height:19px;border-radius:50%;background:var(--sunken)}
+.icard{height:34px;border:1px solid var(--card-line);border-radius:var(--r-sm);background:var(--card);margin-bottom:6px}
 
-/* Z 层级示意 */
-.zstack{position:relative;height:250px;margin-top:10px}
-.z-layer{position:absolute;border-radius:var(--r-lg)}
-.z-l0{inset:0;background:#EDEEF0;border:1px dashed var(--hairline-strong);border-radius:var(--r-lg)}
-.z-l1{left:96px;top:44px;right:16px;bottom:16px;background:var(--surface);border-top-left-radius:12px;box-shadow:var(--sh-md)}
-.z-l2a{left:0;top:0;width:96px;bottom:0;background:var(--canvas);border-right:1px dashed var(--hairline-strong);border-radius:var(--r-lg) 0 0 var(--r-lg)}
-.z-l2b{left:0;top:0;right:0;height:44px;background:var(--canvas);border-bottom:1px dashed var(--hairline-strong);border-radius:var(--r-lg) var(--r-lg) 0 0}
-.z-cap{position:absolute;font-size:10px;color:var(--fg-3);font-family:var(--font-mono);line-height:1.35}
+/* 参考图结构对照 */
+.ref{display:flex;gap:10px;align-items:flex-start;margin-top:12px;flex-wrap:wrap}
+.refbox{width:250px;border:1px solid var(--card-line);border-radius:var(--r-md);overflow:hidden;background:var(--card)}
+.refcap{font-size:11px;color:var(--fg-3);margin-bottom:6px}
+.refapp{position:relative;height:150px;background:var(--canvas);padding:0}
+.reftitle{height:16px;display:flex;align-items:center;gap:4px;padding:0 5px}
+.reftitle .pillmini{width:60px;height:10px;border-radius:3px;background:var(--pill);border:1px solid var(--pill-edge)}
+.reftitle .tmini{width:9px;height:9px;border-radius:50%;background:#FF5F57}
+.refrow{position:absolute;left:5px;right:5px;top:20px;bottom:5px;display:flex;gap:5px}
+.refcard{background:var(--card);border:1px solid var(--card-edge);border-radius:6px;flex:1}
+.refcard.right{flex:none;width:38%}
 
-table.spec{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
-table.spec th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);font-weight:600;padding:9px 12px;background:var(--panel);border-bottom:1px solid var(--hairline)}
-table.spec td{padding:9px 12px;border-bottom:1px solid var(--hairline);color:var(--fg-2);vertical-align:top}
+table.spec{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;border:1px solid var(--card-line);border-radius:var(--r-lg);overflow:hidden;background:var(--card)}
+table.spec th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);font-weight:600;padding:9px 12px;background:var(--canvas);border-bottom:1px solid var(--card-line)}
+table.spec td{padding:9px 12px;border-bottom:1px solid var(--hairline,var(--card-line));color:var(--fg-2);vertical-align:top}
 table.spec tr:last-child td{border-bottom:none}
 table.spec td:first-child{color:var(--fg-1);font-weight:600}
-table.spec .mid{color:var(--warn);font-weight:600}
 table.spec .ok{color:var(--ok);font-weight:600}
 table.spec .no{color:#B8342A;font-weight:600}
 
-.rec-card{margin-top:26px;border:1px solid var(--ok);border-radius:var(--r-lg);background:var(--surface);padding:18px 20px;max-width:980px}
+.rec-card{margin-top:26px;border:1px solid var(--ok);border-radius:var(--r-lg);background:var(--card);padding:18px 20px;max-width:980px}
 .rec-card h3{font-size:14.5px;color:var(--ok);margin-bottom:10px}
 .rec-card ol{margin:0;padding-left:20px;color:var(--fg-2)}
 .rec-card li{margin-bottom:7px}
 .rec-card p{margin-top:10px;color:var(--fg-2)}
 .rec-card b{color:var(--fg-1)}
 
-.note{margin-top:16px;border:1px solid var(--hairline);border-left:3px solid var(--info);border-radius:var(--r-sm);background:#E9F1FA;padding:12px 14px;color:var(--fg-2);font-size:12.5px;max-width:980px}
+.note{margin-top:16px;border:1px solid var(--card-line);border-left:3px solid var(--info);border-radius:var(--r-sm);background:#E9F1FA;padding:12px 14px;color:var(--fg-2);font-size:12.5px;max-width:980px}
 .note b{color:var(--fg-1)}
+.note ol{margin:6px 0 0;padding-left:20px}
+.note li{margin-bottom:5px}
 
-.api{margin-top:14px;border:1px solid var(--hairline);border-radius:var(--r-md);background:var(--surface);padding:12px 14px;font-family:var(--font-mono);font-size:11.5px;color:var(--fg-2);white-space:pre;overflow:auto;line-height:1.7}
+.api{margin-top:14px;border:1px solid var(--card-line);border-radius:var(--r-md);background:var(--canvas);padding:12px 14px;font-family:var(--font-mono);font-size:11.5px;color:var(--fg-2);white-space:pre;overflow:auto;line-height:1.7}
 .api b{color:var(--fg-1);font-weight:600}
 </style>
 </head>
 <body>
 <div class="page">
   <div class="topbar">
-    <div class="brand">外壳重排 <span>· 一整块浮板</span></div>
+    <div class="brand">外壳布局 <span>· 参考 pi-web</span></div>
     <div class="spacer"></div>
     <button class="ghost-btn" id="theme">切换明暗</button>
   </div>
 
   <div class="head">
-    <h1>把侧栏、主区、检视器并成一块浮板</h1>
+    <h1>照 pi-web 的样子改外壳</h1>
     <p>
-      这份稿只做一件事：把外壳的层级关系改掉。
-      <strong>导航轨和标题栏是底槽</strong>（100% 高 / 100% 宽，连成一个 L 形），
-      <strong>它们之外的区域是一整块浮板</strong>，浮板内部再分成侧栏、主对话区、右侧检视器三个板块。
-      标签栏搬进标题栏，成为标题栏的中间一段。
+      参考图是 <code>pi-web</code> 的界面。量过它的像素之后，它的结构其实很单纯：
+      <strong>一条画布色的标题栏</strong>（标签是画布上的圆角药丸），
+      下面<strong>一张张白底卡片</strong>浮在画布上 —— 卡片有 1px 边框、大圆角，卡片之间留 7px 的缝。
     </p>
     <p>
-      现在和之后的差别是：侧栏、主区、检视器是<strong>三个各自带底色、带圆角的独立浮板</strong>
-      （三档底色只差 4–5/255，靠竖线分界）；改完是<strong>一块浮板里的三个板块</strong>。
+      我们跟它的区别只有<strong>导航轨和左侧边栏</strong>：多一条 100% 高的轨，多一块会话列表。
+      其余（标题栏、药丸标签、卡片式的面板）保持一致。
     </p>
   </div>
-
-  <h2 class="sec">一 · Z 空间层级</h2>
-  <p class="secled">
-    三层，从下往上：窗口背景 → 大浮板 → 轨和标题栏的内容（直接写在背景上）。
-  </p>
-  <div class="zstack">
-    <div class="z-layer z-l0"></div>
-    <div class="z-layer z-l1"></div>
-    <div class="z-layer z-l2a"></div>
-    <div class="z-layer z-l2b"></div>
-    <span class="z-cap" style="left:6px;top:14px">轨<br>100%</span>
-    <span class="z-cap" style="left:120px;top:16px">标题栏 · 100% 宽</span>
-    <span class="z-cap" style="left:120px;top:56px">一整块浮板（内部三块）</span>
-    <span class="z-cap" style="left:6px;bottom:6px">轨</span>
-  </div>
-  <p class="secled" style="margin-top:10px">
-    轨和标题栏是背景色（<code>--canvas</code>），浮板是面板色（<code>--surface</code>），
-    浮板的左上角是圆的 —— 背景从那个角透出来，浮板就「浮」在背景上。
-  </p>
 
   <div class="facts">
-    <h3>已经定死的（不用再比）</h3>
+    <h3>从参考图量出来的（2x 截图 ÷ 2 = CSS px）</h3>
     <ul>
-      <li><b>轨 100% 高、标题栏 100% 宽</b>，两者连成一个 L 形，都用背景色。</li>
-      <li><b>标签栏进标题栏</b>，作为标题栏的中间一段；左边是按钮板块，右边是按钮板块。</li>
-      <li><b>浮板内部三块</b>：侧栏、主对话区、右侧检视器。</li>
-      <li><b>标签栏不再单独占一行</b> —— 主区多出 36px。</li>
+      <li><b>标题栏</b>：画布 <code>#FAFAFA</code>，高 <b>44px</b>，铺满整宽。卡片的上边框紧贴在标题栏下沿，<b>不留缝</b>。</li>
+      <li><b>标签药丸</b>：填充 <code>#E6E6E7</code>、1px 边框 <code>#DBDBDB</code>、圆角 8px、高约 22px —— 是画布上的一个药丸，<b>不是浏览器那种贴边的标签</b>。</li>
+      <li><b>卡片</b>：白底 <code>#FFFFFF</code> + 1px 边框 <code>#D6D6D6</code>，圆角约 12–14px。</li>
+      <li><b>卡片之间的缝</b>：约 <b>7px</b> 的画布；窗口左右边距也约 7.5px。</li>
+      <li><b>卡片内部的竖线</b>：<code>#E5E5E5</code>（比外框浅一档）。</li>
+      <li><b>面板自带头部行</b>：右侧那块面板顶部有一条自己的标题行（带一个 <code>settings.json</code> 标签）。</li>
     </ul>
   </div>
 
-  <h2 class="sec">二 · 三个方案</h2>
+  <h2 class="sec">一 · 参考图的结构 vs 我们的</h2>
+  <div class="ref">
+    <div>
+      <div class="refcap">参考图（pi-web）</div>
+      <div class="refbox">
+        <div class="refapp">
+          <div class="reftitle"><span class="tmini"></span><span class="pillmini"></span></div>
+          <div class="refrow"><div class="refcard"></div><div class="refcard right"></div></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="refcap">我们（加轨 + 侧栏）</div>
+      <div class="refbox">
+        <div class="refapp">
+          <div class="reftitle"><span class="tmini"></span><span class="pillmini"></span></div>
+          <div class="refrow" style="left:5px;padding-left:20px"><div class="refcard"></div><div class="refcard right"></div></div>
+        </div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:280px;color:var(--fg-2);font-size:12.5px">
+      <p style="margin-bottom:8px">
+        差别只有左边多出来的一条：<b>轨</b>（100% 高的画布条）加<b>侧栏</b>（会话列表）。
+      </p>
+      <p>
+        其余完全一致 —— 标题栏是画布、标签是药丸、面板是带边框的白卡片、卡片之间留缝。
+      </p>
+    </div>
+  </div>
+
+  <h2 class="sec">二 · 两个方案</h2>
   <p class="secled">
-    三个方案都遵守上面这四条。差的是<b>浮板内部三块怎么分</b>，以及<b>状态栏去哪</b>。
+    两个方案都是「标题栏 + 卡片」。差的是<b>侧栏跟谁住一张卡</b>。
   </p>
 
   <!-- ============ A ============ -->
   <section class="option">
     <div class="option-head">
       <span class="tag rec">A · 推荐</span>
-      <h2>一块底色 + 竖线分栏，状态栏在浮板内部</h2>
+      <h2>侧栏、主区、检视器住同一张卡</h2>
     </div>
     <p class="desc">
-      浮板整块都是 <code>--surface</code>（白），三块之间只用竖线分。
-      状态栏变成浮板底部的一条（只占主区+检视器那两段，跟现在一样不铺到侧栏下面）。
+      一张卡，卡内三条竖线分成三块 —— 跟参考图里「右侧那块面板内部也分两格」是同一个做法。
+      卡的四周离画布 7px，跟参考图一致。
     </p>
     <div class="frame">
-      <div class="win">
-        <div class="chrome">
-          <div class="tl-traffic"><i></i><i></i><i></i></div>
-          <div class="tl-left"><span class="tl-btn">◧</span><span class="tl-title">Codelet</span></div>
-          <div class="tl-tabs">
-            <div class="tab on"><span class="nm">记忆索引重构</span><span class="proj">· Codelet</span><span class="x">×</span></div>
-            <div class="tab"><span class="nm">类型声明生成</span><span class="proj">· pi-sdk</span><span class="x">×</span></div>
-            <div class="tabbar-rail">＋</div>
+      <div class="app">
+        <div class="title">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tbtn">⌕</div>
+          <div class="pills">
+            <div class="pill on"><span class="mk">P</span><span class="nm">记忆索引重构</span><span class="x">×</span></div>
+            <div class="pill"><span class="mk">P</span><span class="nm">类型声明生成</span><span class="x">×</span></div>
+            <div class="pill add">＋</div>
           </div>
-          <div class="tl-right"><span class="tl-btn">◨</span></div>
+          <div style="flex:1"></div>
+          <div class="tbtn">◨</div>
         </div>
         <div class="rail"><i class="on"></i><i></i><i></i><i></i><i></i></div>
-        <div class="panel">
-          <div class="z-side">
-            <div style="height:20px;border-radius:var(--r-sm);background:var(--sunken);margin-bottom:9px"></div>
-            <div style="font-size:10px;color:var(--fg-3);margin-bottom:3px">Codelet ▾</div>
-            <div class="side-item on"><span class="dot"></span>记忆索引重构</div>
-            <div class="side-item"><span class="dot"></span>类型声明生成</div>
-            <div class="side-item">扫描依赖关系</div>
-            <div style="font-size:10px;color:var(--fg-3);margin:9px 0 3px">pi-chat-box ▾</div>
-            <div class="side-item">流式输出的三种写法</div>
+        <div class="deck">
+          <div class="card one">
+            <div class="zone-side" style="width:196px">
+              <div style="height:18px;border-radius:var(--r-sm);background:var(--sunken);margin-bottom:9px"></div>
+              <div class="grp">Codelet <span>▾</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构</div>
+              <div class="crow"><span class="dot"></span>类型声明生成</div>
+              <div class="crow">扫描依赖关系</div>
+              <div class="grp">pi-chat-box <span>▾</span></div>
+              <div class="crow">流式输出的三种写法</div>
+            </div>
+            <div class="zone-main">
+              <div class="bubble" style="width:72%"></div>
+              <div class="bubble" style="width:88%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:60%"></div>
+              <div style="width:150px;height:19px;border:1px solid var(--card-line);border-radius:var(--r-full);margin-top:10px"></div>
+              <div class="composer"><span class="chip">◇ MiniMax-M3.1-Flash</span><span class="send"></span></div>
+            </div>
+            <div class="zone-insp" style="flex:none;width:210px;border-left:1px solid var(--card-line)">
+              <div class="icard"></div><div class="icard"></div>
+            </div>
           </div>
-          <div class="z-main">
-            <div class="bubble" style="width:72%"></div>
-            <div class="bubble" style="width:88%"></div>
-            <div class="user-bubble"></div>
-            <div class="bubble" style="width:60%"></div>
-            <div class="meta"></div>
-          </div>
-          <div class="z-insp"><div class="insp-card"></div><div class="insp-card"></div></div>
-          <div class="z-status"><span>Codelet</span><span>session 01a18b42</span><span style="margin-left:auto">普通 · events 214 · Pi 就绪</span></div>
         </div>
       </div>
     </div>
     <div class="verdict">
-      <b>好处</b>：整块是<strong>一块白板</strong>，三块只是分区 —— 「一整块浮板」这个感觉最直接；
-      三档底色（差 4–5/255）本来就几乎看不出来，去掉不损失什么，反而少一层无谓的区分；
-      标签在标题栏里、主区内容从它正下方开始，视觉上是接上的。<br>
-      <b>代价</b>：<span class="warn">状态栏占了浮板 20px</span>，而且它自己带一条上边线 ——
-      在「一整块」的概念里，这条线是多余的（它把浮板切成了两截）。
+      <b>好处</b>：<strong>跟参考图最像</strong> —— 参考图里右侧那块面板内部也是用竖线分格的
+      （文件树 | 代码），我们这里是（侧栏 | 主区 | 检视器），做法一致；
+      整块只有一条边框、一个轮廓，最接近「一张卡片」的读法；收起侧栏时左边界右移，跟今天的逻辑接得上。<br>
+      <b>代价</b>：三块共用一张卡，<span class="warn">侧栏和检视器的宽度就锁死在卡上</span> ——
+      现在两栏是各自拖的，改成一张卡之后「拖哪条边」要重新定义。
     </div>
   </section>
 
@@ -277,188 +302,139 @@ table.spec .no{color:#B8342A;font-weight:600}
   <section class="option">
     <div class="option-head">
       <span class="tag">B</span>
-      <h2>保留三档底色，状态栏在浮板内部</h2>
+      <h2>侧栏跟主区一张卡，检视器另一张卡</h2>
     </div>
     <p class="desc">
-      结构跟 A 一样，但浮板内部三块各自保留现在的底色：侧栏 <code>--panel</code>、主区 <code>--surface</code>、检视器 <code>--insp</code>。
-      浮板外面多一圈底色，圆角落在浮板上。
+      直接照搬参考图的两张卡，只是左边那张卡里多了侧栏一格。
+      两张卡之间留 7px 的缝，跟参考图一样。
     </p>
     <div class="frame">
-      <div class="win">
-        <div class="chrome">
-          <div class="tl-traffic"><i></i><i></i><i></i></div>
-          <div class="tl-left"><span class="tl-btn">◧</span><span class="tl-title">Codelet</span></div>
-          <div class="tl-tabs">
-            <div class="tab on"><span class="nm">记忆索引重构</span><span class="proj">· Codelet</span><span class="x">×</span></div>
-            <div class="tab"><span class="nm">类型声明生成</span><span class="proj">· pi-sdk</span><span class="x">×</span></div>
-            <div class="tabbar-rail">＋</div>
+      <div class="app">
+        <div class="title">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tbtn">⌕</div>
+          <div class="pills">
+            <div class="pill on"><span class="mk">P</span><span class="nm">记忆索引重构</span><span class="x">×</span></div>
+            <div class="pill"><span class="mk">P</span><span class="nm">类型声明生成</span><span class="x">×</span></div>
+            <div class="pill add">＋</div>
           </div>
-          <div class="tl-right"><span class="tl-btn">◨</span></div>
+          <div style="flex:1"></div>
+          <div class="tbtn">◨</div>
         </div>
         <div class="rail"><i class="on"></i><i></i><i></i><i></i><i></i></div>
-        <div class="panel">
-          <div class="z-side">
-            <div style="height:20px;border-radius:var(--r-sm);background:var(--sunken);margin-bottom:9px"></div>
-            <div style="font-size:10px;color:var(--fg-3);margin-bottom:3px">Codelet ▾</div>
-            <div class="side-item on"><span class="dot"></span>记忆索引重构</div>
-            <div class="side-item"><span class="dot"></span>类型声明生成</div>
-            <div style="font-size:10px;color:var(--fg-3);margin:9px 0 3px">pi-chat-box ▾</div>
-            <div class="side-item">流式输出的三种写法</div>
+        <div class="deck two">
+          <div class="card left">
+            <div class="zone-side" style="width:196px">
+              <div style="height:18px;border-radius:var(--r-sm);background:var(--sunken);margin-bottom:9px"></div>
+              <div class="grp">Codelet <span>▾</span></div>
+              <div class="crow on"><span class="dot"></span>记忆索引重构</div>
+              <div class="crow"><span class="dot"></span>类型声明生成</div>
+              <div class="grp">pi-chat-box <span>▾</span></div>
+              <div class="crow">流式输出的三种写法</div>
+            </div>
+            <div class="zone-main">
+              <div class="bubble" style="width:72%"></div>
+              <div class="bubble" style="width:88%"></div>
+              <div class="user-b"></div>
+              <div class="bubble" style="width:60%"></div>
+              <div style="width:150px;height:19px;border:1px solid var(--card-line);border-radius:var(--r-full);margin-top:10px"></div>
+              <div class="composer"><span class="chip">◇ MiniMax-M3.1-Flash</span><span class="send"></span></div>
+            </div>
           </div>
-          <div class="z-main">
-            <div class="bubble" style="width:72%"></div>
-            <div class="bubble" style="width:88%"></div>
-            <div class="user-bubble"></div>
-            <div class="bubble" style="width:60%"></div>
-            <div class="meta"></div>
+          <div class="card insp">
+            <div class="zone-insp">
+              <div class="icard"></div><div class="icard"></div>
+            </div>
           </div>
-          <div class="z-insp"><div class="insp-card"></div><div class="insp-card"></div></div>
-          <div class="z-status"><span>Codelet</span><span>session 01a18b42</span><span style="margin-left:auto">普通 · events 214 · Pi 就绪</span></div>
         </div>
       </div>
     </div>
     <div class="verdict">
-      <b>好处</b>：三块还是分得开（虽然只差 4–5/255）；跟现在的观感差别最小，改动最保守。<br>
-      <b>代价</b>：<span class="warn">「一整块」的感觉最弱</span> —— 浮板里面还是三块不同颜色，
-      看着像三块拼起来的，而不是一整块。
+      <b>好处</b>：<strong>跟参考图一模一样</strong>（两张卡、两卡之间留缝），
+      而且检视器那张卡可以整体收起、整体移动，跟今天的拖拽逻辑对得上。<br>
+      <b>代价</b>：<span class="warn">左边那张卡里塞了两格</span>（侧栏 + 主区），
+      卡内的分界跟卡外的缝长得不一样 —— 侧栏和主区之间是一条线，主区和检视器之间是一道缝。
     </div>
   </section>
 
-  <!-- ============ C ============ -->
-  <section class="option">
-    <div class="option-head">
-      <span class="tag">C</span>
-      <h2>一块底色 + 竖线分栏，状态栏并进标题栏</h2>
-    </div>
-    <p class="desc">
-      浮板内部跟 A 一样，但状态栏不上浮板底部 —— 挪到标题栏右侧，跟检视器开关并排。
-      浮板从标题栏下面一直到底，底部没有多余的一条。
-    </p>
-    <div class="frame">
-      <div class="win status-in-chrome">
-        <div class="chrome">
-          <div class="tl-traffic"><i></i><i></i><i></i></div>
-          <div class="tl-left"><span class="tl-btn">◧</span><span class="tl-title">Codelet</span></div>
-          <div class="tl-tabs">
-            <div class="tab on"><span class="nm">记忆索引重构</span><span class="proj">· Codelet</span><span class="x">×</span></div>
-            <div class="tab"><span class="nm">类型声明生成</span><span class="proj">· pi-sdk</span><span class="x">×</span></div>
-            <div class="tabbar-rail">＋</div>
-          </div>
-          <div class="tl-right">
-            <span class="tl-status">session 01a18b42 · 普通 · events 214 · Pi 就绪</span>
-            <span class="tl-btn">◨</span>
-          </div>
-        </div>
-        <div class="rail"><i class="on"></i><i></i><i></i><i></i><i></i></div>
-        <div class="panel">
-          <div class="z-side">
-            <div style="height:20px;border-radius:var(--r-sm);background:var(--sunken);margin-bottom:9px"></div>
-            <div style="font-size:10px;color:var(--fg-3);margin-bottom:3px">Codelet ▾</div>
-            <div class="side-item on"><span class="dot"></span>记忆索引重构</div>
-            <div class="side-item"><span class="dot"></span>类型声明生成</div>
-            <div style="font-size:10px;color:var(--fg-3);margin:9px 0 3px">pi-chat-box ▾</div>
-            <div class="side-item">流式输出的三种写法</div>
-          </div>
-          <div class="z-main">
-            <div class="bubble" style="width:72%"></div>
-            <div class="bubble" style="width:88%"></div>
-            <div class="user-bubble"></div>
-            <div class="bubble" style="width:60%"></div>
-            <div class="meta"></div>
-            <div class="composer"><span class="chip">◇ MiniMax-M3.1-Flash</span><span class="send"></span></div>
-          </div>
-          <div class="z-insp"><div class="insp-card"></div><div class="insp-card"></div></div>
-        </div>
-      </div>
-    </div>
-    <div class="verdict">
-      <b>好处</b>：<span class="good">浮板是最干净的一块</span> —— 底部没有任何多余的一条线，
-      内容区从标题栏下面一直到窗口底；状态信息本来是开发者向的，放标题栏比放底部合适；
-      还省下 20px 给对话区。<br>
-      <b>代价</b>：状态栏那一串东西（<code>session 01a18b42 · 普通 · events 214</code>）
-      挤进标题栏右侧，跟标签板块抢位置 —— 标签多的时候状态信息得让位，
-      而且标题栏右侧本来是检视器开关的地盘。
-    </div>
-  </section>
-
-  <h2 class="sec">三 · 三个方案放在一起比</h2>
+  <h2 class="sec">三 · 两个方案比</h2>
   <table class="spec">
-    <thead><tr><th>方案</th><th>「一整块」的感觉</th><th>主区可用高度</th><th>跟现在差多少</th><th>改动面</th></tr></thead>
+    <thead><tr><th>方案</th><th>跟参考图的接近度</th><th>卡内分界的一致性</th><th>两栏还能各自拖吗</th><th>收起侧栏</th></tr></thead>
     <tbody>
-      <tr><td>A 统一底色 · 状态栏在浮板内</td><td class="ok">强</td><td class="mid">比现在少 36px（标签栏并进标题栏）</td><td class="mid">中</td><td>中</td></tr>
-      <tr><td>B 三档底色 · 状态栏在浮板内</td><td class="low">弱</td><td class="mid">比现在少 36px</td><td class="ok">小</td><td>小</td></tr>
-      <tr><td>C 统一底色 · 状态栏进标题栏</td><td class="ok">最强</td><td class="good">比现在少 16px</td><td class="no">大</td><td class="no">大</td></tr>
+      <tr><td>A 三块一张卡</td><td class="ok">高（参考图右侧面板也是卡内分格）</td><td class="ok">三块都是竖线</td><td class="no">不能</td><td class="ok">左边界右移</td></tr>
+      <tr><td>B 两张卡</td><td class="ok">最高（跟参考图一样）</td><td class="no">侧栏|主区 是线，主区|检视器 是缝</td><td class="ok">能</td><td class="ok">左边界右移</td></tr>
     </tbody>
   </table>
 
   <div class="rec-card">
-    <h3>推荐：A —— 一块底色 + 竖线分栏，状态栏在浮板内部</h3>
+    <h3>推荐：A —— 三块住同一张卡</h3>
     <ol>
-      <li><b>浮板内部统一成一块底色。</b>三档底色只差 4–5/255，正常的屏上根本看不出来 ——
-      保留它只是「看着有区别」而实际没有。去掉之后浮板才真的是一整块。</li>
-      <li><b>状态栏留在浮板内部。</b>它那串信息（session id、模式、事件数、Pi 状态）是开发者向的，
-      但它占的位置是实打实的 —— 放标题栏右侧要跟标签抢地盘（方案 C 的代价）。
-      浮板底部留 20px，换来的是标题栏干净、标签板块宽裕。</li>
-      <li><b>标签板块对齐主对话区。</b>标签正好排在它下面那块内容的正上方，
-      视线从标签移到对话是直的。</li>
+      <li><b>卡内分界全部用竖线。</b>参考图里右侧那块面板内部就是用竖线分格（文件树 | 代码），
+      我们这里是侧栏 | 主区 | 检视器 —— 做法一致，读起来是「一张卡里的三格」。</li>
+      <li><b>参考图本身就是混着的：</b>左边是大卡，右边是另一张卡；卡内用竖线、卡外用缝。
+      照搬成 B 的话，我们这边就会出现「侧栏|主区 是线、主区|检视器 是缝」的不一致。</li>
+      <li><b>代价是明确的：</b>两栏不能再各自拖宽度。检视器的宽度得定死，或者改成只拖一条边。
+      这条要么接受，要么改成「检视器宽度固定、只拖侧栏那条边」。</li>
     </ol>
-    <p>
-      如果你更看重「跟现在的观感差别小」，选 B —— 它就是 A 的保守版：结构一样，只是浮板里面还留着三档底色。
-    </p>
   </div>
 
   <div class="note">
-    <b>还有三处这张稿里先定了、你可以推翻的。</b>
-    <ol style="margin:6px 0 0;padding-left:20px">
-      <li><b>浮板跟轨、标题栏之间不留缝。</b>现在是紧贴的（侧栏紧挨着轨），
-      浮板只有左上角是圆的、背景从角上透出来。要不要四周留 8px 的缝、整块浮起来？</li>
-      <li><b>浮板只有一个圆角（左上角）。</b>现在的检视器右上角、侧栏右下角都是直角，
-      改成一整块之后这些角怎么处理要定。</li>
-      <li><b>侧栏收起时</b>：浮板的左边界移到轨的右边，左上角跟着移 ——
-      这套逻辑今天就有（D16 记的「延后 180ms 交接」），改造成本不大。</li>
+    <b>三个要你定的：</b>
+    <ol>
+      <li><b>画布色要不要跟参考图一样？</b>参考图是 <code>#FAFAFA</code>，我们是 <code>#F4F4F5</code>（深一档）。
+      卡片有 1px 边框浮在画布上时，画布浅一点卡片才「浮」得起来。</li>
+      <li><b>标题栏高度</b>：参考图 44px，我们是 52px。药丸标签放进去还够，但标题栏矮一点更紧凑。</li>
+      <li><b>面板要不要自己的头部行？</b>参考图右侧那块面板顶上有一条自己的标题行。
+      我们的检视器（Git / Agent）现在是光秃秃一块，要不要也加一条？</li>
     </ol>
   </div>
 
   <h2 class="sec">四 · 要动的东西</h2>
-  <div class="api">host/renderer/src/styles/global.css
+  <div class="api">host/renderer/src/styles/tokens.css
+  --canvas:#FAFAFA          /* 参考图的值，现在是 #F4F4F5 */
+  --card-edge:#D6D6D6       /* 卡片边框，新增 */
+  --pill:#E6E6E7            /* 标签药丸填充，新增 */
+
+host/renderer/src/styles/global.css
 .shell{
-  /* 轨 100% 高、标题栏 100% 宽 → 两者是背景色，连成 L 形 */
+  /* 标题栏铺满整宽；轨 100% 高 —— 两者是画布，连成 L */
   grid-template-columns: var(--rail-w) minmax(0, 1fr);
   grid-template-rows: var(--titlebar-h) minmax(0, 1fr);
-  grid-template-areas:'chrome chrome' 'rail panel';
+  grid-template-areas:'title title' 'rail  deck';
 }
-/* 浮板：一整块，三块内部用竖线分 */
-.shell-panel{
-  grid-area:panel;
+/* 卡片区：离画布 7px，内部三条竖线分三块 */
+.shell-deck{
+  grid-area:deck;
+  margin:0 7px 7px calc(var(--rail-w) + 7px);
+  display:flex;gap:7px;
+}
+.shell-card{
+  flex:1;display:flex;min-width:0;
   background:var(--surface);
-  border-top-left-radius:calc(var(--panel-radius) - 1px);
+  border:1px solid var(--card-edge);
+  border-radius:var(--r-lg);
   overflow:hidden;
-  display:grid;
-  grid-template-columns:var(--side-w) minmax(0,1fr) var(--insp-w);
-  grid-template-rows:minmax(0,1fr) auto;
 }
-/* 标题栏：四段 —— 轨（红绿灯）· 左按钮 · 标签 · 右按钮 */
-.shell-title{
-  grid-area:chrome;
-  display:grid;
-  grid-template-columns:var(--rail-w) var(--side-w) minmax(0,1fr) var(--insp-w);
-}
-/* 标签栏：从独立的一行搬进标题栏的第三段 */
-.shell-tabs{grid-column:3;display:flex;align-items:stretch;overflow:hidden}
-/* 三块面板不再是各自独立的浮板 —— 去掉各自的底色和圆角 */</div>
+/* 侧栏 / 主区 / 检视器：卡内分格，用竖线，不用缝 */
+.shell-card &gt; * + *{border-left:1px solid var(--card-line)}
+
+/* 标签栏：从独立一行搬进标题栏，改成药丸 */
+.shell-title{grid-area:title;display:flex;align-items:center;gap:9px;padding:0 11px}
+.shell-pill{height:24px;border-radius:var(--r-sm);border:1px solid var(--pill-edge);background:var(--pill)}</div>
   <p class="secled" style="margin-top:12px">
-    标签栏从 <code>.shell-tabs</code>（独立一行）变成标题栏里的一个 grid 段；
-    <code>ProjectSwitcher</code> 已经删了，侧栏那块不用动。
-    <code>.side-panel</code> / <code>.shell-main</code> / <code>.shell-insp</code> 三者的
-    底色、圆角、边界线都要收进 <code>.shell-panel</code> 里统一管。
+    三块面板（<code>.side-panel</code> / <code>.shell-main</code> / <code>.shell-insp</code>）各自的底色、
+    圆角、边界线都要收进 <code>.shell-card</code> 统一管 ——
+    现在它们是三个各自带圆角和底色的独立浮板。
+    标签栏要从 <code>.shell-tabs</code>（独立一行）改成标题栏里的药丸。
   </p>
 
   <h2 class="sec">五 · 这一稿不做</h2>
   <table class="spec">
     <thead><tr><th>项</th><th>为什么</th></tr></thead>
     <tbody>
-      <tr><td>浮板四周留缝（真正「浮」起来）</td><td>稿里先按紧贴画 —— 留缝会让侧栏收放时多一层位移动画，复杂度上一个台阶。先看紧贴的效果。</td></tr>
-      <tr><td>浮板整体拖动 / 调整大小</td><td>现在是两栏各自拖。改成一块之后拖哪一条边要重新定义。</td></tr>
+      <tr><td>两栏各自拖宽度</td><td>A 方案下三块共用一张卡，宽度得重新定。这一稿先按固定宽度画。</td></tr>
+      <tr><td>浮板四周留缝（真正「浮」起来）</td><td>参考图就是四周留缝的卡片，按它来。</td></tr>
       <tr><td>检视器改成抽屉</td><td>另一件事（主区宽度问题）。</td></tr>
       <tr><td>动终端 / HTML 两档排版</td><td>普通模式优先（D14）。</td></tr>
     </tbody>
@@ -468,14 +444,13 @@ table.spec .no{color:#B8342A;font-weight:600}
   <table class="spec">
     <thead><tr><th>#</th><th>标准</th></tr></thead>
     <tbody>
-      <tr><td>1</td><td>轨从窗口顶到底，标题栏从窗口左到右，两者连成一个 L，中间没有缝</td></tr>
-      <tr><td>2</td><td>轨和标题栏之外是一整块浮板，只有一个左上角是圆的</td></tr>
-      <tr><td>3</td><td>浮板内部能看出三块（侧栏 / 主区 / 检视器），但它们是同一块板上的分区</td></tr>
-      <tr><td>4</td><td>标签栏在标题栏里，左边是侧栏开关，右边是检视器开关</td></tr>
-      <tr><td>5</td><td>标签板块的左边缘跟主对话区的左边缘对齐</td></tr>
-      <tr><td>6</td><td>侧栏收起时，浮板左边界右移到轨边，左上角跟着移，全程不跳</td></tr>
-      <tr><td>7</td><td>标签栏不再单独占一行 —— 主区比现在高 36px</td></tr>
-      <tr><td>8</td><td>亮暗两套主题下，浮板跟底槽的边界、竖线、圆角都读得清</td></tr>
+      <tr><td>1</td><td>标题栏是画布色、铺满整宽，标签是画布上的圆角药丸</td></tr>
+      <tr><td>2</td><td>面板是白底 + 1px 边框 + 大圆角的卡片，四周离画布约 7px</td></tr>
+      <tr><td>3</td><td>轨 100% 高，和标题栏连成 L 形，中间没有缝</td></tr>
+      <tr><td>4</td><td>卡片内部三块用竖线分，不留缝</td></tr>
+      <tr><td>5</td><td>标签栏不再单独占一行 —— 主区多出 36px</td></tr>
+      <tr><td>6</td><td>侧栏收起时，卡片左边界右移到轨边，圆角跟着移，全程不跳</td></tr>
+      <tr><td>7</td><td>亮暗两套主题下，卡片边框、药丸、竖线都读得清</td></tr>
     </tbody>
   </table>
 </div>
