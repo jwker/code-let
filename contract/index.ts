@@ -206,6 +206,13 @@ export interface HostSnapshot {
   /** 清单里这些项目的对话列表（按修改时间倒序） */
   conversations: ConversationInfo[]
   /**
+   * 正在重读数据（会话列表刷新 / 标签重载）。
+   *
+   * 只管「事实」—— 什么时候该显示给人看（延迟出现、最短停留）是渲染进程的事，
+   * 见 `host/renderer/src/shell/refreshIndicator.ts`。
+   */
+  refreshing: boolean
+  /**
    * **活动标签**的会话状态。
    *
    * 形状跟以前一样 —— 状态栏和模型选择器读的就是它，不用因为多标签而改。

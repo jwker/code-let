@@ -565,6 +565,33 @@
   height: 17px;
 }
 
+/* 「刷新中」的小转圈 —— 状态栏里那个标识 */
+.refresh-ring {
+  /*
+   * 必须 inline-block：它是 <span>，默认 inline 时 width/height 不生效。
+   * 现在它包在 flex 容器里（会被 blockify），但别依赖那个 —— 换个位置就塌了。
+   */
+  display: inline-block;
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border: 1.5px solid var(--hairline-strong);
+  border-top-color: var(--fg-2);
+  border-radius: 50%;
+  animation: refresh-spin 700ms linear infinite;
+}
+@keyframes refresh-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .refresh-ring {
+    animation: none;
+    border-top-color: var(--fg-2);
+  }
+}
+
 .shell-bar {
   grid-area: bar;
   flex: none;

@@ -17,6 +17,7 @@ const EMPTY_SNAPSHOT: HostSnapshot = {
   activeTabId: null,
   projects: [],
   conversations: [],
+  refreshing: false,
   session: {
     ready: false,
     cwd: null,

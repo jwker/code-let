@@ -161,7 +161,7 @@ table.spec .mid{color:var(--warn);font-weight:600}
 
   <section class="option">
     <div class="option-head">
-      <span class="tag rec">A · 推荐</span>
+      <span class="tag rec">A · 已选</span>
       <h2>转圈 + 「刷新中」</h2>
     </div>
     <p class="desc">
@@ -271,7 +271,11 @@ table.spec .mid{color:var(--warn);font-weight:600}
   慢的刷新：显示了就至少停 500ms，不会闪</div>
 
   <div class="rec-card">
-    <h3>推荐：形态 A + 时序 3</h3>
+    <h3>已选：形态 A + 时序 3（延迟 200ms + 最短 500ms）</h3>
+    <p style="font-size:12px;color:var(--fg-3);margin-top:6px">
+      已实现。实测：2460 个会话文件的刷新只要 90ms —— 实际使用中这个标识几乎不会出现，
+      只有「标签重载」那种重建 runtime 的操作才会看到它。
+    </p>
     <ol>
       <li><b>形态选 A（转圈 + 「刷新中」）</b> —— 状态栏是给「当前在发生什么」用的，
       一个不知道在转什么的转圈反而是噪音。50px 的宽度在 1440 窗口里不成问题。</li>
