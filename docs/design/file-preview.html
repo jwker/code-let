@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文件夹文件预览 · 设计稿</title>
+<style>
+:root{
+  --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-code:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-xl:18px; --r-full:999px;
+  --dur:160ms; --ease:cubic-bezier(.4,0,.2,1);
+}
+[data-theme="light"]{
+  --canvas:#F4F4F5; --panel:#FBFBFB; --surface:#FFFFFF; --insp:#FAFAFA; --raised:#FFFFFF; --sunken:#F1F1F3;
+  --hairline:#ECECEE; --hairline-strong:#DEDEE2;
+  --fg-1:#1B1B19; --fg-2:#5C5C56; --fg-3:#94948C;
+  --accent:#1F1F1D; --accent-fg:#FFFFFF; --accent-wash:#EEEEF0; --accent-line:#DCDCE1;
+  --ok:#2E7D53; --warn:#9C6B15; --warn-wash:#FBF2DF; --info:#2563A8;
+  --sh-sm:0 1px 2px rgba(20,20,16,.04); --sh-md:0 8px 24px -8px rgba(20,20,16,.10);
+}
+[data-theme="dark"]{
+  --canvas:#131312; --panel:#181817; --surface:#1C1C1B; --insp:#191918; --raised:#242423; --sunken:#2A2A29;
+  --hairline:#2B2B29; --hairline-strong:#3B3B38;
+  --fg-1:#EDEDEB; --fg-2:#B4B4AD; --fg-3:#7D7D76;
+  --accent:#F0F0EC; --accent-fg:#151513; --accent-wash:#2A2A2C; --accent-line:#343430;
+  --ok:#5BD69A; --warn:#E5B75C; --warn-wash:#2A2113; --info:#6FAEF0;
+  --sh-sm:0 1px 2px rgba(0,0,0,.5); --sh-md:0 12px 30px -12px rgba(0,0,0,.65);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--canvas);color:var(--fg-1);font-family:var(--font-ui);font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+code{font-family:var(--font-code);font-size:11.5px;background:var(--accent-wash);padding:1px 5px;border-radius:var(--r-xs);color:var(--fg-2)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+
+.page{max-width:1200px;margin:0 auto;padding:0 28px 140px}
+.topbar{position:sticky;top:0;z-index:50;height:52px;display:flex;align-items:center;gap:14px;background:var(--panel);border-bottom:1px solid var(--hairline);margin:0 -28px;padding:0 28px}
+.brand{font-weight:600;letter-spacing:-.015em}
+.brand span{color:var(--fg-3);font-weight:400}
+.topbar .spacer{flex:1}
+.ghost-btn{height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--hairline);color:var(--fg-2);font-size:12px;transition:all var(--dur) var(--ease)}
+.ghost-btn:hover{color:var(--fg-1);border-color:var(--hairline-strong);background:var(--surface)}
+
+.head{padding:36px 0 8px}
+.head h1{font-size:23px;margin-bottom:10px;line-height:1.35}
+.head p{color:var(--fg-2);max-width:86ch}
+.head p + p{margin-top:10px}
+
+.facts{margin:26px 0 0;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);padding:16px 18px;max-width:1000px}
+.facts h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:10px}
+.facts ul{margin:0;padding-left:18px;color:var(--fg-2)}
+.facts li{margin-bottom:7px}
+.facts b{color:var(--fg-1);font-weight:600}
+
+.sec{margin:44px 0 0;font-size:17px;letter-spacing:-.015em}
+.secled{margin:8px 0 0;color:var(--fg-2);font-size:13px;max-width:88ch}
+
+.option{margin-top:26px;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+.option-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--hairline);background:var(--panel)}
+.option-head .tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--fg-3);border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:2px 8px;white-space:nowrap}
+.option-head .tag.rec{color:var(--ok);border-color:var(--ok)}
+.option-head h2{font-size:14.5px}
+.desc{padding:16px 18px 0;color:var(--fg-2);font-size:12.5px;max-width:90ch}
+.desc b{color:var(--fg-1)}
+.frame{padding:18px}
+.verdict{padding:0 18px 18px;color:var(--fg-2);font-size:12.5px;max-width:90ch}
+.verdict b{color:var(--fg-1)}
+.warn{color:var(--warn)}
+.good{color:var(--ok)}
+
+/* ============================================================
+   外壳示意图
+   ============================================================ */
+.app{
+  position:relative;height:400px;background:var(--canvas);
+  border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;
+  display:flex;flex-direction:column;
+  --title:36px; --status:20px; --side:130px; --insp:180px; --gap:6px;
+}
+.t{flex:none;height:var(--title);display:flex;align-items:center;gap:6px;padding:0 9px}
+.traffic{display:flex;gap:4px;flex:none}
+.traffic i{width:8px;height:8px;border-radius:50%;display:block}
+.traffic i:nth-child(1){background:#FF5F57}.traffic i:nth-child(2){background:#FEBC2E}.traffic i:nth-child(3){background:#28C840}
+.tbtn{width:20px;height:20px;border-radius:var(--r-xs);color:var(--fg-3);display:flex;align-items:center;justify-content:center;font-size:10px;flex:none}
+.tapp{font-size:11px;font-weight:600;white-space:nowrap}
+.pills{display:flex;align-items:center;gap:4px;min-width:0;flex:1}
+.pill{display:flex;align-items:center;gap:4px;height:20px;padding:0 6px;border-radius:var(--r-xs);border:1px solid var(--hairline-strong);background:var(--sunken);color:var(--fg-2);font-size:9.5px;white-space:nowrap;max-width:110px}
+.pill.on{background:var(--surface);border-color:var(--accent-line);color:var(--fg-1)}
+.pill .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill.add{width:20px;padding:0;justify-content:center;border-style:dashed;color:var(--fg-3)}
+.pill.file{background:var(--surface);border-color:var(--hairline-strong)}
+.pill.file .ico{font-size:8px;color:var(--fg-3);flex:none}
+
+.deck{flex:1;min-height:0;display:flex;gap:var(--gap);padding:0 var(--gap) var(--gap)}
+.card{background:var(--surface);border:1px solid var(--hairline-strong);border-radius:var(--r-md);overflow:hidden;min-width:0;min-height:0;display:flex;flex-direction:column}
+.card.side{flex:none;width:var(--side);background:var(--panel)}
+.card.main{flex:1}
+.card.insp{flex:none;width:var(--insp);background:var(--insp)}
+.sbar{flex:none;height:var(--status);display:flex;align-items:center;gap:9px;padding:0 9px;font-family:var(--font-code);font-size:8px;color:var(--fg-3)}
+
+/* 对话示意 */
+.conv{flex:1;padding:8px 10px;position:relative;overflow:hidden}
+.bubble{height:6px;border-radius:3px;background:var(--sunken);margin-bottom:5px}
+.user-b{width:70px;height:13px;border-radius:6px;background:var(--fg-1);margin-left:auto;margin-bottom:6px}
+.composer{position:absolute;left:10px;right:10px;bottom:8px;height:32px;border:1px solid var(--hairline);border-radius:9px;background:var(--surface)}
+
+/* 文件树 */
+.tree-head{padding:6px 7px 0;flex:none}
+.tree-proj{display:flex;align-items:center;gap:4px;padding:0 3px 5px;font-size:10px;font-weight:600;color:var(--fg-1)}
+.tree-search{display:flex;align-items:center;gap:4px;height:18px;padding:0 6px;border:1px solid var(--hairline);border-radius:var(--r-xs);color:var(--fg-3);font-size:9px;margin-bottom:5px}
+.tree-body{flex:1;overflow:hidden;padding:0 4px;font-size:10px}
+.node{display:flex;align-items:center;gap:4px;height:17px;padding:0 4px;border-radius:3px;color:var(--fg-2);white-space:nowrap}
+.node.dir{color:var(--fg-1)}
+.node.on{background:var(--accent-wash);color:var(--fg-1)}
+.node .caret{width:7px;flex:none;color:var(--fg-3);font-size:7px;text-align:center}
+.node .ico{width:10px;flex:none;color:var(--fg-3);font-size:8px;text-align:center;font-family:var(--font-code)}
+.node .nm{overflow:hidden;text-overflow:ellipsis}
+.node .child{padding-left:10px}
+
+/* 文件内容 */
+.fhead{flex:none;height:24px;display:flex;align-items:center;gap:6px;padding:0 9px;border-bottom:1px solid var(--hairline);font-size:10px;color:var(--fg-1)}
+.fhead .spacer{flex:1}
+.fhead .act{width:16px;height:16px;border-radius:3px;color:var(--fg-3);display:flex;align-items:center;justify-content:center;font-size:9px}
+.fbody{flex:1;overflow:hidden;padding:10px 12px;font-size:10px;color:var(--fg-2);line-height:1.7}
+.fbody h4{font-size:13px;color:var(--fg-1);margin:0 0 6px}
+.fbody .p{height:6px;border-radius:3px;background:var(--sunken);margin-bottom:5px}
+.fbody .code{background:var(--sunken);border-radius:4px;padding:5px 7px;font-family:var(--font-code);font-size:9px;color:var(--fg-2);margin:6px 0}
+.fbody .inline{display:inline-block;height:8px;width:40px;background:var(--sunken);border-radius:2px;vertical-align:middle}
+
+.hot{outline:2px solid var(--ok);outline-offset:-2px;position:relative}
+.hot::after{content:attr(data-hot);position:absolute;top:-8px;right:3px;background:var(--ok);color:#fff;font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:1px 4px;border-radius:3px;white-space:nowrap}
+
+table.spec{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
+table.spec th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);font-weight:600;padding:9px 12px;background:var(--panel);border-bottom:1px solid var(--hairline)}
+table.spec td{padding:9px 12px;border-bottom:1px solid var(--hairline);color:var(--fg-2);vertical-align:top}
+table.spec tr:last-child td{border-bottom:none}
+table.spec td:first-child{color:var(--fg-1);font-weight:600}
+table.spec .ok{color:var(--ok);font-weight:600}
+table.spec .no{color:#B8342A;font-weight:600}
+table.spec .mid{color:var(--warn);font-weight:600}
+
+.rec-card{margin-top:26px;border:1px solid var(--ok);border-radius:var(--r-lg);background:var(--surface);padding:18px 20px;max-width:1000px}
+.rec-card h3{font-size:14.5px;color:var(--ok);margin-bottom:10px}
+.rec-card ol{margin:0;padding-left:20px;color:var(--fg-2)}
+.rec-card li{margin-bottom:7px}
+.rec-card p{margin-top:10px;color:var(--fg-2)}
+.rec-card b{color:var(--fg-1)}
+
+.note{margin-top:16px;border:1px solid var(--hairline);border-left:3px solid var(--info);border-radius:var(--r-sm);background:#E9F1FA;padding:12px 14px;color:var(--fg-2);font-size:12.5px;max-width:1000px}
+.note b{color:var(--fg-1)}
+.note ol{margin:6px 0 0;padding-left:20px}
+.note li{margin-bottom:5px}
+.note.warn2{border-left-color:var(--warn);background:var(--warn-wash)}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brand">文件夹文件预览 <span>· 设计稿</span></div>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="theme">切换明暗</button>
+  </div>
+
+  <div class="head">
+    <h1>文件树 + 文件标签 + 六种预览</h1>
+    <p>
+      参考图（<code>docs/design/3.png</code>）是一个完整的文件浏览器：左侧文件树、右侧内容、
+      顶部一排文件标签。要在这里落地，绕不开一个问题 —— <strong>它放在窗口的哪一块</strong>。
+    </p>
+    <p>
+      现状是：主区<strong>永远是对话</strong>（上一轮定的），导航项（看板/记忆/代码/终端/Git/Agent）
+      在<strong>右侧面板</strong>里打开，那个面板最小 300、<strong>没有上限</strong>。
+      文件预览是一整套界面，塞哪儿都不太自然 —— 这是这份稿子要解决的第一个问题。
+    </p>
+  </div>
+
+  <div class="facts">
+    <h3>参考图里看到的东西</h3>
+    <ul>
+      <li><b>文件标签栏</b>：顶部一行，<code>settings.json ×</code> / <code>link-pi-types.mjs ×</code> /
+      <code>pi-会话使用指南.md ×</code> / <code>＋</code>。每个带文件类型图标。</li>
+      <li><b>文件树</b>：项目名 + 搜索框（「筛选文件」）+ 树。文件夹用展开箭头，文件用类型图标
+      （<code>{}</code> 是 JSON）。隐藏文件（<code>.git</code> <code>.DS_Store</code>）照样列。</li>
+      <li><b>内容区顶部</b>：文件名 + 三个操作（源码视图 <code>&lt;/&gt;</code>、复制、更多）。</li>
+      <li><b>内容区</b>：这份 md 渲染成了标题、段落、行内代码（灰底）、代码块（灰底框）。</li>
+    </ul>
+  </div>
+
+  <h2 class="sec">一 · 放哪儿：三个方案</h2>
+  <p class="secled">
+    A 放右侧面板（拉宽）、B 占主区（对话切走）、C 主区分屏（对话和文件并排）。
+  </p>
+
+  <!-- ============ A ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">A</span>
+      <h2>放在右侧面板里，点「代码」导航项打开</h2>
+    </div>
+    <p class="desc">
+      右侧面板本来就是放「其他视图」的地方。点「代码」→ 面板里再分两栏：
+      <b>左边文件树 200px、右边内容剩下</b>。面板默认 300 太窄，所以点开「代码」时
+      <b>自动把面板拉到 700px</b>（面板没有上限，现在就能拉）。
+    </p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span></div>
+            <div class="pill"><span class="nm">类型声明生成</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side"><div style="padding:6px;font-size:9px;color:var(--fg-3)">项目<br>会话列表</div></div>
+          <div class="card main">
+            <div class="conv"><div class="bubble" style="width:60%"></div><div class="bubble" style="width:75%"></div><div class="user-b"></div><div class="bubble" style="width:50%"></div><div class="composer"></div></div>
+          </div>
+          <div class="card insp hot" data-hot="放大了" style="width:220px">
+            <div style="flex:none;display:flex;align-items:center;gap:2px;padding:3px 4px;border-bottom:1px solid var(--hairline)">
+              <div style="flex:1;height:14px;border-radius:3px"></div>
+              <div style="flex:1;height:14px;border-radius:3px"></div>
+              <div style="flex:1;height:14px;border-radius:3px;background:var(--accent-wash)"></div>
+              <div style="flex:1;height:14px;border-radius:3px"></div>
+            </div>
+            <div style="flex:1;display:flex;min-height:0">
+              <div style="flex:none;width:78px;border-right:1px solid var(--hairline);padding:4px 3px;font-size:8px;color:var(--fg-2)">
+                <div style="font-weight:600;color:var(--fg-1);margin-bottom:3px;font-size:9px">pi-chat-box</div>
+                <div style="display:flex;gap:2px;height:11px;border:1px solid var(--hairline);border-radius:2px;margin-bottom:3px"></div>
+                <div>▸ .git</div><div>▸ .pi</div><div>▾ src</div>
+                <div>　{} index.ts</div><div>　{} model.ts</div><div>▸ test</div>
+              </div>
+              <div style="flex:1;padding:5px;font-size:8px;color:var(--fg-2);overflow:hidden">
+                <div style="display:flex;gap:3px;border-bottom:1px solid var(--hairline);padding-bottom:3px;margin-bottom:4px">
+                  <span style="flex:1;font-size:9px;color:var(--fg-1)">index.ts</span><span>&lt;/&gt;</span><span>⧉</span><span>⋯</span>
+                </div>
+                <div style="font-family:var(--font-code);font-size:7.5px;line-height:1.5;color:var(--fg-3)">
+                  <div>1&nbsp;&nbsp;<span style="color:var(--info)">import</span> x</div>
+                  <div>2&nbsp;&nbsp;<span style="color:var(--ok)">const</span> a = 1</div>
+                  <div>3&nbsp;&nbsp;<span style="color:var(--warn)">function</span> f()</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sbar"><span>Codelet</span><span>session 01a18b42</span><span style="margin-left:auto">普通 · 刷新中</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="good">不动现有架构</span> —— 导航项本来就在右侧面板打开，文件浏览器只是「代码」这一项的完整实现。
+      对话一直在左边，切回对话什么都不用做。<br>
+      <b>代价</b>：<span class="warn">对话被挤到只有 160px</span>（面板拉 700 时）。
+      而且「文件树 + 内容」都挤在右侧，读文件时视野偏右。
+    </div>
+  </section>
+
+  <!-- ============ B ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag rec">B · 推荐</span>
+      <h2>文件也是标签：标签栏里同时有会话标签和文件标签</h2>
+    </div>
+    <p class="desc">
+      标签栏从「会话标签」变成「工作区标签」—— 一个标签可以是<b>会话</b>，也可以是<b>文件</b>。
+      点文件标签，主区显示文件预览；点会话标签，主区回到对话。
+      文件标签<b>不占导航项</b>，跟参考图一样是独立的一套。
+    </p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span></div>
+            <div class="pill file"><span class="ico">md</span><span class="nm">指南.md</span><span style="color:var(--fg-3)">×</span></div>
+            <div class="pill file"><span class="ico">{}</span><span class="nm">package.json</span><span style="color:var(--fg-3)">×</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side hot" data-hot="文件树" style="width:96px">
+            <div class="tree-head">
+              <div class="tree-proj">📁 pi-chat-box</div>
+              <div class="tree-search">⌕ 筛选文件</div>
+            </div>
+            <div class="tree-body">
+              <div class="node dir"><span class="caret">▸</span><span class="nm">.git</span></div>
+              <div class="node dir"><span class="caret">▾</span><span class="nm">src</span></div>
+              <div class="node on" style="padding-left:12px"><span class="ico">{}</span><span class="nm">index.ts</span></div>
+              <div class="node" style="padding-left:12px"><span class="ico">{}</span><span class="nm">model.ts</span></div>
+              <div class="node dir"><span class="caret">▸</span><span class="nm">test</span></div>
+              <div class="node"><span class="ico">{}</span><span class="nm">package.json</span></div>
+              <div class="node"><span class="ico">◇</span><span class="nm">指南.md</span></div>
+            </div>
+          </div>
+          <div class="card main hot" data-hot="文件内容">
+            <div class="fhead"><span>index.ts</span><span class="spacer"></span><span class="act">&lt;/&gt;</span><span class="act">⧉</span><span class="act">⋯</span></div>
+            <div class="fbody" style="font-family:var(--font-code);font-size:8px;line-height:1.6">
+              <div><span style="color:var(--fg-3)">1</span>&nbsp;&nbsp;<span style="color:var(--info)">import</span> { x } <span style="color:var(--info)">from</span> './x'</div>
+              <div><span style="color:var(--fg-3)">2</span>&nbsp;&nbsp;</div>
+              <div><span style="color:var(--fg-3)">3</span>&nbsp;&nbsp;<span style="color:var(--ok)">export const</span> a = 1</div>
+              <div><span style="color:var(--fg-3)">4</span>&nbsp;&nbsp;<span style="color:var(--warn)">function</span> f() {</div>
+              <div><span style="color:var(--fg-3)">5</span>&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--info)">return</span> a</div>
+              <div><span style="color:var(--fg-3)">6</span>&nbsp;&nbsp;}</div>
+            </div>
+          </div>
+          <div class="card insp" style="width:120px">
+            <div style="flex:none;display:flex;gap:1px;padding:3px;border-bottom:1px solid var(--hairline)">
+              <div style="flex:1;height:13px;border-radius:3px"></div>
+              <div style="flex:1;height:13px;border-radius:3px"></div>
+              <div style="flex:1;height:13px;border-radius:3px;background:var(--accent-wash)"></div>
+              <div style="flex:1;height:13px;border-radius:3px"></div>
+              <div style="flex:1;height:13px;border-radius:3px"></div>
+              <div style="flex:1;height:13px;border-radius:3px"></div>
+            </div>
+            <div style="padding:5px;font-size:8px;color:var(--fg-3)">代码 · 视图还没接</div>
+          </div>
+        </div>
+        <div class="sbar"><span>Codelet</span><span>session 01a18b42</span><span style="margin-left:auto">普通 · Pi 就绪</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="good">跟参考图最接近</span> —— 文件标签、文件树、内容区都在主区，视野正；
+      对话标签还在标签栏里，一键切回；一个窗口里能同时开多个文件。<br>
+      <b>代价</b>：<span class="warn">标签栏要能装两种东西</span> —— 会话标签有「正在跑」的圆点，
+      文件标签有文件类型图标，两者的关闭确认、标题来源、去重规则都不一样。
+      而且「主区永远是对话」这条要重新定义成「标签栏里始终有对话」。
+    </div>
+  </section>
+
+  <!-- ============ C ============ -->
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">C</span>
+      <h2>主区分屏：左边对话，右边文件预览</h2>
+    </div>
+    <p class="desc">
+      对话和文件同时显示，主区一分为二，中间可拖。文件那边再分「树 | 内容」。
+    </p>
+    <div class="frame">
+      <div class="app">
+        <div class="t">
+          <div class="traffic"><i></i><i></i><i></i></div>
+          <div class="tbtn">◧</div>
+          <div class="tapp">Codelet</div>
+          <div class="pills">
+            <div class="pill on"><span class="nm">记忆索引重构</span></div>
+            <div class="pill add">＋</div>
+          </div>
+          <div class="tbtn">⋯</div>
+          <div class="tbtn">◨</div>
+        </div>
+        <div class="deck">
+          <div class="card side" style="width:80px"><div style="padding:5px;font-size:8px;color:var(--fg-3)">项目<br>会话</div></div>
+          <div class="card main" style="flex:1">
+            <div class="conv"><div class="bubble" style="width:80%"></div><div class="bubble" style="width:60%"></div><div class="user-b"></div><div class="composer"></div></div>
+          </div>
+          <div class="card" style="flex:1.4;flex-direction:row">
+            <div style="flex:none;width:60px;border-right:1px solid var(--hairline);padding:4px 3px;font-size:8px;color:var(--fg-2)">
+              <div style="font-weight:600;color:var(--fg-1);font-size:9px;margin-bottom:3px">pi-chat-box</div>
+              <div>▸ .git</div><div>▾ src</div>
+              <div style="padding-left:8px">{} index.ts</div>
+              <div style="padding-left:8px">{} model.ts</div>
+              <div>▸ test</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;min-width:0">
+              <div class="fhead" style="font-size:9px"><span>index.ts</span><span class="spacer"></span><span class="act">&lt;/&gt;</span></div>
+              <div class="fbody" style="font-family:var(--font-code);font-size:7px;line-height:1.5;padding:6px">
+                <div><span style="color:var(--fg-3)">1</span>&nbsp;<span style="color:var(--info)">import</span> x</div>
+                <div><span style="color:var(--fg-3)">2</span>&nbsp;<span style="color:var(--ok)">const</span> a = 1</div>
+                <div><span style="color:var(--fg-3)">3</span>&nbsp;<span style="color:var(--warn)">function</span> f()</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sbar"><span>Codelet</span><span>session 01a18b42</span></div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<b>对话和文件同时看得见</b> —— 一边看代码一边跟 agent 讨论，这是唯一能做到的方案。<br>
+      <b>代价</b>：<span class="warn">三块都很窄</span> —— 主区 912px 分给对话 380、文件树 60、内容 470。
+      文件树 60px 连文件名都显示不全。真要做得把侧栏或右侧面板收起来。
+    </div>
+  </section>
+
+  <h2 class="sec">二 · 三个方案比</h2>
+  <table class="spec">
+    <thead><tr><th>方案</th><th>对话能否同时看</th><th>文件内容宽度</th><th>改动范围</th><th>跟参考图的接近度</th></tr></thead>
+    <tbody>
+      <tr><td>A 右侧面板</td><td class="mid">能（被挤到 160px）</td><td class="ok">约 460px</td><td class="ok">小</td><td class="no">低</td></tr>
+      <tr><td class="ok">B 文件也是标签（推荐）</td><td class="mid">能（切标签）</td><td class="ok">约 700px</td><td class="no">大（标签栏要支持两种）</td><td class="ok">高</td></tr>
+      <tr><td>C 主区分屏</td><td class="ok">能（并排）</td><td class="mid">约 470px</td><td class="no">大</td><td class="mid">中</td></tr>
+    </tbody>
+  </table>
+
+  <div class="rec-card">
+    <h3>推荐：B</h3>
+    <ol>
+      <li><b>文件内容需要宽度。</b>代码和 md 都要横向空间，A 的 460px、C 的 470px 都在勉强。</li>
+      <li><b>对话不会消失。</b>会话标签一直在标签栏里，按一下就回来 —— 比「被挤到 160px」好。</li>
+      <li><b>跟参考图一致。</b>参考图就是「标签栏 + 文件树 + 内容」占满主区。</li>
+    </ol>
+    <p>
+      B 的代价是标签栏要同时支持两种标签。但这正好是「标签栏从会话标签升级成工作区标签」——
+      一次改到位，以后加别的标签类型（比如终端、看板）也是同一条路。
+    </p>
+  </div>
+
+  <div class="note warn2">
+    <b>选 B 要推翻一条已定的决策。</b>
+    「主区永远是对话」是上一轮定的（导航项只在右侧面板打开）。选 B 之后要改成
+    <b>「标签栏里始终有对话」</b> —— 语义上还守住了「对话随时可用」，但主区不再专属对话。
+    这条要你明确点头。
+  </div>
+
+  <h2 class="sec">三 · 文件树怎么画</h2>
+  <table class="spec">
+    <thead><tr><th>项</th><th>做法</th><th>依据</th></tr></thead>
+    <tbody>
+      <tr><td>根目录</td><td>当前<b>活动标签</b>的 cwd</td><td>文件属于项目，而项目由标签带进来</td></tr>
+      <tr><td>加载方式</td><td><b>懒加载</b>：只读展开的那一层</td><td><code>node_modules</code> 可能有几万个文件，一次读完会卡死</td></tr>
+      <tr><td>排序</td><td>文件夹在前、按名字；文件在后、按名字</td><td>跟 VS Code、Finder 一致</td></tr>
+      <tr><td>隐藏文件</td><td>照常显示（<code>.git</code> <code>.DS_Store</code>）</td><td>参考图里就有，而且配置类文件常以点开头</td></tr>
+      <tr><td>搜索</td><td>输入即筛选已加载的节点；未展开的目录不参与</td><td>全局搜索要扫盘，那是另一件事</td></tr>
+      <tr><td>图标</td><td>按扩展名给 <code>{}</code> <code>&lt;/&gt;</code> <code>◇</code> 之类的纯文字标记</td><td>不引入图标库，跟现有 <code>icons.tsx</code> 的线条风格保持一致</td></tr>
+      <tr><td>忽略规则</td><td>读 <code>.gitignore</code>，命中的置灰但仍显示</td><td>不隐藏 —— 用户可能就是想看 <code>node_modules</code> 里的某个文件</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">四 · 六种预览，按扩展名分派</h2>
+  <table class="spec">
+    <thead><tr><th>类型</th><th>扩展名</th><th>怎么渲染</th><th>难点</th></tr></thead>
+    <tbody>
+      <tr><td>Markdown</td><td><code>.md</code> <code>.markdown</code></td><td>复用现有的 <code>conversation/Markdown.tsx</code></td><td>它只支持标题/加粗/斜体/行内代码/代码块/列表/表格/引用/分隔线。图片、链接、脚注都不支持</td></tr>
+      <tr><td>图片</td><td><code>.png</code> <code>.jpg</code> <code>.gif</code> <code>.webp</code> <code>.svg</code></td><td><code>&lt;img&gt;</code>，从主进程读成 data URL 或自定义协议</td><td>大图要限制；SVG 可能带脚本，要走沙箱</td></tr>
+      <tr><td>HTML</td><td><code>.html</code> <code>.htm</code></td><td><code>&lt;iframe sandbox="allow-scripts"&gt;</code></td><td>PLAN.md D3 已定不加 <code>allow-same-origin</code></td></tr>
+      <tr><td>代码</td><td>其余已知扩展名（<code>.ts</code> <code>.js</code> <code>.py</code> <code>.css</code> <code>.json</code> …）</td><td>等宽 + 行号 + 语法高亮</td><td><b>要引入高亮库</b>，现在一个都没有</td></tr>
+      <tr><td>纯文本</td><td>其余一切</td><td>等宽 + 行号，不高亮</td><td>二进制文件要检测并拒绝（给一句「这是二进制文件」）</td></tr>
+      <tr><td>PDF</td><td><code>.pdf</code></td><td>先不做，归到纯文本的「不支持」</td><td>要额外的渲染器</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">五 · 语法高亮：要引入一个库</h2>
+  <p class="secled">
+    现在项目里只有 React、Zustand、zod，没有任何高亮库。这是文件预览唯一的硬依赖。
+  </p>
+  <table class="spec">
+    <thead><tr><th>选型</th><th>优点</th><th>代价</th></tr></thead>
+    <tbody>
+      <tr><td class="ok"><b>Shiki</b></td><td>VS Code 同一套语法和主题，质量最好；输出纯 HTML，不需要运行时</td><td>体积大（每语言一个 grammar）；首次加载要异步初始化</td></tr>
+      <tr><td>Prism</td><td>轻，按需加载语言，主题多</td><td>语法质量不如 Shiki，尤其 TSX / Vue 这类</td></tr>
+      <tr><td>highlight.js</td><td>最轻，能自动检测语言</td><td>同上；自动检测在短文件上经常猜错</td></tr>
+      <tr><td>先不做</td><td>零依赖</td><td>代码只有等宽，看起来像纯文本</td></tr>
+    </tbody>
+  </table>
+  <p class="secled" style="margin-top:12px">
+    PLAN.md D3 当初选的是 Shiki，但因为「依赖安装没获授权」一直没装，markdown 也是手写的子集。
+    这次要装的话得先确认能装。
+  </p>
+
+  <h2 class="sec">六 · 安全与性能</h2>
+  <table class="spec">
+    <thead><tr><th>风险</th><th>对策</th></tr></thead>
+    <tbody>
+      <tr><td><b>路径越界</b></td><td>所有读文件请求在主进程校验：解析后必须在活动标签的 cwd 之内。
+      拒绝 <code>../</code>、符号链接指向外面、绝对路径</td></tr>
+      <tr><td><b>HTML 里的脚本</b></td><td><code>iframe sandbox="allow-scripts"</code>，不加 <code>allow-same-origin</code>（D3）</td></tr>
+      <tr><td><b>大文件</b></td><td>超过阈值（比如 2MB）不渲染内容，给一句「文件太大（12MB），不预览」+ 一个「仍要打开」</td></tr>
+      <tr><td><b>大目录</b></td><td>懒加载 + 一层的条目数上限（比如 5000），超了给一句提示</td></tr>
+      <tr><td><b>二进制文件</b></td><td>读前 8KB 检测 NUL 字节，命中就当二进制，不渲染</td></tr>
+      <tr><td><b>文件被外部改动</b></td><td>跟标签的 stale 同一套思路：焦点回来时比对 mtime，变了就提示「文件已更新，重新加载」</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">七 · 要你定的</h2>
+  <table class="spec">
+    <thead><tr><th>#</th><th>问题</th><th>我的倾向</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><b>选 A 还是 B？</b>B 要推翻「主区永远是对话」</td><td>B。文件内容需要宽度，而且对话标签还在标签栏里</td></tr>
+      <tr><td>2</td><td><b>文件标签跟会话标签混在一排，还是分两排？</b></td><td>混在一排 —— 参考图就是一排；分两排会让标题栏变高</td></tr>
+      <tr><td>3</td><td><b>关掉文件标签要不要确认？</b></td><td>不要。文件没有未保存的改动，关掉就是关掉</td></tr>
+      <tr><td>4</td><td><b>要装 Shiki 吗？还是先只做等宽？</b></td><td>先做等宽 + 行号，高亮作为第二阶段 —— 这样第一步就能看到东西</td></tr>
+      <tr><td>5</td><td><b>文件树放左侧栏，还是放在主区里（如参考图）？</b></td><td>放主区里 —— 左侧栏现在是项目/会话列表，塞不下两棵树</td></tr>
+      <tr><td>6</td><td><b>md 预览复用现有的手写渲染器吗？</b></td><td>复用。它支持的那几种格式覆盖了大部分 README</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="sec">八 · 这一稿不做</h2>
+  <table class="spec">
+    <thead><tr><th>项</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td>编辑文件</td><td>这是「预览」，不是编辑器。要编辑是另一个量级的任务（撤销、保存、冲突）</td></tr>
+      <tr><td>全局文件搜索（跨目录内容搜索）</td><td>要扫盘 + 索引，是独立功能</td></tr>
+      <tr><td>Git 状态标记（文件树里显示 M / A / ?）</td><td>要读 git，而且 Git 面板已经有了</td></tr>
+      <tr><td>PDF / 视频 / 音频预览</td><td>先归到「不支持」，看需求再加</td></tr>
+      <tr><td>文件树拖拽移动 / 重命名</td><td>写操作，跟「预览」无关</td></tr>
+      <tr><td>图片缩放 / 拖拽平移</td><td>第一版先按容器宽度等比缩放</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.getElementById('theme').addEventListener('click', () => {
+    const root = document.documentElement
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'
+  })
+</script>
+</body>
+</html>
