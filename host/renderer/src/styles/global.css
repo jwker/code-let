@@ -114,7 +114,9 @@
 .shell {
   /* 三栏宽度只在这里定义；拖拽时 App 往 shell 上写同样的变量，标题栏跟着走 */
   --rail-w: 56px;
-  --side-w: 264px;
+  /* 默认宽度 = 最小宽度（跟 paneSizes.ts 的 SIDEBAR_DEFAULT 一致）——
+     首屏 JS 还没跑时先按这个渲染，打开时把地方让给主区 */
+  --side-w: 200px;
   --side-track: var(--side-w);
   --insp-w: 300px;
   --insp-track: var(--insp-w);
