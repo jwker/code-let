@@ -155,6 +155,12 @@
 
 /* 一张卡：白底 + 1px 边框 + 大圆角 */
 .shell-card {
+  /*
+   * 必须是 flex 列：面板要靠它把内容约束在卡内 ——
+   * 侧栏的会话列表内容比卡片高，不约束住就会被 overflow:hidden 裁掉（而不是滚动）。
+   */
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--panel-radius);
@@ -488,7 +494,7 @@
 }
 .insp-body {
   display: flex;
-  width: var(--insp-w);
+  width: 100%;
   height: 100%;
   margin-left: auto;
   flex-direction: column;

@@ -217,7 +217,7 @@ function OverflowMenu({ tabs, onPick }: { tabs: TabInfo[]; onPick: (id: string) 
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-40 mt-1 w-60 rounded-xl border border-hairline bg-raised p-1"
+          className="no-drag absolute right-0 top-full z-40 mt-1 w-60 rounded-xl border border-hairline bg-raised p-1"
           style={{ boxShadow: 'var(--sh-md)' }}
         >
           {tabs.map((tab) => (
@@ -281,7 +281,7 @@ function NewTabMenu({ projects }: { projects: ProjectEntry[] }) {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-40 mt-1 w-60 rounded-xl border border-hairline bg-raised p-1"
+          className="no-drag absolute right-0 top-full z-40 mt-1 w-60 rounded-xl border border-hairline bg-raised p-1"
           style={{ boxShadow: 'var(--sh-md)' }}
         >
           <div className="px-2.5 pb-1 pt-1.5 text-[10.5px] text-fg-3">在哪个项目里新建</div>
