@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { existsSync } from 'node:fs'
 import { basename, normalize } from 'node:path'
 import type {
   ConversationInfo,
@@ -10,7 +11,7 @@ import type {
 } from '@contract/index'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
-import { PiRuntime, TabSessionMissingError, type PiRuntimePort } from './pi/runtime'
+import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
 import { TabStore, type StoredTab } from './tabs'
 
@@ -161,11 +162,31 @@ export class HostState extends EventEmitter {
    */
   private async restoreTabs(): Promise<boolean> {
     for (const stored of this.tabStore.list()) {
+      /*
+       * 会话文件还在 → 打开它，内容都在。
+       * 文件不在 → 在同一个目录里当**新会话**开，标签留着。
+       *
+       * 为什么不是「丢掉这个标签」：Pi 创建会话时就把路径算出来了，
+       * 但文件要等第一条用户消息才建 —— 所以「有路径、没文件」的标签
+       * 绝大多数是**从没说过话的空标签**，它们本来就没有内容可丢。
+       * 把「开着的标签」当工作区的一部分保住，比因为没内容就扔掉更合理。
+       */
+      const hasFile = Boolean(stored.path && existsSync(stored.path))
       try {
-        await this.pi.openTab(stored.id, { cwd: stored.cwd, path: stored.path ?? undefined, lazy: true })
-        this.tabs.push({ id: stored.id, cwd: stored.cwd, path: stored.path, title: stored.title, error: null })
+        await this.pi.openTab(stored.id, {
+          cwd: stored.cwd,
+          path: hasFile ? (stored.path ?? undefined) : undefined,
+          lazy: true
+        })
+        this.tabs.push({
+          id: stored.id,
+          cwd: stored.cwd,
+          // 重开的是新会话，路径要换成它的（此刻文件还没建，先记着）
+          path: hasFile ? stored.path : null,
+          title: stored.title,
+          error: null
+        })
       } catch (error) {
-        if (error instanceof TabSessionMissingError) continue
         // 目录被删之类 —— 标签留着，但标出来
         this.tabs.push({
           id: stored.id,
@@ -202,7 +223,10 @@ export class HostState extends EventEmitter {
     const id = this.nextTabId()
     await this.pi.openTab(id, { cwd: options.cwd, path: options.path })
     const title = options.title ?? (options.path ? '对话' : '新对话')
-    this.tabs.push({ id, cwd: options.cwd, path: options.path ?? null, title, error: null })
+    // 会话文件路径必须记下来 —— 重启时按它找回会话。
+    // 新建的会话在 Pi 里立刻就有路径了（只是文件还没建），所以这里读得到。
+    const path = options.path ?? this.pi.tabState(id).sessionFile
+    this.tabs.push({ id, cwd: options.cwd, path, title, error: null })
     this.activeTabId = id
     this.persistTabs()
     this.readSession()
@@ -263,6 +287,15 @@ export class HostState extends EventEmitter {
     this.activeTabId = tabId
     // runtime 还没建就建（懒加载）
     await this.pi.activateTab(tabId)
+    // 懒加载的标签这时候才真的有会话 —— 把它的文件路径补上，
+    // 不然下次重启它又变回「没路径的空标签」。
+    if (!tab.path) {
+      const path = this.pi.tabState(tabId).sessionFile
+      if (path) {
+        tab.path = path
+        this.persistTabs()
+      }
+    }
     this.readSession()
     this.push()
   }
@@ -316,11 +349,17 @@ export class HostState extends EventEmitter {
       this.conversations = list
       // 会话标题变了（第一条用户消息落盘后，标题从「新对话」变成消息内容）——
       // 标签上的标题要跟着变，不然标签一直写着「新对话」
+      let titleChanged = false
       for (const tab of this.tabs) {
         if (!tab.path) continue
         const conversation = list.find((c) => c.path === tab.path)
-        if (conversation) tab.title = conversation.title
+        if (conversation && conversation.title !== tab.title) {
+          tab.title = conversation.title
+          titleChanged = true
+        }
       }
+      // 标题变了要落盘 —— 不然重启后标签还写着「新对话」
+      if (titleChanged) this.persistTabs()
     } catch {
       if (token !== this.refreshToken) return
       this.conversations = []

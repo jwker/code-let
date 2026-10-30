@@ -55,6 +55,7 @@ class FakePi implements PiRuntimePort {
     return {
       ready: Boolean(manager),
       sessionId: manager?.getSessionId() ?? null,
+      sessionFile: manager?.getSessionFile() ?? null,
       streaming: this.streaming.has(tabId),
       model: null,
       modelFallback: null

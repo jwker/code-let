@@ -48,6 +48,7 @@ class FakePi implements PiRuntimePort {
     return {
       ready: Boolean(tab),
       sessionId: tab ? `s-${tabId}` : null,
+      sessionFile: null,
       streaming: tab?.streaming ?? false,
       model: null,
       modelFallback: null
