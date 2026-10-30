@@ -20,8 +20,16 @@ const TOOL_MARK = {
   error: { icon: '✗', color: 'var(--danger)' }
 } as const
 
-export function TerminalStream({ items, streaming }: { items: StreamItem[]; streaming: boolean }) {
-  const { outputs, isExpanded } = useToolOutputs(items)
+export function TerminalStream({
+  items,
+  streaming,
+  tabId
+}: {
+  items: StreamItem[]
+  streaming: boolean
+  tabId: string | null
+}) {
+  const { outputs, isExpanded } = useToolOutputs(items, tabId)
   const setToolExpanded = useStore((s) => s.setToolExpanded)
 
   // 有主的输出归工具行 —— 这里只留没主的（理论上不会有）
@@ -81,7 +89,9 @@ export function TerminalStream({ items, streaming }: { items: StreamItem[]; stre
                   type="button"
                   aria-expanded={expanded}
                   title={item.label}
-                  onClick={() => setToolExpanded(item.callId, !expanded)}
+                  onClick={() => {
+                    if (tabId) setToolExpanded(tabId, item.callId, !expanded)
+                  }}
                   className="flex w-full gap-2 rounded-md px-1.5 py-0.5 text-left transition-colors hover:bg-sunken"
                 >
                   <span style={{ color: mark.color }}>{mark.icon}</span>

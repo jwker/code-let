@@ -70,7 +70,10 @@ if (!app.requestSingleInstanceLock()) {
 
     disposeIpc = registerIpc(state)
     createWindow()
-    await state.init()
+    // 初始化失败不能把窗口晾在这儿 —— 记下来，界面还在，能看到错误
+    await state.init().catch((error) => {
+      console.error('宿主状态初始化失败:', error)
+    })
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

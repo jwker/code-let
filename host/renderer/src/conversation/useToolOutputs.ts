@@ -2,6 +2,9 @@ import { useMemo } from 'react'
 import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 
+/** 没有展开状态时的空对象 —— 稳定引用 */
+const EMPTY_EXPANDED: Record<string, boolean> = {}
+
 /**
  * 工具输出的展开状态（R4）。
  *
@@ -9,8 +12,9 @@ import { useStore } from '../store'
  * 工具**正在跑**的时候自动展开（实时输出要看得见），跑完自动收起；
  * 用户点过就听用户的（记在 store 里，两种模式共享）。
  */
-export function useToolOutputs(items: StreamItem[]) {
-  const expandedTools = useStore((s) => s.expandedTools)
+export function useToolOutputs(items: StreamItem[], tabId: string | null) {
+  // 展开状态按标签存（D4 修订）—— 切标签不该把上一个标签的展开状态带过来
+  const expandedTools = useStore((s) => (tabId ? s.expandedTools[tabId] : undefined) ?? EMPTY_EXPANDED)
 
   /** callId → 输出文本 */
   const outputs = useMemo(() => {

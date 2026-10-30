@@ -1,16 +1,31 @@
 import { EventEmitter } from 'node:events'
-import { normalize } from 'node:path'
+import { basename, normalize } from 'node:path'
 import type {
   ConversationInfo,
   HostSnapshot,
   ModelOption,
-  ProjectInfo,
   SessionState,
-  StreamItem
+  StreamItem,
+  TabInfo
 } from '@contract/index'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
-import { PiRuntime, type PiRuntimePort } from './pi/runtime'
-import { ProjectStore } from './projects'
+import { pickDirectory } from './directoryPicker'
+import { PiRuntime, TabSessionMissingError, type PiRuntimePort } from './pi/runtime'
+import { TabStore, type StoredTab } from './tabs'
+
+/** 宿主这边记的一个标签 */
+interface HostTab {
+  /** 标签自己的 id —— 宿主发的，稳定的身份 */
+  id: string
+  /** 会话所在目录 */
+  cwd: string
+  /** 会话文件路径 */
+  path: string | null
+  /** 标签显示的标题 */
+  title: string
+  /** 创建失败时的原因 */
+  error: string | null
+}
 
 /**
  * 宿主权威状态（PLAN.md D7）。
@@ -19,8 +34,10 @@ import { ProjectStore } from './projects'
  */
 export class HostState extends EventEmitter {
   readonly pi: PiRuntimePort
-  private readonly store: ProjectStore
-  private currentProject: ProjectInfo | null = null
+  private readonly tabStore: TabStore
+  private readonly pickDirectory: () => Promise<string | null>
+  private tabs: HostTab[] = []
+  private activeTabId: string | null = null
   private conversations: ConversationInfo[] = []
   private session: SessionState = {
     ready: false,
@@ -34,12 +51,19 @@ export class HostState extends EventEmitter {
   private readonly conversationsRefresh: DebouncedRefresh
   /** 刷新的序号：只认最后一次发起的 */
   private refreshToken = 0
+  /** 标签 id 的序号 —— 宿主自己发，与会话 id 解耦 */
+  private tabSeq = 0
 
-  /** 运行时和项目存储都能塞进来 —— 真跑要用模型，测不动 */
-  constructor(store?: ProjectStore, pi?: PiRuntimePort) {
+  /** 运行时、标签存储、目录选择器都能塞进来 —— 真跑要模型，测不动 */
+  constructor(options?: {
+    pi?: PiRuntimePort
+    tabStore?: TabStore
+    pickDirectory?: () => Promise<string | null>
+  }) {
     super()
-    this.store = store ?? new ProjectStore()
-    this.pi = pi ?? new PiRuntime()
+    this.pi = options?.pi ?? new PiRuntime()
+    this.tabStore = options?.tabStore ?? new TabStore()
+    this.pickDirectory = options?.pickDirectory ?? pickDirectory
     this.conversationsRefresh = new DebouncedRefresh(() => this.refreshConversations())
   }
 
@@ -49,10 +73,27 @@ export class HostState extends EventEmitter {
 
   snapshot(): HostSnapshot {
     return {
-      projects: this.store.list(),
-      currentProject: this.currentProject,
+      tabs: this.tabs.map((tab) => this.tabInfo(tab)),
+      activeTabId: this.activeTabId,
       conversations: this.conversations,
       session: this.session
+    }
+  }
+
+  private tabInfo(tab: HostTab): TabInfo {
+    const state = this.pi.tabState(tab.id)
+    return {
+      id: tab.id,
+      sessionId: state.sessionId,
+      path: tab.path,
+      cwd: tab.cwd,
+      title: tab.title,
+      projectName: basename(tab.cwd) || tab.cwd,
+      streaming: state.streaming,
+      ready: state.ready,
+      model: state.model,
+      modelFallback: state.modelFallback,
+      error: tab.error
     }
   }
 
@@ -65,7 +106,7 @@ export class HostState extends EventEmitter {
   // ---------------------------------------------------------------------
 
   async init(): Promise<void> {
-    // 会话流事件：转发给渲染进程
+    // 会话流事件：转发给渲染进程（带 tabId）
     this.pi.onEvent((event) => {
       this.emit('session-event', event)
       // 模型被换了（比如扩展调的 setModel）—— 快照跟着变
@@ -79,81 +120,164 @@ export class HostState extends EventEmitter {
       }
     })
 
-    const recent = this.store.list()
-    const first = recent[0]?.path ?? process.cwd()
-    // 启动时接着上次那个会话跑，不留一堆空会话
-    await this.switchProject(first, { remember: recent.length > 0, resume: true })
+    // 先把会话列表读出来 —— 首次启动没有标签时，要靠它找「接着上次那个会话跑」
+    await this.refreshConversations()
+    // 恢复上次的标签（PLAN.md D4 修订）：标签栏立刻能显示，
+    // runtime 等用户点它的时候再建（懒加载）。
+    const restored = await this.restoreTabs()
+    if (!restored) await this.openFallbackTab()
   }
 
-  // ---------------------------------------------------------------------
-  // 项目
-  // ---------------------------------------------------------------------
-
-  /** 系统目录选择器：打开新项目 */
-  async openProject(): Promise<ProjectInfo | null> {
-    const picked = await this.store.pick()
-    if (!picked) return null
-    this.store.add(picked)
-    await this.switchProject(picked, { remember: true })
-    return this.currentProject
-  }
-
-  /** 切到某个项目（目录） */
-  async switchProject(path: string, options?: { remember?: boolean; resume?: boolean }): Promise<void> {
-    const dir = normalize(path)
-    if (options?.remember) this.store.add(dir)
-
-    this.currentProject = { path: dir, name: basenameOf(dir) }
-    this.conversations = []
-    this.session = {
-      ready: false,
-      cwd: dir,
-      sessionId: null,
-      model: null,
-      modelFallback: null,
-      error: null
+  /**
+   * 首次启动（没有存过标签）时的退路：接着最近的那个会话跑。
+   *
+   * 一个会话都没有的话，就在当前目录下开一个新会话。
+   */
+  private async openFallbackTab(): Promise<void> {
+    const latest = this.conversations[0]
+    if (latest) {
+      await this.openTab({ cwd: latest.cwd, path: latest.path, title: latest.title })
+      return
     }
-    this.push()
+    await this.openTab({ cwd: process.cwd() })
+  }
 
-    try {
-      await this.pi.start(dir, { resume: options?.resume })
-      this.readSession()
-    } catch (error) {
-      this.session = {
-        ready: false,
-        cwd: dir,
-        sessionId: null,
-        model: null,
-        modelFallback: null,
-        error: error instanceof Error ? error.message : String(error)
+  /**
+   * 恢复上次的标签。
+   *
+   * **会话文件没了的标签直接丢掉** —— 内容就在会话文件里，文件没了内容也没了。
+   * **项目目录被删的**标签留着但标为出错 —— 它还能被看到、能被关掉。
+   */
+  private async restoreTabs(): Promise<boolean> {
+    for (const stored of this.tabStore.list()) {
+      try {
+        await this.pi.openTab(stored.id, { cwd: stored.cwd, path: stored.path ?? undefined, lazy: true })
+        this.tabs.push({ id: stored.id, cwd: stored.cwd, path: stored.path, title: stored.title, error: null })
+      } catch (error) {
+        if (error instanceof TabSessionMissingError) continue
+        // 目录被删之类 —— 标签留着，但标出来
+        this.tabs.push({
+          id: stored.id,
+          cwd: stored.cwd,
+          path: stored.path,
+          title: stored.title,
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
     }
-
-    await this.refreshConversations()
+    if (this.tabs.length === 0) return false
+    // 恢复出来的第一个标签成为活动标签
+    this.activeTabId = this.tabs[0].id
+    await this.pi.activateTab(this.tabs[0].id)
+    this.readSession()
+    this.persistTabs()
+    this.push()
+    return true
   }
 
   // ---------------------------------------------------------------------
-  // 对话
+  // 标签
+  // ---------------------------------------------------------------------
+
+  private nextTabId(): string {
+    this.tabSeq += 1
+    return `tab-${Date.now().toString(36)}-${this.tabSeq}`
+  }
+
+  /**
+   * 开一个新标签：给会话路径就打开已有会话，不给就在这个目录里新建。
+   */
+  private async openTab(options: { cwd: string; path?: string; title?: string }): Promise<string> {
+    const id = this.nextTabId()
+    await this.pi.openTab(id, { cwd: options.cwd, path: options.path })
+    const title = options.title ?? (options.path ? '对话' : '新对话')
+    this.tabs.push({ id, cwd: options.cwd, path: options.path ?? null, title, error: null })
+    this.activeTabId = id
+    this.persistTabs()
+    this.readSession()
+    this.push()
+    return id
+  }
+
+  /** 打开项目（系统目录选择器）→ 在那儿开一个新标签 */
+  async openProject(): Promise<string | null> {
+    const picked = await this.pickDirectory()
+    if (!picked) return null
+    const dir = normalize(picked)
+    await this.openTab({ cwd: dir })
+    return dir
+  }
+
+  /** 打开一个已有会话 → 开成新标签 */
+  async openConversation(path: string, cwd: string): Promise<void> {
+    const conversation = this.conversations.find((c) => c.path === path)
+    await this.openTab({ cwd, path, title: conversation?.title })
+  }
+
+  /** 在某个目录里新建会话 → 开成新标签 */
+  async newConversation(cwd: string): Promise<void> {
+    await this.openTab({ cwd })
+  }
+
+  /** 切到某个标签 */
+  async activateTab(tabId: string): Promise<void> {
+    const tab = this.tabs.find((t) => t.id === tabId)
+    if (!tab) throw new Error(`标签不存在：${tabId}`)
+    this.activeTabId = tabId
+    // runtime 还没建就建（懒加载）
+    await this.pi.activateTab(tabId)
+    this.readSession()
+    this.push()
+  }
+
+  /** 关掉某个标签 */
+  async closeTab(tabId: string): Promise<void> {
+    const index = this.tabs.findIndex((t) => t.id === tabId)
+    if (index < 0) return
+    await this.pi.closeTab(tabId)
+    this.tabs.splice(index, 1)
+    // 关掉的正好是活动标签 —— 活动标签落到相邻的一个
+    if (this.activeTabId === tabId) {
+      const next = this.tabs[Math.min(index, this.tabs.length - 1)]
+      this.activeTabId = next ? next.id : null
+      if (next) await this.pi.activateTab(next.id)
+    }
+    this.persistTabs()
+    this.readSession()
+    this.push()
+  }
+
+  /** 把当前的标签列表落盘（顺序即标签栏的顺序） */
+  private persistTabs(): void {
+    const stored: StoredTab[] = this.tabs.map((tab) => ({
+      id: tab.id,
+      cwd: tab.cwd,
+      path: tab.path,
+      title: tab.title
+    }))
+    this.tabStore.saveTabs(stored)
+  }
+
+  // ---------------------------------------------------------------------
+  // 对话列表（全部项目）
   // ---------------------------------------------------------------------
 
   /**
    * 重读对话列表（磁盘上的会话文件是权威）。
    *
-   * 刷新是异步的（要读盘），两次刷新可能交错返回。
-   * 只认最后一次发起的 —— 早发起的那次数据更旧，别让它盖掉新的。
+   * 现在列的是**全部项目**的会话（`SessionManager.listAll()`）。
+   * 它要读并解析每一个 jsonl —— 实测 38 个会话 212ms，随会话数线性增长。
+   * 所以用 `onProgress` 分段出结果：先给一部分，别让侧栏干等。
    */
   async refreshConversations(): Promise<void> {
-    const cwd = this.currentProject?.path
-    if (!cwd) {
-      this.conversations = []
-      this.push()
-      return
-    }
-    // 刷新是异步的（要读盘），两次刷新可能交错返回。
-    // 只认最后一次发起的 —— 早发起的那次数据更旧，别让它盖掉新的。
     const token = ++this.refreshToken
     try {
-      const list = await PiRuntime.listConversations(cwd)
+      const list = await PiRuntime.listConversations((partial) => {
+        // 分段出结果：listAll 要读并解析每一个 jsonl，先给一部分，别让侧栏干等
+        if (token !== this.refreshToken) return
+        this.conversations = partial
+        this.push()
+      })
       if (token !== this.refreshToken) return
       this.conversations = list
     } catch {
@@ -163,66 +287,64 @@ export class HostState extends EventEmitter {
     this.push()
   }
 
-  /** 在当前项目下新建会话 */
-  async newConversation(): Promise<void> {
-    await this.pi.newSession()
-    this.readSession()
-    await this.refreshConversations()
-  }
-
-  /** 切到某个已有会话 */
-  async switchConversation(path: string): Promise<void> {
-    await this.pi.switchSession(path)
-    this.readSession()
-    await this.refreshConversations()
-  }
-
   /**
    * 把运行时里的会话状态抄进快照。
    *
-   * 换项目、新建会话、切会话都要走一次 —— 模型是跟着会话走的，
-   * 漏抄就会出现「切了会话，状态栏还显示上一个会话的模型」。
+   * 模型是跟着会话走的，漏抄就会出现「切了标签，状态栏还显示上一个标签的模型」。
    */
   private readSession(): void {
+    const tabId = this.activeTabId
+    if (!tabId) {
+      this.session = {
+        ready: false,
+        cwd: null,
+        sessionId: null,
+        model: null,
+        modelFallback: null,
+        error: null
+      }
+      return
+    }
+    const tab = this.tabs.find((t) => t.id === tabId)
+    const state = this.pi.tabState(tabId)
     this.session = {
-      ready: this.pi.ready,
-      cwd: this.pi.cwd,
-      sessionId: this.pi.currentSessionId,
-      model: this.pi.currentModel(),
-      modelFallback: this.pi.modelFallback(),
-      error: null
+      ready: state.ready,
+      cwd: tab?.cwd ?? null,
+      sessionId: state.sessionId,
+      model: state.model,
+      modelFallback: state.modelFallback,
+      error: tab?.error ?? null
     }
   }
 
-  /** 已配置凭据的模型清单（选择器用） */
-  listModels(): Promise<ModelOption[]> {
-    return this.pi.listModels()
+  // ---------------------------------------------------------------------
+  // 会话
+  // ---------------------------------------------------------------------
+
+  /** 某个标签已经说过的话（R1 R5） */
+  readEntries(tabId: string): StreamItem[] {
+    return this.pi.readEntries(tabId)
   }
 
-  /** 切当前会话的模型 */
-  async selectModel(provider: string, id: string, persist: boolean): Promise<void> {
-    await this.pi.selectModel(provider, id, persist)
+  /** 已配置凭据的模型清单（选择器用） */
+  listModels(tabId: string): Promise<ModelOption[]> {
+    return this.pi.listModels(tabId)
+  }
+
+  /** 切某个标签的模型 */
+  async selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void> {
+    await this.pi.selectModel(tabId, provider, id, persist)
     this.readSession()
     this.push()
   }
 
-  /** 往当前会话发一条用户消息 */
-  async prompt(text: string): Promise<void> {
-    await this.pi.prompt(text)
-  }
-
-  /** 当前会话已经说过的话（R1 R5） */
-  readEntries(): StreamItem[] {
-    return this.pi.readEntries()
+  /** 往某个标签发一条用户消息 */
+  async prompt(tabId: string, text: string): Promise<void> {
+    await this.pi.prompt(tabId, text)
   }
 
   async dispose(): Promise<void> {
     this.conversationsRefresh.dispose()
     await this.pi.stop()
   }
-}
-
-function basenameOf(path: string): string {
-  const parts = path.split(/[\\/]/).filter(Boolean)
-  return parts[parts.length - 1] || path
 }

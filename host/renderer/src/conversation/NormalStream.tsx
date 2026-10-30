@@ -65,8 +65,16 @@ function splitTurns(items: readonly StreamItem[]): Turn[] {
   return turns
 }
 
-export function NormalStream({ items, streaming }: { items: StreamItem[]; streaming: boolean }) {
-  const { outputs, isExpanded } = useToolOutputs(items)
+export function NormalStream({
+  items,
+  streaming,
+  tabId
+}: {
+  items: StreamItem[]
+  streaming: boolean
+  tabId: string | null
+}) {
+  const { outputs, isExpanded } = useToolOutputs(items, tabId)
   const setToolExpanded = useStore((s) => s.setToolExpanded)
 
   // 有主的输出归工具行 —— 这里只留没主的（理论上不会有）
@@ -88,7 +96,9 @@ export function NormalStream({ items, streaming }: { items: StreamItem[]; stream
           turn={turn}
           outputs={outputs}
           isExpanded={isExpanded}
-          onToggle={(callId, expanded) => setToolExpanded(callId, expanded)}
+          onToggle={(callId, expanded) => {
+            if (tabId) setToolExpanded(tabId, callId, expanded)
+          }}
           toolIds={toolIds}
           streaming={streaming && index === turns.length - 1}
         />
