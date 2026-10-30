@@ -283,6 +283,13 @@ export class HostState extends EventEmitter {
       })
       if (token !== this.refreshToken) return
       this.conversations = list
+      // 会话标题变了（第一条用户消息落盘后，标题从「新对话」变成消息内容）——
+      // 标签上的标题要跟着变，不然标签一直写着「新对话」
+      for (const tab of this.tabs) {
+        if (!tab.path) continue
+        const conversation = list.find((c) => c.path === tab.path)
+        if (conversation) tab.title = conversation.title
+      }
     } catch {
       if (token !== this.refreshToken) return
       this.conversations = []
