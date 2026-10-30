@@ -6,15 +6,25 @@ import { z } from 'zod'
  * 只被主进程引用 —— preload 是 sandbox 的，引 zod 会炸。
  */
 
-export const switchProjectSchema = z.object({
-  path: z.string().min(1)
+/** 标签 id —— 宿主自己发的，稳定的身份 */
+export const tabIdSchema = z.object({
+  tabId: z.string().min(1)
 })
 
-export const switchConversationSchema = z.object({
-  path: z.string().min(1)
+export const tabOpenSchema = z.object({
+  /** 会话文件路径 */
+  path: z.string().min(1),
+  /** 会话所在目录 */
+  cwd: z.string().min(1)
+})
+
+export const tabNewSchema = z.object({
+  /** 会话要建在哪个目录 */
+  cwd: z.string().min(1)
 })
 
 export const promptSchema = z.object({
+  tabId: z.string().min(1),
   text: z.string().min(1)
 })
 
@@ -23,11 +33,14 @@ export const clipboardWriteSchema = z.object({
 })
 
 export const modelSelectSchema = z.object({
+  tabId: z.string().min(1),
   provider: z.string().min(1),
   id: z.string().min(1),
   persist: z.boolean()
 })
 
-export type SwitchProjectPayload = z.infer<typeof switchProjectSchema>
-export type SwitchConversationPayload = z.infer<typeof switchConversationSchema>
+export type TabIdPayload = z.infer<typeof tabIdSchema>
+export type TabOpenPayload = z.infer<typeof tabOpenSchema>
+export type TabNewPayload = z.infer<typeof tabNewSchema>
 export type PromptPayload = z.infer<typeof promptSchema>
+export type ModelSelectPayload = z.infer<typeof modelSelectSchema>

@@ -10,8 +10,9 @@ import {
   clipboardWriteSchema,
   modelSelectSchema,
   promptSchema,
-  switchConversationSchema,
-  switchProjectSchema
+  tabIdSchema,
+  tabNewSchema,
+  tabOpenSchema
 } from '@contract/schemas'
 import { trimMessageUpdate } from '@contract/stream'
 import type { HostState } from './state'
@@ -75,40 +76,54 @@ export function registerIpc(state: HostState): () => void {
     broadcast(IPC_EVENTS.snapshot, snapshot)
   })
 
-  state.on('session-event', (event: { type: string; data: unknown }) => {
+  state.on('session-event', (event: { type: string; data: unknown; tabId: string }) => {
     const data = event.type === 'message_update' ? trimMessageUpdate(event.data) : event.data
-    coalescer.push({ type: event.type, data, at: Date.now() })
+    coalescer.push({ type: event.type, data, at: Date.now(), tabId: event.tabId })
   })
 
   ipcMain.handle(IPC.snapshotGet, () => state.snapshot())
 
-  ipcMain.handle(IPC.sessionEntries, () => state.readEntries())
+  // —— 标签 ——
 
   ipcMain.handle(IPC.projectsOpen, async () => {
     await state.openProject()
     return state.snapshot()
   })
 
-  ipcMain.handle(IPC.projectsSwitch, async (_event, payload: unknown) => {
-    const { path } = switchProjectSchema.parse(payload)
-    await state.switchProject(path, { remember: true })
+  ipcMain.handle(IPC.tabsOpen, async (_event, payload: unknown) => {
+    const { path, cwd } = tabOpenSchema.parse(payload)
+    await state.openConversation(path, cwd)
     return state.snapshot()
   })
 
-  ipcMain.handle(IPC.conversationsNew, async () => {
-    await state.newConversation()
+  ipcMain.handle(IPC.tabsNew, async (_event, payload: unknown) => {
+    const { cwd } = tabNewSchema.parse(payload)
+    await state.newConversation(cwd)
     return state.snapshot()
   })
 
-  ipcMain.handle(IPC.conversationsSwitch, async (_event, payload: unknown) => {
-    const { path } = switchConversationSchema.parse(payload)
-    await state.switchConversation(path)
+  ipcMain.handle(IPC.tabsActivate, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    await state.activateTab(tabId)
     return state.snapshot()
   })
+
+  ipcMain.handle(IPC.tabsClose, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    await state.closeTab(tabId)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.tabsEntries, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    return state.readEntries(tabId)
+  })
+
+  // —— 会话 ——
 
   ipcMain.handle(IPC.promptSend, async (_event, payload: unknown) => {
-    const { text } = promptSchema.parse(payload)
-    await state.prompt(text)
+    const { tabId, text } = promptSchema.parse(payload)
+    await state.prompt(tabId, text)
   })
 
   ipcMain.handle(IPC.clipboardWrite, (_event, payload: unknown) => {
@@ -116,21 +131,25 @@ export function registerIpc(state: HostState): () => void {
     clipboard.writeText(text)
   })
 
-  ipcMain.handle(IPC.modelsList, () => state.listModels())
+  ipcMain.handle(IPC.modelsList, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    return state.listModels(tabId)
+  })
 
   ipcMain.handle(IPC.modelsSelect, async (_event, payload: unknown) => {
-    const { provider, id, persist } = modelSelectSchema.parse(payload)
-    await state.selectModel(provider, id, persist)
+    const { tabId, provider, id, persist } = modelSelectSchema.parse(payload)
+    await state.selectModel(tabId, provider, id, persist)
   })
 
   return () => {
     coalescer.dispose()
     ipcMain.removeHandler(IPC.snapshotGet)
-    ipcMain.removeHandler(IPC.sessionEntries)
     ipcMain.removeHandler(IPC.projectsOpen)
-    ipcMain.removeHandler(IPC.projectsSwitch)
-    ipcMain.removeHandler(IPC.conversationsNew)
-    ipcMain.removeHandler(IPC.conversationsSwitch)
+    ipcMain.removeHandler(IPC.tabsOpen)
+    ipcMain.removeHandler(IPC.tabsNew)
+    ipcMain.removeHandler(IPC.tabsActivate)
+    ipcMain.removeHandler(IPC.tabsClose)
+    ipcMain.removeHandler(IPC.tabsEntries)
     ipcMain.removeHandler(IPC.promptSend)
     ipcMain.removeHandler(IPC.clipboardWrite)
     ipcMain.removeHandler(IPC.modelsList)

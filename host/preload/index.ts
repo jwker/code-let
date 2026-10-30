@@ -18,15 +18,16 @@ const api: CodeletApi = {
   platform: process.platform,
   getSnapshot: () => ipcRenderer.invoke(IPC.snapshotGet) as Promise<HostSnapshot>,
   openProject: () => ipcRenderer.invoke(IPC.projectsOpen) as Promise<HostSnapshot>,
-  switchProject: (path) => ipcRenderer.invoke(IPC.projectsSwitch, { path }) as Promise<HostSnapshot>,
-  newConversation: () => ipcRenderer.invoke(IPC.conversationsNew) as Promise<HostSnapshot>,
-  switchConversation: (path) => ipcRenderer.invoke(IPC.conversationsSwitch, { path }) as Promise<HostSnapshot>,
-  getSessionEntries: () => ipcRenderer.invoke(IPC.sessionEntries) as Promise<StreamItem[]>,
-  prompt: (text) => ipcRenderer.invoke(IPC.promptSend, { text }) as Promise<void>,
+  openConversation: (path, cwd) => ipcRenderer.invoke(IPC.tabsOpen, { path, cwd }) as Promise<HostSnapshot>,
+  newConversation: (cwd) => ipcRenderer.invoke(IPC.tabsNew, { cwd }) as Promise<HostSnapshot>,
+  activateTab: (tabId) => ipcRenderer.invoke(IPC.tabsActivate, { tabId }) as Promise<HostSnapshot>,
+  closeTab: (tabId) => ipcRenderer.invoke(IPC.tabsClose, { tabId }) as Promise<HostSnapshot>,
+  getTabEntries: (tabId) => ipcRenderer.invoke(IPC.tabsEntries, { tabId }) as Promise<StreamItem[]>,
+  prompt: (tabId, text) => ipcRenderer.invoke(IPC.promptSend, { tabId, text }),
   copyText: (text) => ipcRenderer.invoke(IPC.clipboardWrite, { text }) as Promise<void>,
-  listModels: () => ipcRenderer.invoke(IPC.modelsList) as Promise<ModelOption[]>,
-  selectModel: (provider, id, persist) =>
-    ipcRenderer.invoke(IPC.modelsSelect, { provider, id, persist }) as Promise<void>,
+  listModels: (tabId) => ipcRenderer.invoke(IPC.modelsList, { tabId }) as Promise<ModelOption[]>,
+  selectModel: (tabId, provider, id, persist) =>
+    ipcRenderer.invoke(IPC.modelsSelect, { tabId, provider, id, persist }) as Promise<void>,
 
   onSnapshot: (listener) => {
     const handler = (_event: unknown, snapshot: HostSnapshot): void => listener(snapshot)

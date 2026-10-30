@@ -18,23 +18,25 @@
 export const IPC = {
   /** 取一次完整快照 */
   snapshotGet: 'host:snapshot:get',
-  /** 系统目录选择器：打开新项目 */
+  /** 系统目录选择器：打开新项目（在那儿开一个新标签） */
   projectsOpen: 'host:projects:open',
-  /** 切到某个项目（目录） */
-  projectsSwitch: 'host:projects:switch',
-  /** 在当前项目下新建会话 */
-  conversationsNew: 'host:conversations:new',
-  /** 切到某个已有会话 */
-  conversationsSwitch: 'host:conversations:switch',
-  /** 读当前会话的内容流（历史） */
-  sessionEntries: 'host:session:entries',
-  /** 往当前会话发一条用户消息 */
+  /** 打开一个已有会话 → 开成新标签 */
+  tabsOpen: 'host:tabs:open',
+  /** 在某个目录里新建会话 → 开成新标签 */
+  tabsNew: 'host:tabs:new',
+  /** 切到某个标签 */
+  tabsActivate: 'host:tabs:activate',
+  /** 关掉某个标签 */
+  tabsClose: 'host:tabs:close',
+  /** 读某个标签的内容流（历史重建） */
+  tabsEntries: 'host:tabs:entries',
+  /** 往某个标签发一条用户消息 */
   promptSend: 'host:prompt:send',
   /** 把一段文字写入系统剪贴板 */
   clipboardWrite: 'host:clipboard:write',
   /** 列出已配置凭据的模型 */
   modelsList: 'host:models:list',
-  /** 切换当前会话的模型 */
+  /** 切换某个标签的模型 */
   modelsSelect: 'host:models:select'
 } as const
 
@@ -76,6 +78,43 @@ export interface ProjectInfo {
   path: string
   /** 目录名，作为显示名 */
   name: string
+}
+
+/**
+ * 一个标签 = 一个会话（PLAN.md D4）。
+ *
+ * 标签可以跨项目 —— 每个标签自带自己的 cwd。标签 id 由宿主发，
+ * 与会话 id 分开：`SessionManager.open()` 打开一个不存在的文件会生成新的会话 id，
+ * 绑死的话重启后认不出这个标签。
+ */
+export interface TabInfo {
+  /** 标签自己的 id —— 宿主发的，稳定的身份 */
+  id: string
+  /** 会话 id（当前会话的）。runtime 还没建时是 null */
+  sessionId: string | null
+  /**
+   * 会话文件路径。
+   *
+   * Pi 在创建会话时就算出了这个路径，但**文件要等第一条用户消息才真的建** ——
+   * 所以这里非 null 不代表磁盘上有这个文件。
+   */
+  path: string | null
+  /** 会话所在目录 */
+  cwd: string
+  /** 标签显示的标题 */
+  title: string
+  /** 目录名 —— 标签要能看出属于哪个项目 */
+  projectName: string
+  /** 这个标签的 agent 是不是正在跑 */
+  streaming: boolean
+  /** runtime 建好了没（懒加载：恢复出来的标签先不建） */
+  ready: boolean
+  /** 这个标签用的模型 */
+  model: ModelOption | null
+  /** 恢复会话时没能恢复原模型的原因 */
+  modelFallback: string | null
+  /** 创建失败时的原因 */
+  error: string | null
 }
 
 /** 一条对话 = 一个 Pi 会话 */
@@ -128,13 +167,17 @@ export interface SessionState {
 
 /** 宿主权威状态的完整快照 */
 export interface HostSnapshot {
-  /** 最近项目，当前项目排在最前 */
-  projects: ProjectInfo[]
-  /** 当前项目 */
-  currentProject: ProjectInfo | null
-  /** 当前项目的对话列表 */
+  /** 打开的标签（按标签栏的顺序） */
+  tabs: TabInfo[]
+  /** 当前活动的标签 */
+  activeTabId: string | null
+  /** 全部项目的对话列表（按修改时间倒序） */
   conversations: ConversationInfo[]
-  /** 当前会话状态 */
+  /**
+   * **活动标签**的会话状态。
+   *
+   * 形状跟以前一样 —— 状态栏和模型选择器读的就是它，不用因为多标签而改。
+   */
   session: SessionState
 }
 
@@ -146,6 +189,13 @@ export interface SessionEvent {
   data: unknown
   /** 主进程产生时刻 */
   at: number
+  /**
+   * 这条事件属于哪个标签。
+   *
+   * 多标签之后事件不再是「无主」的（PLAN.md D4 修订）——
+   * 渲染进程按它把事件分发到对应的内容流。
+   */
+  tabId: string
 }
 
 // ---------------------------------------------------------------------------
@@ -224,24 +274,26 @@ export interface CodeletApi {
   readonly platform: string
   /** 取一次完整快照 */
   getSnapshot(): Promise<HostSnapshot>
-  /** 打开新项目（系统目录选择器） */
+  /** 打开项目（系统目录选择器）→ 在那儿开一个新标签 */
   openProject(): Promise<HostSnapshot>
-  /** 切到某个项目 */
-  switchProject(path: string): Promise<HostSnapshot>
-  /** 在当前项目下新建对话 */
-  newConversation(): Promise<HostSnapshot>
-  /** 切到某个已有对话 */
-  switchConversation(path: string): Promise<HostSnapshot>
-  /** 读当前会话的内容流（历史重建，R1 R5） */
-  getSessionEntries(): Promise<StreamItem[]>
-  /** 往当前会话发一条消息 */
-  prompt(text: string): Promise<void>
+  /** 打开一个已有会话 → 开成新标签 */
+  openConversation(path: string, cwd: string): Promise<HostSnapshot>
+  /** 在某个目录里新建会话 → 开成新标签 */
+  newConversation(cwd: string): Promise<HostSnapshot>
+  /** 切到某个标签 */
+  activateTab(tabId: string): Promise<HostSnapshot>
+  /** 关掉某个标签 */
+  closeTab(tabId: string): Promise<HostSnapshot>
+  /** 读某个标签的内容流（历史重建，R1 R5） */
+  getTabEntries(tabId: string): Promise<StreamItem[]>
+  /** 往某个标签发一条消息 */
+  prompt(tabId: string, text: string): Promise<void>
   /** 把一段文字写入系统剪贴板（复制回复正文） */
   copyText(text: string): Promise<void>
   /** 列出已配置凭据的模型（选择器用） */
-  listModels(): Promise<ModelOption[]>
-  /** 切当前会话的模型；persist 为真时同时设为新会话默认 */
-  selectModel(provider: string, id: string, persist: boolean): Promise<void>
+  listModels(tabId: string): Promise<ModelOption[]>
+  /** 切某个标签的模型；persist 为真时同时设为新会话默认 */
+  selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void>
   /** 订阅快照推送，返回取消订阅的函数 */
   onSnapshot(listener: (snapshot: HostSnapshot) => void): () => void
   /** 订阅会话流增量事件 */

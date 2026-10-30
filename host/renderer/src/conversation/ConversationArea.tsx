@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
 import { IconArrowUp } from '../shell/icons'
@@ -6,6 +7,9 @@ import { NormalStream } from './NormalStream'
 import { ScrollJump } from './ScrollJump'
 import { TerminalStream } from './TerminalStream'
 import { useAutoScroll } from './useAutoScroll'
+
+/** 还没有内容流时的空数组 —— 稳定引用，别每次渲染新建 */
+const EMPTY_ITEMS: StreamItem[] = []
 
 /**
  * 对话区 —— 应用的核心组件（PLAN.md D10）。
@@ -16,8 +20,12 @@ import { useAutoScroll } from './useAutoScroll'
 export function ConversationArea() {
   const mode = useStore((s) => s.mode)
   const session = useStore((s) => s.snapshot.session)
-  const items = useStore((s) => s.items)
-  const streaming = useStore((s) => s.streaming)
+  const activeTabId = useStore((s) => s.snapshot.activeTabId)
+  // 内容流按标签存（D4 修订）—— 这里只读活动标签那一份
+  const items = useStore((s) => (s.snapshot.activeTabId ? s.items[s.snapshot.activeTabId] : undefined) ?? EMPTY_ITEMS)
+  const streaming = useStore(
+    (s) => (s.snapshot.activeTabId ? s.streaming[s.snapshot.activeTabId] : undefined) ?? false
+  )
   const openPicker = useStore((s) => s.openModelPicker)
   const [draft, setDraft] = useState('')
 
@@ -30,10 +38,10 @@ export function ConversationArea() {
 
   async function send(): Promise<void> {
     const text = draft.trim()
-    if (!text) return
+    if (!text || !activeTabId) return
     setDraft('')
     scrollToBottom()
-    await host.prompt(text)
+    await host.prompt(activeTabId, text)
   }
 
   return (
@@ -42,7 +50,7 @@ export function ConversationArea() {
         {mode === 'normal' &&
           (items.length > 0 ? (
             <div className="conv-normal" ref={setRef}>
-              <NormalStream items={items} streaming={streaming} />
+              <NormalStream items={items} streaming={streaming} tabId={activeTabId} />
             </div>
           ) : (
             <div className="conv-normal" ref={setRef}>
@@ -56,7 +64,7 @@ export function ConversationArea() {
         {mode === 'terminal' &&
           (items.length > 0 ? (
             <div className="conv-terminal" ref={setRef}>
-              <TerminalStream items={items} streaming={streaming} />
+              <TerminalStream items={items} streaming={streaming} tabId={activeTabId} />
             </div>
           ) : (
             <div className="conv-terminal" ref={setRef}>

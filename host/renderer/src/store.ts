@@ -13,8 +13,8 @@ import { host } from './host'
 export type Theme = 'light' | 'dark'
 
 const EMPTY_SNAPSHOT: HostSnapshot = {
-  projects: [],
-  currentProject: null,
+  tabs: [],
+  activeTabId: null,
   conversations: [],
   session: {
     ready: false,
@@ -115,12 +115,17 @@ interface RendererStore {
   theme: Theme
   /** 会话流事件计数 —— 骨架阶段先只记账，不渲染 */
   eventCount: number
-  /** 对话区的内容流 —— 两种排版读的是同一个数组（R3） */
-  items: StreamItem[]
-  /** 助手正在回话（R2 —— 末尾跟一个光标） */
-  streaming: boolean
-  /** 工具输出哪些是展开的（callId → 展开与否）。默认收起来，点开才看。 */
-  expandedTools: Record<string, boolean>
+  /**
+   * 对话区的内容流 —— **按标签存**（PLAN.md D4 修订）。
+   *
+   * 多标签之后每个标签有自己的内容流：后台标签正在流式输出，事件得有地方堆着。
+   * 两种排版读的是同一个数组（R3）。
+   */
+  items: Record<string, StreamItem[]>
+  /** 助手正在回话（R2 —— 末尾跟一个光标），按标签存 */
+  streaming: Record<string, boolean>
+  /** 工具输出哪些是展开的（callId → 展开与否）。默认收起来，点开才看。按标签存 */
+  expandedTools: Record<string, Record<string, boolean>>
   /** 右侧检视器是否展开 */
   inspectorOpen: boolean
   /** 左侧栏是否展开 */
@@ -144,20 +149,20 @@ interface RendererStore {
   /** 展开 / 收起左侧栏 */
   toggleSidebar: () => void
   bumpEvents: (count: number) => void
-  /** 换会话时整体替换内容流（R5） */
-  setItems: (items: StreamItem[]) => void
+  /** 换会话时整体替换内容流（R5）—— 按标签存 */
+  setItems: (tabId: string, items: StreamItem[]) => void
   /** 把实时事件落到内容流上（R2） */
   applySessionEvents: (events: SessionEvent[]) => void
   /** 展开 / 收起某个工具的输出 */
-  setToolExpanded: (callId: string, expanded: boolean) => void
+  setToolExpanded: (tabId: string, callId: string, expanded: boolean) => void
   /** 打开模型选择器（锚点是触发控件的视口坐标） */
   openModelPicker: (anchor: { left: number; bottom: number }) => void
   /** 关掉模型选择器 */
   closeModelPicker: () => void
   /** 拉模型清单 */
-  loadModels: () => Promise<void>
-  /** 切当前会话的模型（persist 时同时设为新会话默认） */
-  selectModel: (provider: string, id: string, persist: boolean) => Promise<void>
+  loadModels: (tabId: string) => Promise<void>
+  /** 切某个标签的模型（persist 时同时设为新会话默认） */
+  selectModel: (tabId: string, provider: string, id: string, persist: boolean) => Promise<void>
 }
 
 export const useStore = create<RendererStore>((set, get) => ({
@@ -166,8 +171,8 @@ export const useStore = create<RendererStore>((set, get) => ({
   mode: 'normal',
   theme: loadTheme(),
   eventCount: 0,
-  items: [],
-  streaming: false,
+  items: {},
+  streaming: {},
   expandedTools: {},
   inspectorOpen: loadInspectorOpen(),
   sidebarOpen: loadSidebarOpen(),
@@ -189,25 +194,49 @@ export const useStore = create<RendererStore>((set, get) => ({
     set({ snapshot, mode })
   },
 
+
   setNav: (nav) => set({ nav }),
 
-  // 换会话：内容流和展开状态一起换
-  setItems: (items) => set({ items, streaming: false, expandedTools: {} }),
+  // 换会话：内容流和展开状态一起换（按标签存）
+  setItems: (tabId, items) =>
+    set((state) => ({
+      items: { ...state.items, [tabId]: items },
+      streaming: { ...state.streaming, [tabId]: false },
+      expandedTools: { ...state.expandedTools, [tabId]: {} }
+    })),
 
-  setToolExpanded: (callId, expanded) =>
-    set((state) => ({ expandedTools: { ...state.expandedTools, [callId]: expanded } })),
+  setToolExpanded: (tabId, callId, expanded) =>
+    set((state) => ({
+      expandedTools: {
+        ...state.expandedTools,
+        [tabId]: { ...(state.expandedTools[tabId] ?? {}), [callId]: expanded }
+      }
+    })),
 
   applySessionEvents: (events) => {
     if (events.length === 0) return
-    let items = get().items
-    let streaming = get().streaming
+    // 事件带着标签 id —— 按它分发到各自的内容流（后台标签也在流）
+    const byTab = new Map<string, SessionEvent[]>()
     for (const event of events) {
-      items = applyEvent(items, event)
-      if (event.type === 'agent_settled') streaming = false
-      if (event.type === 'message_start') {
-        const role = (event.data as { message?: { role?: string } } | undefined)?.message?.role
-        if (role === 'assistant') streaming = true
+      const bucket = byTab.get(event.tabId)
+      if (bucket) bucket.push(event)
+      else byTab.set(event.tabId, [event])
+    }
+    const items = { ...get().items }
+    const streaming = { ...get().streaming }
+    for (const [tabId, list] of byTab) {
+      let tabItems = items[tabId] ?? []
+      let tabStreaming = streaming[tabId] ?? false
+      for (const event of list) {
+        tabItems = applyEvent(tabItems, event)
+        if (event.type === 'agent_settled') tabStreaming = false
+        if (event.type === 'message_start') {
+          const role = (event.data as { message?: { role?: string } } | undefined)?.message?.role
+          if (role === 'assistant') tabStreaming = true
+        }
       }
+      items[tabId] = tabItems
+      streaming[tabId] = tabStreaming
     }
     set({ items, streaming, eventCount: get().eventCount + events.length })
   },
@@ -249,15 +278,16 @@ export const useStore = create<RendererStore>((set, get) => ({
 
   openModelPicker: (anchor) => {
     set({ modelPickerAnchor: anchor })
-    void get().loadModels()
+    const tabId = get().snapshot.activeTabId
+    if (tabId) void get().loadModels(tabId)
   },
 
   closeModelPicker: () => set({ modelPickerAnchor: null }),
 
-  loadModels: async () => {
+  loadModels: async (tabId) => {
     set({ modelsLoading: true, modelsError: null })
     try {
-      const models = await host.listModels()
+      const models = await host.listModels(tabId)
       set({ models, modelsLoading: false })
     } catch (error) {
       set({
@@ -268,8 +298,8 @@ export const useStore = create<RendererStore>((set, get) => ({
     }
   },
 
-  selectModel: async (provider, id, persist) => {
+  selectModel: async (tabId, provider, id, persist) => {
     // 主进程切完之后会推新快照，session.model 从那一路回来
-    await host.selectModel(provider, id, persist)
+    await host.selectModel(tabId, provider, id, persist)
   }
 }))

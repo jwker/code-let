@@ -51,7 +51,16 @@ const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
       cwd: '/Users/demo/Projects/codelet'
     }
   ],
-  '/Users/demo/Projects/pi-sdk': [],
+  '/Users/demo/Projects/pi-sdk': [
+    {
+      id: 'c4',
+      path: '/fake/pi-sdk/1.jsonl',
+      title: '流式输出的三种写法',
+      modified: new Date(Date.now() - 40 * 60_000).toISOString(),
+      messageCount: 12,
+      cwd: '/Users/demo/Projects/pi-sdk'
+    }
+  ],
   '/Users/demo/Projects/web': []
 }
 
@@ -156,24 +165,64 @@ const FAKE_TOOL_LINES = [
 ]
 
 export function createMockApi(): CodeletApi {
-  let currentProject: ProjectInfo = FAKE_PROJECTS[0]
-  let conversations: ConversationInfo[] = FAKE_CONVERSATIONS[currentProject.path] ?? []
-  let sessionId: string | null = conversations[0]?.id ?? null
+  /** 假标签：每个标签一个会话 */
+  interface FakeTab {
+    id: string
+    cwd: string
+    path: string | null
+    title: string
+    items: StreamItem[]
+    model: ModelOption | null
+    streaming: boolean
+  }
+
+  const tabs: FakeTab[] = []
+  let activeTabId: string | null = null
+  let conversations: ConversationInfo[] = []
+  let seq = 0
+
   const snapshotListeners = new Set<(snapshot: HostSnapshot) => void>()
   const eventListeners = new Set<(events: SessionEvent[]) => void>()
-  let fakeItems: StreamItem[] = [...FAKE_ITEMS]
-  let fakeModel: ModelOption | null = FAKE_MODELS[0]
+
+  function addTab(options: { cwd: string; path?: string; title?: string; items?: StreamItem[] }): FakeTab {
+    seq += 1
+    const tab: FakeTab = {
+      id: `t${seq}`,
+      cwd: options.cwd,
+      path: options.path ?? null,
+      title: options.title ?? '新对话',
+      items: options.items ?? [],
+      model: FAKE_MODELS[0],
+      streaming: false
+    }
+    tabs.push(tab)
+    activeTabId = tab.id
+    return tab
+  }
 
   function snapshot(): HostSnapshot {
+    const active = tabs.find((t) => t.id === activeTabId)
     return {
-      projects: FAKE_PROJECTS,
-      currentProject,
+      tabs: tabs.map((tab) => ({
+        id: tab.id,
+        sessionId: `s-${tab.id}`,
+        path: tab.path,
+        cwd: tab.cwd,
+        title: tab.title,
+        projectName: basenameOf(tab.cwd),
+        streaming: tab.streaming,
+        ready: true,
+        model: tab.model,
+        modelFallback: null,
+        error: null
+      })),
+      activeTabId,
       conversations,
       session: {
-        ready: true,
-        cwd: currentProject.path,
-        sessionId,
-        model: fakeModel,
+        ready: Boolean(active),
+        cwd: active?.cwd ?? null,
+        sessionId: active ? `s-${active.id}` : null,
+        model: active?.model ?? null,
         modelFallback: null,
         error: null
       }
@@ -186,56 +235,76 @@ export function createMockApi(): CodeletApi {
     return value
   }
 
-  function publishEvent(type: string, data: unknown): void {
-    const events: SessionEvent[] = [{ type, data, at: Date.now() }]
+  /** 事件带着 tabId —— 渲染进程按它分发到各自的内容流（D4 修订） */
+  function publishEvent(tabId: string, type: string, data: unknown): void {
+    const events: SessionEvent[] = [{ type, data, at: Date.now(), tabId }]
     for (const listener of eventListeners) listener(events)
   }
+
+  /** 假数据里的全部会话（全部项目） */
+  function allConversations(): ConversationInfo[] {
+    return Object.values(FAKE_CONVERSATIONS).flat()
+  }
+
+  // 开场就有一个标签
+  conversations = allConversations()
+  addTab({
+    cwd: FAKE_PROJECTS[0].path,
+    path: FAKE_CONVERSATIONS[FAKE_PROJECTS[0].path][0]?.path ?? null,
+    title: FAKE_CONVERSATIONS[FAKE_PROJECTS[0].path][0]?.title ?? '记忆索引重构',
+    items: [...FAKE_ITEMS]
+  })
 
   return {
     platform: 'browser',
 
     getSnapshot: async () => snapshot(),
 
-    openProject: async () => publish(),
-
-    switchProject: async (path) => {
-      const found = FAKE_PROJECTS.find((p) => p.path === path)
-      if (found) currentProject = found
-      conversations = FAKE_CONVERSATIONS[currentProject.path] ?? []
-      sessionId = conversations[0]?.id ?? null
+    openProject: async () => {
+      const project = FAKE_PROJECTS[tabs.length % FAKE_PROJECTS.length]
+      addTab({ cwd: project.path, title: '新对话' })
       return publish()
     },
 
-    newConversation: async () => {
-      const fresh: ConversationInfo = {
-        id: `c${Date.now()}`,
-        path: `/fake/${currentProject.name}/${Date.now()}.jsonl`,
-        title: '新对话',
-        modified: new Date().toISOString(),
-        messageCount: 0,
-        cwd: currentProject.path
-      }
-      conversations = [fresh, ...conversations]
-      sessionId = fresh.id
-      fakeItems = []
-      return publish()
-    },
-
-    switchConversation: async (path) => {
+    openConversation: async (path, cwd) => {
       const found = conversations.find((c) => c.path === path)
-      if (found) sessionId = found.id
-      fakeItems = [...FAKE_ITEMS]
+      // 已经在标签栏里开着 → 切过去，不重复开
+      const existing = tabs.find((t) => t.path === path)
+      if (existing) {
+        activeTabId = existing.id
+        return publish()
+      }
+      addTab({ cwd, path, title: found?.title ?? '对话', items: [...FAKE_ITEMS] })
       return publish()
     },
 
-    getSessionEntries: async () => fakeItems,
+    newConversation: async (cwd) => {
+      addTab({ cwd, title: '新对话' })
+      return publish()
+    },
+
+    activateTab: async (tabId) => {
+      if (tabs.some((t) => t.id === tabId)) activeTabId = tabId
+      return publish()
+    },
+
+    closeTab: async (tabId) => {
+      const index = tabs.findIndex((t) => t.id === tabId)
+      if (index < 0) return publish()
+      tabs.splice(index, 1)
+      if (activeTabId === tabId) activeTabId = tabs[Math.min(index, tabs.length - 1)]?.id ?? null
+      return publish()
+    },
+
+    getTabEntries: async (tabId) => tabs.find((t) => t.id === tabId)?.items ?? [],
 
     listModels: async () => FAKE_MODELS,
 
-    selectModel: async (provider, id) => {
+    selectModel: async (tabId, provider, id) => {
       const found = FAKE_MODELS.find((m) => m.provider === provider && m.id === id)
       if (!found) throw new Error(`模型不存在：${provider}/${id}`)
-      fakeModel = found
+      const tab = tabs.find((t) => t.id === tabId)
+      if (tab) tab.model = found
       publish()
     },
 
@@ -249,12 +318,15 @@ export function createMockApi(): CodeletApi {
       }
     },
 
-    prompt: async (text) => {
+    prompt: async (tabId, text) => {
+      const tab = tabs.find((t) => t.id === tabId)
+      if (!tab) return
+      tab.streaming = true
       // 假的一次回复：用户消息 → 助手消息一点点长出来
-      publishEvent('message_start', { message: { role: 'user', content: text } })
-      publishEvent('message_end', { message: { role: 'user', content: text } })
+      publishEvent(tabId, 'message_start', { message: { role: 'user', content: text } })
+      publishEvent(tabId, 'message_end', { message: { role: 'user', content: text } })
       const startedAt = Date.now()
-      publishEvent('message_start', {
+      publishEvent(tabId, 'message_start', {
         message: {
           role: 'assistant',
           content: [],
@@ -263,9 +335,9 @@ export function createMockApi(): CodeletApi {
         }
       })
       for (const chunk of FAKE_REPLY) {
-        publishEvent('message_update', { type: 'text_delta', contentIndex: 0, delta: chunk })
+        publishEvent(tabId, 'message_update', { type: 'text_delta', contentIndex: 0, delta: chunk })
       }
-      publishEvent('message_end', {
+      publishEvent(tabId, 'message_end', {
         message: {
           role: 'assistant',
           content: [
@@ -279,27 +351,28 @@ export function createMockApi(): CodeletApi {
       })
 
       // 工具跑起来：输出边跑边出来（R4）
-      publishEvent('tool_execution_start', { toolCallId: 'm1', toolName: 'bash' })
+      publishEvent(tabId, 'tool_execution_start', { toolCallId: 'm1', toolName: 'bash' })
       let acc = ''
       for (const line of FAKE_TOOL_LINES) {
         acc += line
-        publishEvent('tool_execution_update', {
+        publishEvent(tabId, 'tool_execution_update', {
           toolCallId: 'm1',
           toolName: 'bash',
           partialResult: { content: [{ type: 'text', text: acc }] }
         })
       }
-      publishEvent('tool_execution_end', { toolCallId: 'm1', toolName: 'bash', isError: false })
-      publishEvent('message_start', {
+      publishEvent(tabId, 'tool_execution_end', { toolCallId: 'm1', toolName: 'bash', isError: false })
+      publishEvent(tabId, 'message_start', {
         message: { role: 'toolResult', toolCallId: 'm1', content: [{ type: 'text', text: acc }] }
       })
-      publishEvent('message_end', {
+      publishEvent(tabId, 'message_end', {
         message: { role: 'toolResult', toolCallId: 'm1', content: [{ type: 'text', text: acc }] }
       })
 
       // 一轮结束 —— 真的 Pi 会发这个。不发的话预览里 streaming 永远为真，
       // 元信息行会停在跳动的计时器上、复制按钮一直禁用。
-      publishEvent('agent_settled', { aborted: false })
+      tab.streaming = false
+      publishEvent(tabId, 'agent_settled', { aborted: false })
     },
 
     onSnapshot: (listener) => {
@@ -312,4 +385,10 @@ export function createMockApi(): CodeletApi {
       return () => eventListeners.delete(listener)
     }
   }
+}
+
+/** 目录名 —— 标签要能看出属于哪个项目 */
+function basenameOf(path: string): string {
+  const parts = path.split(/[\\/]/).filter(Boolean)
+  return parts[parts.length - 1] || path
 }

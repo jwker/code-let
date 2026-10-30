@@ -29,14 +29,14 @@ export function App() {
   const applySessionEvents = useStore((s) => s.applySessionEvents)
   const setItems = useStore((s) => s.setItems)
   const theme = useStore((s) => s.theme)
-  const sessionId = useStore((s) => s.snapshot.session.sessionId)
+  const activeTabId = useStore((s) => s.snapshot.activeTabId)
   const inspectorOpen = useStore((s) => s.inspectorOpen)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const pickerAnchor = useStore((s) => s.modelPickerAnchor)
   const models = useStore((s) => s.models)
-  const closeModelPicker = useStore((s) => s.closeModelPicker)
   const selectModel = useStore((s) => s.selectModel)
+  const closeModelPicker = useStore((s) => s.closeModelPicker)
   const currentModel = useStore((s) => s.snapshot.session.model)
 
   const shellRef = useRef<HTMLDivElement>(null)
@@ -72,17 +72,26 @@ export function App() {
     }
   }, [setSnapshot, applySessionEvents])
 
+  /**
+   * 切标签就换内容流（R1 R5）：持久态在 Pi 的会话文件里，宿主不另存一份。
+   *
+   * **每个标签一份**（PLAN.md D4 修订）：内容流按标签 id 存在 store 里，
+   * 切回来读内存里那一份 —— 磁盘上的 entries 落后于实时事件，
+   * 拿磁盘覆盖回放会丢消息或重排。
+   *
+   * 只有这个标签还没加载过时才去读盘（懒加载的标签第一次点开才建 runtime）。
+   */
   useEffect(() => {
-    // 换会话就重建内容流（R1 R5）：持久态在 Pi 的会话文件里，宿主不另存一份
+    if (!activeTabId) return
+    if (useStore.getState().items[activeTabId]) return
     let cancelled = false
-    setItems([])
-    void host.getSessionEntries().then((items) => {
-      if (!cancelled) setItems(items)
+    void host.getTabEntries(activeTabId).then((items) => {
+      if (!cancelled) setItems(activeTabId, items)
     })
     return () => {
       cancelled = true
     }
-  }, [sessionId, setItems])
+  }, [activeTabId, setItems])
 
   // 宽度写在 shell 的 CSS 变量上，标题栏和下方三列共用同一份（见 .shell）
   useLayoutEffect(() => {
@@ -186,7 +195,9 @@ export function App() {
           <ModelPicker
             models={models}
             current={currentModel}
-            onPick={(model, persist) => selectModel(model.provider, model.id, persist)}
+            onPick={async (model, persist) => {
+              if (activeTabId) await selectModel(activeTabId, model.provider, model.id, persist)
+            }}
             onClose={closeModelPicker}
           />
         </div>

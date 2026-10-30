@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { IPC, IPC_EVENTS, MAX_PAYLOAD_BYTES } from '@contract/index'
-import { promptSchema, switchConversationSchema, switchProjectSchema } from '@contract/schemas'
+import { promptSchema, tabIdSchema, tabNewSchema, tabOpenSchema } from '@contract/schemas'
 
 describe('IPC 规格', () => {
   it('通道名互不重复', () => {
@@ -9,14 +9,21 @@ describe('IPC 规格', () => {
   })
 
   it('载荷 schema 拒绝空路径', () => {
-    expect(switchProjectSchema.safeParse({ path: '' }).success).toBe(false)
-    expect(switchConversationSchema.safeParse({ path: '' }).success).toBe(false)
-    expect(switchProjectSchema.safeParse({ path: '/tmp' }).success).toBe(true)
+    expect(tabOpenSchema.safeParse({ path: '', cwd: '/tmp' }).success).toBe(false)
+    expect(tabOpenSchema.safeParse({ path: '/a.jsonl', cwd: '' }).success).toBe(false)
+    expect(tabOpenSchema.safeParse({ path: '/a.jsonl', cwd: '/tmp' }).success).toBe(true)
+    expect(tabNewSchema.safeParse({ cwd: '/tmp' }).success).toBe(true)
+  })
+
+  it('载荷 schema 拒绝空标签 id', () => {
+    expect(tabIdSchema.safeParse({ tabId: '' }).success).toBe(false)
+    expect(tabIdSchema.safeParse({ tabId: 'tab-1' }).success).toBe(true)
   })
 
   it('载荷 schema 拒绝空消息', () => {
-    expect(promptSchema.safeParse({ text: '' }).success).toBe(false)
-    expect(promptSchema.safeParse({ text: 'hi' }).success).toBe(true)
+    expect(promptSchema.safeParse({ tabId: 'tab-1', text: '' }).success).toBe(false)
+    expect(promptSchema.safeParse({ tabId: '', text: 'hi' }).success).toBe(false)
+    expect(promptSchema.safeParse({ tabId: 'tab-1', text: 'hi' }).success).toBe(true)
   })
 
   it('载荷上限是有限值', () => {
