@@ -326,7 +326,7 @@ table.spec .no{color:var(--danger);font-weight:600}
   <!-- ============ S1 ============ -->
   <section class="option">
     <div class="option-head">
-      <span class="tag rec">S1 · 推荐</span>
+      <span class="tag rec">S1 · 已选</span>
       <h2>可折叠的组头，组内保留时间分组</h2>
     </div>
     <p class="desc">
@@ -374,8 +374,6 @@ table.spec .no{color:var(--danger);font-weight:600}
         <div class="menu" style="width:180px">
           <div class="menu-item"><span>新建对话</span><span class="k">⌘N</span></div>
           <div class="menu-item"><span>复制项目路径</span></div>
-          <div class="menu-sep"></div>
-          <div class="menu-item"><span>收起此组</span></div>
         </div>
         <p style="font-size:12.5px;color:var(--fg-2);margin-top:14px"><b style="color:var(--fg-1)">会话行上的两个记号</b></p>
         <p style="font-size:12px;color:var(--fg-3);margin-top:6px">
@@ -525,7 +523,7 @@ table.spec .no{color:var(--danger);font-weight:600}
   <!-- ============ A ============ -->
   <section class="option">
     <div class="option-head">
-      <span class="tag rec">A · 推荐</span>
+      <span class="tag rec">A · 已选</span>
       <h2>标题栏下方独立一行，只盖主区</h2>
     </div>
     <p class="desc">
@@ -563,8 +561,9 @@ table.spec .no{color:var(--danger);font-weight:600}
       <b>好处</b>：标签有整整一行的高度和宽度，可以放标题 + 项目标识 + 关闭按钮 + 运行指示，不挤；
       标签栏是普通区域，<b>不是拖动区</b>，<code>-webkit-app-region</code> 那套坑完全绕开；
       只盖主区，侧栏和导航轨保持满高，跟现在的面板结构（底槽 + 浮起的面板）不冲突。<br>
-      <b>代价</b>：<span class="warn">多占 36px 高度</span>；标签栏要跟主面板共用左上角圆角，
-      圆角得从 <code>.shell-main</code> 挪到标签栏这一行（侧栏收起时也要跟着挪）。
+      <b>代价</b>：<span class="warn">多占 36px 高度</span>。左上角圆角<b>先不动</b> ——
+      它现在长在 <code>.shell-main</code> 上，先按原样实现看效果；接缝不对再挪（挪的话侧栏收起时那套
+      「延后 180ms 交接」也得跟着挪）。
     </div>
   </section>
 
@@ -840,7 +839,7 @@ table.spec .no{color:var(--danger);font-weight:600}
   <!-- ============================================================ -->
   <h2 class="sec">六 · 推荐</h2>
   <div class="rec-card">
-    <h3>推荐：标签栏 A（标题栏下方，只盖主区） + 侧栏 S1（可折叠的组头）</h3>
+    <h3>已定：标签栏 A（标题栏下方，只盖主区） + 侧栏 S1（可折叠的组头）</h3>
     <ol>
       <li>
         <b>标签栏放 A。</b>理由不是「像 VS Code」，是<b>它是唯一一个不跟已有结构打架的位置</b>：
@@ -854,9 +853,13 @@ table.spec .no{color:var(--danger);font-weight:600}
       </li>
     </ol>
     <p>
-      两个方案合起来有一处要一起定：<b>组头里的会话数（<code>2</code> / <code>15</code>）去掉</b>。
-      侧栏顶部不再有「对话 N」的总数（分组本身就是结构，那一行可以去掉），
-      组头再挂一个数字就是第三处重复。
+      侧栏顶部<b>不再有「对话 N」那一行</b> —— 分组本身就是结构，总数没有位置放。
+      但<b>组头的会话数（<code>2</code> / <code>15</code>）要留</b>：组可以收起来，
+      收起之后那个数字是唯一能告诉你「里面还有多少」的线索。
+    </p>
+    <p>
+      <b>组头「…」里不放「收起此组」</b> —— 组头左边已经有折叠箭头了，菜单里再放一个是重复。
+      菜单里留「新建对话」（已定）和「复制项目路径」。
     </p>
     <p>
       还有一处 S1、S2、S3 都没解决的：<b>「打开项目」这个按钮放哪</b>。
@@ -867,12 +870,12 @@ table.spec .no{color:var(--danger);font-weight:600}
   </div>
 
   <div class="note">
-    <b>有一处 A 方案的代价还没解决，得单独想：左上角那个圆角。</b>
+    <b>左上角圆角：先保留原样。</b>
     现在圆角在 <code>.shell-main</code> 上，侧栏收起时它从侧栏挪到主区（D16）。
-    标签栏变成独立的一行之后，<b>主区的顶上多了一条标签栏</b>，圆角应该长在标签栏这一行 ——
-    否则标签栏的左端是直角、主区是圆角，接缝会很怪。
-    也就是说 <code>.shell-main</code> 的圆角要挪到标签栏那一行，而且侧栏收放时那套
-    「延后 180ms 交接」的逻辑要跟着挪。这条要在实现前单独验一次。
+    标签栏变成独立的一行之后，主区顶上多了一条标签栏 —— 按理圆角该长在标签栏那一行，
+    否则标签栏左端是直角、主区是圆角，接缝会不自然。
+    <b>已定：先不动</b>，圆角照旧留在 <code>.shell-main</code> 上，按原样实现，
+    效果不好再挪（挪的话侧栏收放时那套「延后 180ms 交接」的逻辑也得跟着挪）。
   </div>
 
   <!-- ============================================================ -->
