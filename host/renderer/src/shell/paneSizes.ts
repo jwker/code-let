@@ -19,8 +19,13 @@ export const SIDEBAR_MIN = 200
 export const SIDEBAR_MAX = 360
 export const SIDEBAR_DEFAULT = 264
 
-/** 检视器只有下限，没有上限 */
-export const INSPECTOR_MIN = 260
+/**
+ * 检视器只有下限，没有上限。
+ *
+ * 下限从 260 提到 300：右侧面板顶部现在是导航栏，6 个图标各占一格 ——
+ * 260 宽时每个只有 43px，太挤；300 时 50px，能接受。
+ */
+export const INSPECTOR_MIN = 300
 export const INSPECTOR_DEFAULT = 300
 
 const SIDEBAR_KEY = 'codelet:sidebar-width'

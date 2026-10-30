@@ -48,6 +48,28 @@ export const IconCode = () => (
   </Icon>
 )
 
+/** Git —— 一条分支线上两个提交点 */
+export const IconGit = () => (
+  <Icon>
+    <circle cx="7" cy="6" r="2.4" />
+    <circle cx="7" cy="18" r="2.4" />
+    <circle cx="17" cy="9" r="2.4" />
+    <path d="M7 8.4v7.2" />
+    <path d="M17 11.4c0 3.2-2.6 4.6-6 4.9" />
+  </Icon>
+)
+
+/** Agent —— 一个带天线的机器人脑袋 */
+export const IconAgent = () => (
+  <Icon>
+    <rect x="4" y="8" width="16" height="12" rx="3" />
+    <path d="M12 4v4" />
+    <circle cx="12" cy="3" r="1.2" />
+    <circle cx="9" cy="14" r="1" />
+    <circle cx="15" cy="14" r="1" />
+  </Icon>
+)
+
 export const IconTerminal = () => (
   <Icon>
     <path d="m4 17 6-6-6-6M12 19h8" />

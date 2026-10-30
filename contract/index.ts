@@ -78,8 +78,10 @@ export type ConversationMode = 'normal' | 'terminal' | 'html'
  *
  * **没有「会话」** —— 主区永远是对话，不跟着导航切；
  * 导航只决定右侧面板显示什么。
+ *
+ * Git / Agent 也在里面：右侧面板一次只显示一个视图，没有常驻面板。
  */
-export type NavEntry = 'board' | 'memory' | 'code' | 'terminal'
+export type NavEntry = 'board' | 'memory' | 'code' | 'terminal' | 'git' | 'agent'
 
 /** 一个项目 = 一个目录 */
 export interface ProjectInfo {

@@ -111,10 +111,10 @@ interface RendererStore {
   /**
    * 右侧面板当前显示哪个视图。
    *
-   * `null` = 没选任何导航项 → 右侧显示默认面板（Git / Agent）。
    * 主区不看这个值，它永远是对话。
+   * 一次只显示一个 —— 右侧面板里没有常驻内容。
    */
-  nav: NavEntry | null
+  nav: NavEntry
   /** 对话区当前排版模式（PLAN.md D10） */
   mode: ConversationMode
   /** 亮 / 暗，默认亮色 */
@@ -179,7 +179,7 @@ interface RendererStore {
 
 export const useStore = create<RendererStore>((set, get) => ({
   snapshot: EMPTY_SNAPSHOT,
-  nav: null,
+  nav: 'board',
   mode: 'normal',
   theme: loadTheme(),
   eventCount: 0,
