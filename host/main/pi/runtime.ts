@@ -30,6 +30,13 @@ export interface TabRuntimeState {
   ready: boolean
   /** 当前会话的 id */
   sessionId: string | null
+  /**
+   * 会话文件路径。
+   *
+   * Pi 在创建会话时就算出来了，**但文件要等第一条用户消息才真的建** ——
+   * 所以非 null 不代表磁盘上有这个文件。标签靠它落盘，重启时按它找回会话。
+   */
+  sessionFile: string | null
   /** agent 是不是正在跑 */
   streaming: boolean
   /** 这个标签用的模型 */
@@ -229,11 +236,12 @@ export class PiRuntime implements PiRuntimePort {
     const record = this.tabs.get(tabId)
     const runtime = record?.runtime
     if (!record || !runtime) {
-      return { ready: false, sessionId: null, streaming: false, model: null, modelFallback: null }
+      return { ready: false, sessionId: null, sessionFile: null, streaming: false, model: null, modelFallback: null }
     }
     return {
       ready: true,
       sessionId: runtime.session.sessionId ?? null,
+      sessionFile: runtime.session.sessionFile ?? null,
       streaming: runtime.session.isStreaming,
       model: runtime.session.model ? toOption(runtime.session.model) : null,
       modelFallback: runtime.modelFallbackMessage ?? null
