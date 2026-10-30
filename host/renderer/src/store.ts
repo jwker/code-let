@@ -108,8 +108,13 @@ function saveModes(modes: ModeMap): void {
 
 interface RendererStore {
   snapshot: HostSnapshot
-  /** 导航轨当前入口 */
-  nav: NavEntry
+  /**
+   * 右侧面板当前显示哪个视图。
+   *
+   * `null` = 没选任何导航项 → 右侧显示默认面板（Git / Agent）。
+   * 主区不看这个值，它永远是对话。
+   */
+  nav: NavEntry | null
   /** 对话区当前排版模式（PLAN.md D10） */
   mode: ConversationMode
   /** 亮 / 暗，默认亮色 */
@@ -174,7 +179,7 @@ interface RendererStore {
 
 export const useStore = create<RendererStore>((set, get) => ({
   snapshot: EMPTY_SNAPSHOT,
-  nav: 'session',
+  nav: null,
   mode: 'normal',
   theme: loadTheme(),
   eventCount: 0,
