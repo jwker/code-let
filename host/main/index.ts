@@ -39,12 +39,17 @@ function createWindow(): BrowserWindow {
   win.once('ready-to-show', () => win.show())
 
   /*
-   * 窗口重新获得焦点时重读会话列表。
+   * 离开够久再切回来，就重读一次会话列表。
    *
    * 会话列表的刷新本来是事件驱动的，但那只覆盖「Codelet 自己的 runtime」——
    * 用户在裸 pi 的 TUI 里说话时，那是另一个进程，我们收不到事件，
-   * 列表就一直不动，只有重启才更新。切回窗口是最自然的「我期望它是最新的」时刻。
+   * 列表就一直不动，只有重启才更新。
+   *
+   * 用 blur / focus 配对而不是「每次 focus 都读」：
+   * 一次重读要解析那几个项目的 jsonl（实测 180ms），
+   * 点了下别的窗口又点回来不该付这个代价。
    */
+  win.on('blur', () => state.noteBlur())
   win.on('focus', () => {
     void state.refreshOnFocus()
   })
