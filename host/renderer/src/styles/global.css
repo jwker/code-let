@@ -590,6 +590,31 @@ body.is-pane-resizing * {
   overflow: auto;
 }
 
+/*
+ * 对话区顶部的一条渐隐带 —— 往上滚时，内容从这条带子里淡出去，
+ * 而不是被卡片上沿齐刷刷切平。
+ *
+ * 为什么不给滚动容器加 padding：容器的 padding 跟着内容一起滚走，
+ * 滚起来照样贴着边（量过：加 24px，裁切线没往下挪，只是内容整体上移了 24px）。
+ * 这条带子是 sticky 的，钉在视口上沿，不跟着内容跑。
+ *
+ * 高度取 --sp-6：跟内容列自己的上下留白（--sp-12 / --sp-10）比，
+ * 淡出得太快会看出"字被吃掉"的一截，太慢又像蒙了层灰。
+ */
+.conv-normal::before,
+.conv-terminal::before,
+.conv-html::before {
+  content: '';
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: var(--sp-6);
+  /* 负外边距：这块带子盖在内容上，不占高度 */
+  margin-bottom: calc(-1 * var(--sp-6));
+  pointer-events: none;
+  background: linear-gradient(to bottom, var(--surface), transparent);
+}
+
 .conv-normal {
   display: flex;
   flex-direction: column;

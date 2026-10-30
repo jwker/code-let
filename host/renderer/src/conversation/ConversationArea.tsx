@@ -59,7 +59,12 @@ export function ConversationArea() {
 
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-surface">
-      <div className="min-h-0 flex-1">
+      {/*
+        顶上留 12px：这条留白在滚动容器外面，不跟着内容滚走 ——
+        内容往上滚时，文字离卡片上沿始终还有这一段距离。
+        滚动容器自己给的 padding 做不到（跟着内容一起滚走）。
+      */}
+      <div className="min-h-0 flex-1 pt-3">
         {mode === 'normal' &&
           (items.length > 0 ? (
             <div className="conv-normal" ref={setRef}>
