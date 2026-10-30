@@ -40,7 +40,9 @@ export function ReplyMeta({ summary, streaming }: { summary: TurnSummary; stream
   }
 
   return (
-    <div className="flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full border border-hairline bg-panel py-1 pl-1 pr-3">
+    // mt-3：正文最后一段的下边距被 Markdown 清成 0（.md-bubble .md-p），
+    // 胶囊不自己留出间距就贴上去了。设计稿 .meta-b 的 margin-top 是 12px。
+    <div className="mt-3 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full border border-hairline bg-panel py-1 pl-1 pr-3">
       <button
         type="button"
         onClick={() => void copy()}
