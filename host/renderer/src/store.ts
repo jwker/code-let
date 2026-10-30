@@ -15,6 +15,7 @@ export type Theme = 'light' | 'dark'
 const EMPTY_SNAPSHOT: HostSnapshot = {
   tabs: [],
   activeTabId: null,
+  projects: [],
   conversations: [],
   session: {
     ready: false,

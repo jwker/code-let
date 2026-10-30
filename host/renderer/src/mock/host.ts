@@ -179,6 +179,8 @@ export function createMockApi(): CodeletApi {
   const tabs: FakeTab[] = []
   let activeTabId: string | null = null
   let conversations: ConversationInfo[] = []
+  /** 假数据里「用户选中的项目」 */
+  let projects: ProjectInfo[] = FAKE_PROJECTS.map((p) => ({ ...p }))
   let seq = 0
 
   const snapshotListeners = new Set<(snapshot: HostSnapshot) => void>()
@@ -212,11 +214,13 @@ export function createMockApi(): CodeletApi {
         projectName: basenameOf(tab.cwd),
         streaming: tab.streaming,
         ready: true,
+        removed: !projects.some((p) => p.path === tab.cwd),
         model: tab.model,
         modelFallback: null,
         error: null
       })),
       activeTabId,
+      projects,
       conversations,
       session: {
         ready: Boolean(active),
@@ -241,9 +245,9 @@ export function createMockApi(): CodeletApi {
     for (const listener of eventListeners) listener(events)
   }
 
-  /** 假数据里的全部会话（全部项目） */
+  /** 假数据里这些项目的会话 */
   function allConversations(): ConversationInfo[] {
-    return Object.values(FAKE_CONVERSATIONS).flat()
+    return projects.flatMap((project) => FAKE_CONVERSATIONS[project.path] ?? [])
   }
 
   // 开场就有一个标签
@@ -262,7 +266,17 @@ export function createMockApi(): CodeletApi {
 
     openProject: async () => {
       const project = FAKE_PROJECTS[tabs.length % FAKE_PROJECTS.length]
+      if (!projects.some((p) => p.path === project.path)) {
+        projects = [project, ...projects]
+      }
       addTab({ cwd: project.path, title: '新对话' })
+      return publish()
+    },
+
+    removeProject: async (path) => {
+      // 只是从清单里移除 —— 对话数据不动
+      projects = projects.filter((p) => p.path !== path)
+      conversations = allConversations()
       return publish()
     },
 
@@ -279,6 +293,9 @@ export function createMockApi(): CodeletApi {
     },
 
     newConversation: async (cwd) => {
+      if (!projects.some((p) => p.path === cwd)) {
+        projects = [{ path: cwd, name: basenameOf(cwd) }, ...projects]
+      }
       addTab({ cwd, title: '新对话' })
       return publish()
     },

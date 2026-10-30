@@ -23,6 +23,7 @@ function makeTab(overrides: Partial<TabInfo> = {}): TabInfo {
     projectName: 'demo',
     streaming: false,
     ready: true,
+    removed: false,
     model: null,
     modelFallback: null,
     error: null,

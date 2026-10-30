@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { ConversationInfo, TabInfo } from '@contract/index'
+import type { TabInfo } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
 import { IconFolder } from './icons'
 import { createTabCloseController, runningTabCloseCopy } from './tabClose'
+import { ConfirmDialog } from './ConfirmDialog'
 
 /**
  * 标签栏 —— 顶部那一排，每个标签是一个打开的会话（PLAN.md D4 修订）。
@@ -23,7 +24,6 @@ const GAP = 6
 export function TabBar() {
   const tabs = useStore((s) => s.snapshot.tabs)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
-  const conversations = useStore((s) => s.snapshot.conversations)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const stripRef = useRef<HTMLDivElement>(null)
@@ -81,7 +81,8 @@ export function TabBar() {
   }, [tabs.map((t) => `${t.title}|${t.projectName}`).join('\u0001')])
 
   const hidden = hasOverflow && visibleCount < tabs.length ? tabs.slice(visibleCount) : []
-  const projects = useProjects(conversations, tabs)
+  // 「＋」只列**清单里**的项目 —— 不是 Pi 聊过的所有项目
+  const projects = useStore((s) => s.snapshot.projects)
 
   return (
     <div ref={containerRef} className="shell-tabs">
@@ -132,7 +133,11 @@ function Tab({ tab, active, clipped }: { tab: TabInfo; active: boolean; clipped:
         type="button"
         aria-current={active ? 'page' : undefined}
         onClick={() => void host.activateTab(tab.id)}
-        title={`${tab.title} · ${tab.projectName}`}
+        title={
+          tab.removed
+            ? `${tab.title} · ${tab.projectName}（这个项目已经从 Codelet 移除，对话还在磁盘上）`
+            : `${tab.title} · ${tab.projectName}`
+        }
         className={[
           'tab group/tab no-drag flex items-center gap-1.5 px-2 text-left transition-colors',
           clipped ? 'tab-clipped' : ''
@@ -146,7 +151,15 @@ function Tab({ tab, active, clipped }: { tab: TabInfo; active: boolean; clipped:
         <span aria-hidden="true" className="flex-none text-[11px] leading-none text-fg-3 opacity-70">
           ·
         </span>
-        <span className="max-w-[72px] flex-none truncate text-[9.5px] text-fg-3">{tab.projectName}</span>
+        <span
+          className={[
+            'max-w-[72px] flex-none truncate text-[9.5px]',
+            // 项目已经从清单里移走了 —— 用告警色标出来
+            tab.removed ? 'text-warn' : 'text-fg-3'
+          ].join(' ')}
+        >
+          {tab.projectName}
+        </span>
         <span
           role="button"
           tabIndex={0}
@@ -321,89 +334,8 @@ function NewTabMenu({ projects }: { projects: ProjectEntry[] }) {
   )
 }
 
-/** 一个项目 */
+/** 一个项目 —— 来自项目清单 */
 interface ProjectEntry {
   path: string
   name: string
-}
-
-/**
- * 项目清单：从会话列表和打开的标签里取（目录就是项目）。
- *
- * `cwd` 为空的老会话归到「未知项目」—— Pi 的注释里写了老会话可能是空字符串。
- */
-function useProjects(conversations: ConversationInfo[], tabs: TabInfo[]): ProjectEntry[] {
-  return useMemo(() => {
-    const map = new Map<string, ProjectEntry>()
-    const add = (path: string): void => {
-      if (!path) return
-      if (map.has(path)) return
-      map.set(path, { path, name: basenameOf(path) })
-    }
-    for (const conversation of conversations) add(conversation.cwd)
-    for (const tab of tabs) add(tab.cwd)
-    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
-  }, [conversations, tabs])
-}
-
-function basenameOf(path: string): string {
-  const parts = path.split(/[\\/]/).filter(Boolean)
-  return parts[parts.length - 1] || path
-}
-
-/** 确认框（关掉正在跑的标签时用） */
-function ConfirmDialog({
-  title,
-  body,
-  confirmText,
-  cancelText,
-  onCancel,
-  onConfirm
-}: {
-  title: string
-  body: string
-  confirmText: string
-  cancelText: string
-  onCancel: () => void
-  onConfirm: () => void
-}) {
-  useEffect(() => {
-    function onKey(event: KeyboardEvent): void {
-      if (event.key === 'Escape') onCancel()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onCancel])
-
-  return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/25" onClick={onCancel} />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="relative w-[330px] rounded-xl border border-hairline bg-raised p-4"
-        style={{ boxShadow: 'var(--sh-lg)' }}
-      >
-        <div className="text-[13.5px] font-semibold text-fg-1">{title}</div>
-        <div className="mt-2 text-[12.5px] leading-relaxed text-fg-2">{body}</div>
-        <div className="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="h-7 rounded-lg border border-hairline-strong px-3 text-[12.5px] text-fg-1 transition-colors hover:bg-sunken"
-          >
-            {cancelText}
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            className="h-7 rounded-lg bg-danger px-3 text-[12.5px] text-white transition-opacity hover:opacity-90"
-          >
-            {confirmText}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
 }

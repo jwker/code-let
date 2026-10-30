@@ -309,17 +309,19 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /**
-   * 列出**全部项目**的会话。
+   * 列出**指定这几个项目**的会话。
    *
-   * `SessionManager.listAll()` 要读并解析每一个 jsonl —— 实测 38 个会话 212ms，
-   * 随会话总数线性增长。所以支持分段回调：先给一部分，别让侧栏干等。
+   * 不再全量扫 `listAll()` —— 那是 Pi 聊过的所有项目（包括历史遗留的），
+   * 侧栏只该列用户选中的那几个。顺带也快了：只读选中的目录。
    */
-  static async listConversations(onPartial?: (list: ConversationInfo[]) => void): Promise<ConversationInfo[]> {
-    const sessions = await SessionManager.listAll((_loaded, _total, partial) => {
-      if (!partial || !onPartial) return
-      onPartial(partial.map(toConversationInfo).sort(byModifiedDesc))
-    })
-    return sessions.map(toConversationInfo).sort(byModifiedDesc)
+  static async listConversations(cwds: string[]): Promise<ConversationInfo[]> {
+    const lists = await Promise.all(
+      cwds.map(async (cwd) => {
+        const sessions = await SessionManager.list(cwd)
+        return sessions.map(toConversationInfo)
+      })
+    )
+    return lists.flat().sort(byModifiedDesc)
   }
 }
 

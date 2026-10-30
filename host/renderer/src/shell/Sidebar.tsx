@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ConversationInfo, TabInfo } from '@contract/index'
+import type { ConversationInfo, ProjectInfo, TabInfo } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
 import { IconFolder } from './icons'
+import { ConfirmDialog } from './ConfirmDialog'
 
 /**
  * 上下文侧栏 —— 宿主独占（PLAN.md D11 修订）。
@@ -34,13 +35,16 @@ function saveCollapsed(collapsed: Set<string>): void {
 
 export function Sidebar() {
   const conversations = useStore((s) => s.snapshot.conversations)
+  const projects = useStore((s) => s.snapshot.projects)
   const tabs = useStore((s) => s.snapshot.tabs)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed())
+  /** 待确认移除的项目 */
+  const [removing, setRemoving] = useState<ProjectInfo | null>(null)
 
-  // 项目分组：按会话的 cwd 分组，顺序按最近修改
-  const groups = groupByProject(conversations)
+  // 分组只按**清单里的项目**分 —— 不是 Pi 聊过的所有项目
+  const groups = groupByProject(projects, conversations)
 
   function toggle(project: string): void {
     setCollapsed((prev) => {
@@ -89,6 +93,7 @@ export function Sidebar() {
               count={group.conversations.length}
               collapsed={collapsed.has(group.path)}
               onToggle={() => toggle(group.path)}
+              onRemove={() => setRemoving(group)}
               conversations={group.conversations}
               tabs={tabs}
               activeTabId={activeTabId}
@@ -96,6 +101,21 @@ export function Sidebar() {
           ))}
         </div>
       </div>
+
+      {removing && (
+        <ConfirmDialog
+          title="从 Codelet 移除这个项目？"
+          body={`「${removing.name}」不会再出现在 Codelet 的项目列表里。Pi 存的对话还在磁盘上，一个字都没动 —— 重新「打开项目」指到同一个目录就能回来。`}
+          confirmText="移除"
+          danger
+          onCancel={() => setRemoving(null)}
+          onConfirm={() => {
+            const target = removing
+            setRemoving(null)
+            void host.removeProject(target.path)
+          }}
+        />
+      )}
     </aside>
   )
 }
@@ -107,6 +127,7 @@ function ProjectGroup({
   count,
   collapsed,
   onToggle,
+  onRemove,
   conversations,
   tabs,
   activeTabId
@@ -116,6 +137,7 @@ function ProjectGroup({
   count: number
   collapsed: boolean
   onToggle: () => void
+  onRemove: () => void
   conversations: ConversationInfo[]
   tabs: TabInfo[]
   activeTabId: string | null
@@ -195,6 +217,18 @@ function ProjectGroup({
               >
                 <span>复制项目路径</span>
               </button>
+              <div className="my-1 h-px bg-hairline" />
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false)
+                  onRemove()
+                }}
+                className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-danger transition-colors hover:bg-sunken"
+              >
+                <span>从 Codelet 移除</span>
+              </button>
             </div>
           )}
         </div>
@@ -265,35 +299,22 @@ function ConversationRow({
   )
 }
 
-/** 一个项目 */
-interface ProjectGroupData {
-  path: string
-  name: string
+/** 一个项目分组 */
+interface ProjectGroupData extends ProjectInfo {
   conversations: ConversationInfo[]
 }
 
-/** 按项目分组。会话按 cwd 分，顺序按最近修改 */
-function groupByProject(conversations: ConversationInfo[]): ProjectGroupData[] {
-  const map = new Map<string, ConversationInfo[]>()
-  for (const conversation of conversations) {
-    const key = conversation.cwd || UNKNOWN_PROJECT
-    const bucket = map.get(key)
-    if (bucket) bucket.push(conversation)
-    else map.set(key, [conversation])
-  }
-  return [...map.entries()].map(([path, list]) => ({
-    path,
-    name: path === UNKNOWN_PROJECT ? '未知项目' : basenameOf(path),
-    conversations: list
+/**
+ * 按项目分组。
+ *
+ * **以清单为准** —— 用户没选的项目，它的会话不列出来。
+ * 清单里的项目即使一个会话都没有，也照样列出来（不然用户不知道自己选了什么）。
+ */
+function groupByProject(projects: ProjectInfo[], conversations: ConversationInfo[]): ProjectGroupData[] {
+  return projects.map((project) => ({
+    ...project,
+    conversations: conversations.filter((conversation) => conversation.cwd === project.path)
   }))
-}
-
-/** 老会话的 cwd 可能是空字符串（Pi 的注释里写了）—— 归到「未知项目」 */
-const UNKNOWN_PROJECT = 'unknown'
-
-function basenameOf(path: string): string {
-  const parts = path.split(/[\\/]/).filter(Boolean)
-  return parts[parts.length - 1] || path
 }
 
 function startOfToday(): number {

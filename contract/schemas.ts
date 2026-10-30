@@ -7,6 +7,10 @@ import { z } from 'zod'
  */
 
 /** 标签 id —— 宿主自己发的，稳定的身份 */
+export const projectPathSchema = z.object({
+  path: z.string().min(1)
+})
+
 export const tabIdSchema = z.object({
   tabId: z.string().min(1)
 })

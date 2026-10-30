@@ -11,6 +11,7 @@ import type {
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
 import { PiRuntime, TabSessionMissingError, type PiRuntimePort } from './pi/runtime'
+import { ProjectStore } from './projects'
 import { TabStore, type StoredTab } from './tabs'
 
 /** 宿主这边记的一个标签 */
@@ -34,6 +35,8 @@ interface HostTab {
  */
 export class HostState extends EventEmitter {
   readonly pi: PiRuntimePort
+  /** 用户选的项目清单 —— 侧栏只列这些项目的会话 */
+  private readonly projects: ProjectStore
   private readonly tabStore: TabStore
   private readonly pickDirectory: () => Promise<string | null>
   private tabs: HostTab[] = []
@@ -58,10 +61,12 @@ export class HostState extends EventEmitter {
   constructor(options?: {
     pi?: PiRuntimePort
     tabStore?: TabStore
+    projects?: ProjectStore
     pickDirectory?: () => Promise<string | null>
   }) {
     super()
     this.pi = options?.pi ?? new PiRuntime()
+    this.projects = options?.projects ?? new ProjectStore()
     this.tabStore = options?.tabStore ?? new TabStore()
     this.pickDirectory = options?.pickDirectory ?? pickDirectory
     this.conversationsRefresh = new DebouncedRefresh(() => this.refreshConversations())
@@ -75,6 +80,7 @@ export class HostState extends EventEmitter {
     return {
       tabs: this.tabs.map((tab) => this.tabInfo(tab)),
       activeTabId: this.activeTabId,
+      projects: this.projects.list(),
       conversations: this.conversations,
       session: this.session
     }
@@ -91,6 +97,8 @@ export class HostState extends EventEmitter {
       projectName: basename(tab.cwd) || tab.cwd,
       streaming: state.streaming,
       ready: state.ready,
+      // 项目从清单里移走了 —— 标签还能用，但它不再「在清单里」
+      removed: !this.projects.has(tab.cwd),
       model: state.model,
       modelFallback: state.modelFallback,
       error: tab.error
@@ -134,12 +142,15 @@ export class HostState extends EventEmitter {
    * 一个会话都没有的话，就在当前目录下开一个新会话。
    */
   private async openFallbackTab(): Promise<void> {
+    const projects = this.projects.list()
+    // 一个项目都没选 —— 不开标签，侧栏显示空态，等用户「打开项目」
+    if (projects.length === 0) return
     const latest = this.conversations[0]
     if (latest) {
       await this.openTab({ cwd: latest.cwd, path: latest.path, title: latest.title })
       return
     }
-    await this.openTab({ cwd: process.cwd() })
+    await this.openTab({ cwd: projects[0].path })
   }
 
   /**
@@ -199,13 +210,26 @@ export class HostState extends EventEmitter {
     return id
   }
 
-  /** 打开项目（系统目录选择器）→ 在那儿开一个新标签 */
+  /** 打开项目（系统目录选择器）→ 加进项目清单 → 在那儿开一个新标签 */
   async openProject(): Promise<string | null> {
     const picked = await this.pickDirectory()
     if (!picked) return null
     const dir = normalize(picked)
+    this.projects.add(dir)
     await this.openTab({ cwd: dir })
     return dir
+  }
+
+  /**
+   * 从清单里移除一个项目。
+   *
+   * **Pi 存的对话一个字都不动** —— 只是这个目录不再出现在 Codelet 的清单里，
+   * 侧栏不列它了。已经打开的标签留着照常用，只是标记成「已移除」。
+   */
+  async removeProject(path: string): Promise<void> {
+    this.projects.remove(path)
+    await this.refreshConversations()
+    this.push()
   }
 
   /** 打开一个已有会话 → 开成新标签 */
@@ -272,15 +296,9 @@ export class HostState extends EventEmitter {
   async refreshConversations(): Promise<void> {
     const token = ++this.refreshToken
     try {
-      const list = await PiRuntime.listConversations((partial) => {
-        // 分段出结果：listAll 要读并解析每一个 jsonl，先给一部分，别让侧栏干等。
-        //
-        // **只加不删** —— 拿部分结果替换整个列表，侧栏会先塌下去再涨回来，
-        // 看着就是闪一下（实测：58 条塌成 4 条再回到 61 条）。
-        if (token !== this.refreshToken) return
-        this.conversations = mergeConversations(this.conversations, partial)
-        this.push()
-      })
+      // 只读用户选中的那几个项目的目录 —— 不是 Pi 聊过的所有项目
+      const cwds = this.projects.list().map((project) => project.path)
+      const list = await PiRuntime.listConversations(cwds)
       if (token !== this.refreshToken) return
       this.conversations = list
       // 会话标题变了（第一条用户消息落盘后，标题从「新对话」变成消息内容）——
@@ -357,16 +375,4 @@ export class HostState extends EventEmitter {
     this.conversationsRefresh.dispose()
     await this.pi.stop()
   }
-}
-
-/**
- * 把分段读出来的结果并进现有列表。
- *
- * **只加不删** —— 列表已有的会话保留，缺的是补上，标题/时间变了的用新的。
- * 顺序按修改时间倒序（新的在前），跟完整列表一致。
- */
-function mergeConversations(existing: ConversationInfo[], incoming: ConversationInfo[]): ConversationInfo[] {
-  const byPath = new Map(existing.map((conversation) => [conversation.path, conversation]))
-  for (const conversation of incoming) byPath.set(conversation.path, conversation)
-  return [...byPath.values()].sort((a, b) => b.modified.localeCompare(a.modified))
 }
