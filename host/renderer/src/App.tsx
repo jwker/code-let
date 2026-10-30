@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { host } from './host'
 import { Inspector } from './shell/Inspector'
+import { StatusBar } from './shell/StatusBar'
 import { MainArea } from './shell/MainArea'
 import { ModelPicker } from './shell/ModelPicker'
 import { PaneResizer } from './shell/PaneResizer'
-import { Rail } from './shell/Rail'
 import { Sidebar } from './shell/Sidebar'
 import { TitleBar } from './shell/TitleBar'
 import {
@@ -139,12 +139,12 @@ export function App() {
   return (
     <div ref={shellRef} className={shellClass}>
       <TitleBar />
-      <Rail />
       <div className="shell-deck">
         <Sidebar />
         <MainArea />
         <Inspector />
       </div>
+      <StatusBar />
 
       <PaneResizer
         edge="left"

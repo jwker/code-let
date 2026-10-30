@@ -6,6 +6,9 @@ const MODE_LABEL = { normal: '普通', terminal: '终端', html: 'HTML' } as con
 /**
  * 底部状态栏 —— 多段并存，左边身份，右边状态。
  *
+ * **在画布上，不属于任何一张卡片**：铺满整宽、没有背景色，
+ * 跟标题栏上下对称。以前它是主区卡内部的页脚，那会儿有白底。
+ *
  * 模型不在这一行 —— 它只在输入框那一行显示与切换（见 ConversationArea 的模型胶囊）。
  * 同一件事不在两处说，也不给两个都能点的入口。
  */
@@ -17,7 +20,7 @@ export function StatusBar() {
   const fallback = snapshot.session.modelFallback
 
   return (
-    <footer className="shell-bar flex items-center gap-4 bg-surface px-4 text-[10.5px] text-fg-3">
+    <footer className="shell-bar flex items-center gap-4 px-4 text-[10.5px] text-fg-3">
       <span className="truncate">Codelet</span>
       <span className="truncate font-mono">
         {snapshot.session.sessionId ? `session ${snapshot.session.sessionId.slice(0, 8)}` : 'no session'}

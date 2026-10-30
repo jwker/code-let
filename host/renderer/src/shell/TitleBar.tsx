@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ConversationMode } from '@contract/index'
 import { useStore } from '../store'
-import { IconMore, IconPanelLeft, IconPanelRight } from './icons'
+import { IconMoon, IconMore, IconPanelLeft, IconPanelRight, IconSettings, IconSun } from './icons'
 import { TabBar } from './TabBar'
 
 const MODES: Array<{ key: ConversationMode; label: string }> = [
@@ -25,6 +25,8 @@ export function TitleBar() {
   const toggleInspector = useStore((s) => s.toggleInspector)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
+  const theme = useStore((s) => s.theme)
+  const toggleTheme = useStore((s) => s.toggleTheme)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [subOpen, setSubOpen] = useState(false)
@@ -158,6 +160,35 @@ export function TitleBar() {
                   >
                     <span>{sidebarOpen ? '隐藏侧栏' : '显示侧栏'}</span>
                     <span className="ml-auto font-mono text-[10.5px] text-fg-3">⌘B</span>
+                  </button>
+
+                  <div className="my-1 h-px bg-hairline" />
+
+                  {/* 原来在导航轨底部，轨去掉之后挪到这儿 */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      closeMenu()
+                      toggleTheme()
+                    }}
+                    className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken"
+                  >
+                    <span className="flex-none text-fg-2">
+                      {theme === 'dark' ? <IconSun /> : <IconMoon />}
+                    </span>
+                    <span>{theme === 'dark' ? '切到亮色' : '切到暗色'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={closeMenu}
+                    className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken"
+                  >
+                    <span className="flex-none text-fg-2">
+                      <IconSettings />
+                    </span>
+                    <span>设置</span>
                   </button>
 
                   <div className="my-1 h-px bg-hairline" />

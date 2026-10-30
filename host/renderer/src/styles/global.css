@@ -124,14 +124,17 @@
   position: relative;
   display: grid;
   /*
-   * 轨 100% 高、标题栏 100% 宽 —— 两者是画布色，连成一个 L 形。
-   * 轨和标题栏之外的区域是卡片区（deck）：三张卡浮在画布上。
+   * 三行：标题栏 / 卡片区 / 状态栏，都铺满整宽。
+   *
+   * 没有导航轨了 —— 导航入口挪到右侧面板顶部（见 Inspector）。
+   * 标题栏和状态栏都是画布色、直接写在背景上；卡片区里的三张卡浮在中间。
    */
-  grid-template-columns: var(--rail-w) minmax(0, 1fr);
-  grid-template-rows: var(--titlebar-h) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: var(--titlebar-h) minmax(0, 1fr) var(--statusbar-h);
   grid-template-areas:
-    'title title'
-    'rail  deck';
+    'title'
+    'deck'
+    'bar';
   height: 100vh;
   background: var(--canvas);
   transition:
@@ -179,6 +182,7 @@
 }
 .shell-card.insp {
   flex: none;
+  /* 展开时用设计宽度；收起时被下面那条覆盖成 38px（窄轨） */
   width: var(--insp-w);
   background: var(--insp);
 }
@@ -192,14 +196,25 @@
 .shell.is-side-hidden .shell-deck {
   padding-left: 0;
 }
-/* 收起检视器：同理，它右边那条缝也要吃掉 */
+/*
+ * 收起检视器：卡片收成 38px 的窄轨 —— **导航栏留在里面**，只收起面板内容。
+ *
+ * 不归零是因为导航入口在检视器卡片里：卡片没了，切视图的入口也就没了。
+ * 代价是收起后右边仍占 38px（设计稿方案 A 的取舍）。
+ */
 .shell.is-insp-hidden .shell-card.insp {
-  width: 0;
-  border-width: 0;
-  margin-left: -7px;
+  width: 38px;
+}
+.shell.is-insp-hidden .shell-card.insp .insp-body {
+  display: none;
 }
 
-/* 收起检视器 / 侧栏：卡片的宽度归零（见上面 .shell-card.insp / .side） */
+/*
+ * 收起侧栏：宽度归零（卡片整个消失）。
+ *
+ * 检视器**不归零** —— 它收成 38px 的窄轨，导航栏留在里面（见上面那条）。
+ * 但 --insp-w 还是要归零：拖拽手柄、标题栏那些地方用它算位置。
+ */
 .shell.is-insp-hidden {
   --insp-w: 0px;
 }
@@ -226,10 +241,15 @@
   gap: 9px;
   padding-right: 12px;
 }
-/* 红绿灯占的那一片：轨的宽度，让轨和标题栏连成 L 形 */
+/*
+ * 红绿灯占的那一片。
+ *
+ * 以前是「轨的宽度」（轨在它下面，两者连成 L）。轨去掉之后，这里只需要让开红绿灯
+ * 本身的宽度 —— 不然标题栏左边会空一大截。
+ */
 .titlebar-gutter {
   flex: none;
-  width: var(--rail-w);
+  width: 12px;
   align-self: stretch;
 }
 [data-platform='darwin'] .titlebar-gutter {
@@ -311,7 +331,7 @@
  * 让左边距跟着收放一起过渡 —— 不然收起末尾标题会突然往右跳一格。
  */
 [data-platform='darwin'] .shell.is-side-hidden .titlebar-content {
-  padding-left: calc(var(--traffic-light-gutter) - var(--rail-w) + 28px + var(--sp-3));
+  padding-left: calc(var(--traffic-light-gutter) + 28px + var(--sp-3));
 }
 .titlebar-main {
   min-width: 0;
@@ -509,7 +529,41 @@
     transition: none;
   }
 }
+/*
+ * 右侧面板顶部的导航栏（原来是左边的导航轨）。
+ *
+ * 展开：图标横排，5 个各占一格均匀铺满面板宽度。
+ * 收起：检视器卡收成 38px 窄轨，图标竖排。
+ *
+ * 只有图标没有文字 —— 每一项的 title 就是它的名字。
+ */
+.nav-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--hairline);
+}
+.nav-bar svg {
+  width: 16px;
+  height: 16px;
+}
+.nav-rail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+}
+.nav-rail svg {
+  width: 17px;
+  height: 17px;
+}
+
 .shell-bar {
+  grid-area: bar;
   flex: none;
 }
 
@@ -541,7 +595,7 @@
 }
 /* 手柄贴在卡片的外缘：左边是侧栏卡的右缘，右边是检视器卡的左缘 */
 .shell-grip-left {
-  left: calc(var(--rail-w) + 7px + var(--side-w));
+  left: calc(7px + var(--side-w));
 }
 .shell-grip-right {
   left: calc(100% - 7px - var(--insp-w));
@@ -550,6 +604,11 @@
 .shell.is-insp-hidden .shell-grip-right,
 .shell.is-side-hidden .shell-grip-left {
   display: none;
+}
+/* 检视器收起时卡片是 38px 的窄轨 —— 手柄要贴在窄轨的左边 */
+.shell.is-insp-hidden .shell-grip-right {
+  display: block;
+  left: calc(100% - 38px);
 }
 /* 悬停时把原有那条细线加粗一格，不另外画线，免得出现双线 */
 .shell-grip::after {
