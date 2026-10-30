@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>状态栏的「刷新中」标识</title>
+<style>
+:root{
+  --font-ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --font-code:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-full:999px;
+  --dur:160ms; --ease:cubic-bezier(.4,0,.2,1);
+}
+[data-theme="light"]{
+  --canvas:#F4F4F5; --panel:#FBFBFB; --surface:#FFFFFF; --raised:#FFFFFF; --sunken:#F1F1F3;
+  --hairline:#ECECEE; --hairline-strong:#DEDEE2;
+  --fg-1:#1B1B19; --fg-2:#5C5C56; --fg-3:#94948C;
+  --accent:#1F1F1D; --accent-fg:#FFFFFF; --accent-wash:#EEEEF0;
+  --ok:#2E7D53; --warn:#9C6B15; --info:#2563A8;
+  --sh-sm:0 1px 2px rgba(20,20,16,.04); --sh-md:0 8px 24px -8px rgba(20,20,16,.10);
+}
+[data-theme="dark"]{
+  --canvas:#131312; --panel:#181817; --surface:#1C1C1B; --raised:#242423; --sunken:#2A2A29;
+  --hairline:#2B2B29; --hairline-strong:#3B3B38;
+  --fg-1:#EDEDEB; --fg-2:#B4B4AD; --fg-3:#7D7D76;
+  --accent:#F0F0EC; --accent-fg:#151513; --accent-wash:#2A2A2C;
+  --ok:#5BD69A; --warn:#E5B75C; --info:#6FAEF0;
+  --sh-sm:0 1px 2px rgba(0,0,0,.5); --sh-md:0 12px 30px -12px rgba(0,0,0,.65);
+}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--canvas);color:var(--fg-1);font-family:var(--font-ui);font-size:13px;line-height:1.65;-webkit-font-smoothing:antialiased}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+p{margin:0}
+code{font-family:var(--font-code);font-size:11.5px;background:var(--accent-wash);padding:1px 5px;border-radius:var(--r-xs);color:var(--fg-2)}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+
+.page{max-width:1200px;margin:0 auto;padding:0 28px 140px}
+.topbar{position:sticky;top:0;z-index:50;height:52px;display:flex;align-items:center;gap:14px;background:var(--panel);border-bottom:1px solid var(--hairline);margin:0 -28px;padding:0 28px}
+.brand{font-weight:600;letter-spacing:-.015em}
+.brand span{color:var(--fg-3);font-weight:400}
+.topbar .spacer{flex:1}
+.ghost-btn{height:28px;padding:0 10px;border-radius:var(--r-sm);border:1px solid var(--hairline);color:var(--fg-2);font-size:12px;transition:all var(--dur) var(--ease)}
+.ghost-btn:hover{color:var(--fg-1);border-color:var(--hairline-strong);background:var(--surface)}
+
+.head{padding:36px 0 8px}
+.head h1{font-size:23px;margin-bottom:10px;line-height:1.35}
+.head p{color:var(--fg-2);max-width:86ch}
+.head p + p{margin-top:10px}
+
+.facts{margin:26px 0 0;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);padding:16px 18px;max-width:1000px}
+.facts h3{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-3);margin-bottom:10px}
+.facts ul{margin:0;padding-left:18px;color:var(--fg-2)}
+.facts li{margin-bottom:7px}
+.facts b{color:var(--fg-1);font-weight:600}
+
+.sec{margin:44px 0 0;font-size:17px;letter-spacing:-.015em}
+.secled{margin:8px 0 0;color:var(--fg-2);font-size:13px;max-width:88ch}
+
+.option{margin-top:26px;border:1px solid var(--hairline);border-radius:var(--r-lg);background:var(--surface);overflow:hidden}
+.option-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--hairline);background:var(--panel)}
+.option-head .tag{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;color:var(--fg-3);border:1px solid var(--hairline-strong);border-radius:var(--r-full);padding:2px 8px;white-space:nowrap}
+.option-head .tag.rec{color:var(--ok);border-color:var(--ok)}
+.option-head h2{font-size:14.5px}
+.desc{padding:16px 18px 0;color:var(--fg-2);font-size:12.5px;max-width:90ch}
+.desc b{color:var(--fg-1)}
+.frame{padding:18px}
+.verdict{padding:0 18px 18px;color:var(--fg-2);font-size:12.5px;max-width:90ch}
+.verdict b{color:var(--fg-1)}
+.warn{color:var(--warn)}
+.good{color:var(--ok)}
+
+/* ============================================================
+   状态栏样例
+   ============================================================ */
+.sbar{
+  display:flex;align-items:center;gap:12px;height:26px;padding:0 12px;
+  background:var(--canvas);font-family:var(--font-code);font-size:9.5px;color:var(--fg-3);
+  border:1px solid var(--hairline);border-radius:var(--r-sm);
+}
+.sbar .spacer{flex:1}
+.sbar .dim{color:var(--fg-3)}
+
+/* 形态 A：文字 */
+.spin-text{color:var(--fg-2)}
+/* 形态 B：转圈 + 文字 */
+.spin-b{display:inline-flex;align-items:center;gap:5px;color:var(--fg-2)}
+.ring{width:9px;height:9px;border:1.5px solid var(--hairline-strong);border-top-color:var(--fg-2);border-radius:50%;display:inline-block;animation:spin 700ms linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* 形态 C：只有转圈 */
+.ring.only{width:10px;height:10px}
+/* 形态 D：状态栏顶部细线 */
+.sbar-wrap{position:relative}
+.bar-line{position:absolute;left:0;right:0;top:-1px;height:2px;background:var(--hairline);overflow:hidden;border-radius:1px}
+.bar-line::after{content:'';position:absolute;top:0;bottom:0;width:30%;background:var(--info);border-radius:1px;animation:slide 1.1s ease-in-out infinite}
+@keyframes slide{0%{left:-30%}100%{left:100%}}
+
+/* 位置对比用的小标签 */
+.mark{display:inline-block;font-family:var(--font-ui);font-size:9px;background:var(--ok);color:#fff;border-radius:3px;padding:0 4px;margin-left:4px;vertical-align:1px}
+
+table.spec{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px;border:1px solid var(--hairline);border-radius:var(--r-lg);overflow:hidden;background:var(--surface)}
+table.spec th{text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-3);font-weight:600;padding:9px 12px;background:var(--panel);border-bottom:1px solid var(--hairline)}
+table.spec td{padding:9px 12px;border-bottom:1px solid var(--hairline);color:var(--fg-2);vertical-align:top}
+table.spec tr:last-child td{border-bottom:none}
+table.spec td:first-child{color:var(--fg-1);font-weight:600}
+table.spec .ok{color:var(--ok);font-weight:600}
+table.spec .no{color:#B8342A;font-weight:600}
+table.spec .mid{color:var(--warn);font-weight:600}
+
+.rec-card{margin-top:26px;border:1px solid var(--ok);border-radius:var(--r-lg);background:var(--surface);padding:18px 20px;max-width:1000px}
+.rec-card h3{font-size:14.5px;color:var(--ok);margin-bottom:10px}
+.rec-card ol{margin:0;padding-left:20px;color:var(--fg-2)}
+.rec-card li{margin-bottom:7px}
+.rec-card p{margin-top:10px;color:var(--fg-2)}
+.rec-card b{color:var(--fg-1)}
+
+.note{margin-top:16px;border:1px solid var(--hairline);border-left:3px solid var(--info);border-radius:var(--r-sm);background:#E9F1FA;padding:12px 14px;color:var(--fg-2);font-size:12.5px;max-width:1000px}
+.note b{color:var(--fg-1)}
+.note ol{margin:6px 0 0;padding-left:20px}
+.note li{margin-bottom:5px}
+
+/* 时序图 */
+.timeline{margin-top:14px;border:1px solid var(--hairline);border-radius:var(--r-md);background:var(--surface);padding:14px 16px;font-family:var(--font-code);font-size:11px;color:var(--fg-2);overflow-x:auto;white-space:pre;line-height:1.9}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="topbar">
+    <div class="brand">状态栏的「刷新中」标识</div>
+    <div class="spacer"></div>
+    <button class="ghost-btn" id="theme">切换明暗</button>
+  </div>
+
+  <div class="head">
+    <h1>什么时候显示「刷新中」</h1>
+    <p>
+      刷新时机有四个来源（Pi 事件、用户操作、窗口焦点、启动），但只有一种刷新**有可感知的耗时**：
+      重读会话列表（<code>refreshConversations</code>）。实测 4 个项目 21 个会话约 180ms。
+      其余几个（<code>readSession</code> 读 runtime 内存）是微秒级，不值得显示。
+    </p>
+    <p>
+      所以这个标识只为「重读会话列表」而做。下面比的是<b>显示什么形态</b>、<b>放哪</b>、
+      以及<b>什么时候出现和消失</b> —— 最后一条最容易做错。
+    </p>
+  </div>
+
+  <div class="facts">
+    <h3>先摆事实</h3>
+    <ul>
+      <li><b>耗时</b>：一次重读约 180ms（4 个项目 21 个会话）。项目多、会话多会更久。</li>
+      <li><b>频率</b>：发消息后（去抖 100ms）、切窗口（离开 ≥3 秒）、开关项目时各触发一次。</li>
+      <li><b>主进程还是渲染进程</b>：读盘在主进程，所以标识要由主进程把「正在刷新」这个状态推下来。</li>
+      <li><b>180ms 会闪</b>：一个东西出现 180ms 再消失，人眼会看到一次「抖」。所以时序比形态更重要。</li>
+    </ul>
+  </div>
+
+  <h2 class="sec">一 · 三个形态</h2>
+  <p class="secled">
+    都放在状态栏右侧，跟「普通 · events · Pi 就绪」那一串并列。
+  </p>
+
+  <section class="option">
+    <div class="option-head">
+      <span class="tag rec">A · 推荐</span>
+      <h2>转圈 + 「刷新中」</h2>
+    </div>
+    <p class="desc">
+      一个小转圈加两个字。最明确 —— 不用猜那个转圈是什么意思。
+    </p>
+    <div class="frame">
+      <div class="sbar">
+        <span>Codelet</span><span>session 01a18b42</span>
+        <span class="spacer"></span>
+        <span class="spin-b"><span class="ring"></span>刷新中</span>
+        <span>普通</span><span>events 214</span><span>Pi 就绪</span>
+      </div>
+      <div class="sbar" style="margin-top:10px">
+        <span>Codelet</span><span>session 01a18b42</span>
+        <span class="spacer"></span>
+        <span>普通</span><span>events 214</span><span>Pi 就绪</span>
+      </div>
+      <p style="font-size:12px;color:var(--fg-3);margin-top:8px">上面是刷新中，下面是平时（标识完全不占位）</p>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：一眼看懂，不用学。<br>
+      <b>代价</b>：<span class="warn">占宽</span> —— 「刷新中」三个字约 36px，加上转圈和间距约 50px。
+      状态栏右边已经有四项，窄窗口时会挤。
+    </div>
+  </section>
+
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">B</span>
+      <h2>只有转圈</h2>
+    </div>
+    <p class="desc">
+      一个 10px 的转圈，没有文字。最省空间。
+    </p>
+    <div class="frame">
+      <div class="sbar">
+        <span>Codelet</span><span>session 01a18b42</span>
+        <span class="spacer"></span>
+        <span class="ring only"></span>
+        <span>普通</span><span>events 214</span><span>Pi 就绪</span>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="good">只占 10px</span>，几乎不挤。<br>
+      <b>代价</b>：<span class="warn">不说明在刷什么</span>。状态栏里出现一个转圈，用户会猜「是网络在转？还是模型在转？」。
+    </div>
+  </section>
+
+  <section class="option">
+    <div class="option-head">
+      <span class="tag">C</span>
+      <h2>状态栏顶部一条细线（不走马灯）</h2>
+    </div>
+    <p class="desc">
+      不在右侧加东西，而是在状态栏上沿画一条 2px 的线，刷新时线变成一条滑动的进度条。
+    </p>
+    <div class="frame">
+      <div class="sbar-wrap">
+        <div class="bar-line"></div>
+        <div class="sbar">
+          <span>Codelet</span><span>session 01a18b42</span>
+          <span class="spacer"></span>
+          <span>普通</span><span>events 214</span><span>Pi 就绪</span>
+        </div>
+      </div>
+    </div>
+    <div class="verdict">
+      <b>好处</b>：<span class="good">完全不占文字空间</span>，也不打断状态栏那一行的读法。<br>
+      <b>代价</b>：<span class="warn">太淡</span> —— 2px 的线在窗口底部，眼睛不一定扫得到；
+      而且它看起来像「页面加载进度」，容易误会成更重的事情。
+    </div>
+  </section>
+
+  <h2 class="sec">二 · 时序：什么时候出现、什么时候消失</h2>
+  <p class="secled">
+    这一节比形态重要。180ms 的刷新如果每次都闪一下，比不显示还烦。
+  </p>
+
+  <div class="timeline">方案 1（立即显示、立即消失）—— 会闪
+  ┌─ 刷新开始
+  │  ▼ 出现
+  │  ████  180ms
+  │        ▼ 消失
+  └─────────────────────────────► 时间
+  问题：180ms 的东西出现又消失，看起来像「抖了一下」
+
+
+方案 2（延迟 200ms 才出现）—— 快的时候完全不显示
+  ┌─ 刷新开始
+  │
+  │        ▼ 200ms 还没完 → 出现
+  │        ████ 剩下的时间
+  │            ▼ 消失
+  └─────────────────────────────► 时间
+  180ms 的刷新：什么都不显示（因为 200ms 前就结束了）
+  2 秒的刷新：从 200ms 开始显示，一直到最后
+
+
+方案 3（延迟 200ms + 最短显示 500ms）—— 推荐
+  ┌─ 刷新开始
+  │
+  │        ▼ 200ms 还没完 → 出现
+  │        ████████  至少 500ms
+  │                ▼ 消失
+  └─────────────────────────────► 时间
+  快的刷新：不显示
+  慢的刷新：显示了就至少停 500ms，不会闪</div>
+
+  <div class="rec-card">
+    <h3>推荐：形态 A + 时序 3</h3>
+    <ol>
+      <li><b>形态选 A（转圈 + 「刷新中」）</b> —— 状态栏是给「当前在发生什么」用的，
+      一个不知道在转什么的转圈反而是噪音。50px 的宽度在 1440 窗口里不成问题。</li>
+      <li><b>时序用「延迟 200ms + 最短 500ms」</b> ——
+      这是「不闪」的关键：180ms 的刷新根本不显示；真慢了才显示，显示了就停够时间。</li>
+      <li><b>位置在右侧、跟状态并列</b> —— 不占左边的身份区（Codelet / session），
+      右边那一串本来就是「现在什么状态」。</li>
+    </ol>
+    <p>
+      如果以后觉得 50px 太宽，降到形态 B（只有转圈）+ 一个 <code>title</code> 说明在刷什么。
+    </p>
+  </div>
+
+  <div class="note">
+    <b>三个要你定的：</b>
+    <ol>
+      <li><b>只显示「会话列表刷新」，还是也显示「标签重载」？</b>
+      重载一个标签（<code>reloadTab</code>）要重建 runtime，耗时比 180ms 长得多 ——
+      那个更值得显示。可以两个共用同一个标识。</li>
+      <li><b>延迟 200ms 这个门槛</b> —— 如果实际用下来 180ms 的刷新经常被感知到卡，
+      说明门槛该调低（比如 120ms）。</li>
+      <li><b>要不要区分「正在刷新」和「刷新完了」</b> —— 比如完了之后闪一下「已更新」再消失。
+      我倾向不要：状态栏不该变成通知中心。</li>
+    </ol>
+  </div>
+
+  <h2 class="sec">三 · 怎么实现（技术要点）</h2>
+  <p class="secled">
+    不是纯前端的事 —— 刷新的耗时在主进程，状态要从主进程推下来。
+  </p>
+  <table class="spec">
+    <thead><tr><th>在哪</th><th>做什么</th></tr></thead>
+    <tbody>
+      <tr><td><code>contract/index.ts</code></td><td><code>HostSnapshot</code> 加 <code>refreshing: boolean</code></td></tr>
+      <tr><td><code>host/main/state.ts</code></td><td><code>refreshConversations</code> 开始置真、结束置假，各 <code>push()</code> 一次</td></tr>
+      <tr><td><code>host/renderer/src/shell/StatusBar.tsx</code></td><td>读 <code>snapshot.refreshing</code>，按延迟/最短显示规则渲染</td></tr>
+      <tr><td><code>host/renderer/src/shell/refreshIndicator.ts</code>（新）</td><td>延迟与最短显示的纯逻辑，好测</td></tr>
+    </tbody>
+  </table>
+  <p class="secled" style="margin-top:12px">
+    <b>延迟和最短显示放在渲染进程</b>，不放主进程：主进程只管「我正在读盘」这个事实，
+    什么时候该显示给人看是 UI 的事。
+  </p>
+
+  <h2 class="sec">四 · 怎么算做对了</h2>
+  <table class="spec">
+    <thead><tr><th>#</th><th>标准</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>发一条消息（触发 180ms 的刷新）→ 状态栏<b>不出现</b>「刷新中」（太快，不闪）</td></tr>
+      <tr><td>2</td><td>项目很多、刷新超过 200ms → 出现「刷新中」，刷完消失</td></tr>
+      <tr><td>3</td><td>刷新在 250ms 结束 → 标识至少停留 500ms 才消失，不闪</td></tr>
+      <tr><td>4</td><td>标识出现时，状态栏右侧其他项不换行、不挤掉</td></tr>
+      <tr><td>5</td><td>窄窗口（960px）下也不溢出</td></tr>
+      <tr><td>6</td><td>亮暗两套主题下转圈和文字都看得清</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script>
+  document.getElementById('theme').addEventListener('click', () => {
+    const root = document.documentElement
+    root.dataset.theme = root.dataset.theme === 'light' ? 'dark' : 'light'
+  })
+</script>
+</body>
+</html>
