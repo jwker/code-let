@@ -1094,3 +1094,282 @@ ol.md-list {
     opacity: 0;
   }
 }
+
+/* ===========================================================================
+   文件浏览器 —— 右侧面板的「文件」视图（PLAN.md D20）
+   =========================================================================== */
+
+.file-browser {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* —— 文件标签栏 —— */
+.file-tabs {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--hairline);
+  scrollbar-width: none;
+}
+.file-tabs::-webkit-scrollbar {
+  display: none;
+}
+.file-tabs-empty {
+  font-size: 10.5px;
+  color: var(--fg-3);
+  padding: 0 4px;
+}
+.file-tab {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 150px;
+  height: 22px;
+  padding: 0 5px 0 6px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--hairline);
+  background: var(--sunken);
+  color: var(--fg-2);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.file-tab:hover {
+  background: var(--panel);
+  color: var(--fg-1);
+}
+.file-tab.is-active {
+  background: var(--surface);
+  border-color: var(--hairline-strong);
+  color: var(--fg-1);
+}
+.file-tab-mark {
+  flex: none;
+  font-family: var(--font-code);
+  font-size: 8px;
+  color: var(--fg-3);
+}
+.file-tab-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.file-tab-close {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: var(--fg-3);
+  font-size: 10px;
+  opacity: 0;
+}
+.file-tab:hover .file-tab-close,
+.file-tab.is-active .file-tab-close {
+  opacity: 1;
+}
+.file-tab-close:hover {
+  background: var(--accent-wash);
+  color: var(--fg-1);
+}
+
+/* —— 树 + 内容 —— */
+.file-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.file-tree-pane {
+  flex: none;
+  width: 180px;
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--hairline);
+  padding: 4px 3px;
+}
+/*
+ * 面板被拖窄时收起文件树 —— 用容器查询，不用 JS 量宽度。
+ *
+ * 480 是内容宽度的分界；`FILE_VIEW_MIN`（520）比它大，所以切到文件视图时
+ * 面板被拉到 520，扣掉边框还有 518 > 480 —— 树一定显示得出来。
+ * 两个数要一起看：改一个别忘了另一个。
+ */
+.shell-card.insp {
+  container-type: inline-size;
+}
+@container (max-width: 480px) {
+  .file-tree-pane {
+    display: none;
+  }
+}
+
+.file-tree-empty,
+.file-tree-loading {
+  padding: 6px 8px;
+  font-size: 10.5px;
+  color: var(--fg-3);
+}
+.file-node {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  height: 19px;
+  border-radius: var(--r-xs);
+  color: var(--fg-2);
+  font-size: 10.5px;
+  text-align: left;
+  white-space: nowrap;
+}
+.file-node:hover {
+  background: var(--sunken);
+  color: var(--fg-1);
+}
+.file-node.is-active {
+  background: var(--accent-wash);
+  color: var(--fg-1);
+}
+.file-node.is-dir {
+  color: var(--fg-1);
+}
+.file-node-mark {
+  flex: none;
+  width: 11px;
+  text-align: center;
+  font-family: var(--font-code);
+  font-size: 8px;
+  color: var(--fg-3);
+}
+.file-node-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-content-pane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 内容区顶部：只放操作，不放文件名（标签栏已经显示了） */
+.file-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--hairline);
+  font-family: var(--font-code);
+  font-size: 9.5px;
+  color: var(--fg-3);
+}
+.file-actions-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-action {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-xs);
+  color: var(--fg-3);
+  font-size: 10px;
+}
+.file-action:hover {
+  background: var(--sunken);
+  color: var(--fg-1);
+}
+
+.file-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.file-viewer-state {
+  padding: 16px;
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+
+/* markdown 预览 */
+.file-markdown {
+  padding: 10px 14px 24px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--fg-1);
+}
+/* 面板里比对话区窄，标题收一档 */
+.file-markdown .md-h1 {
+  font-size: 17px;
+}
+.file-markdown .md-h2 {
+  font-size: 14px;
+}
+.file-markdown .md-h3 {
+  font-size: 12.5px;
+}
+
+/* 图片预览：按容器宽度等比缩放 */
+.file-image {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+}
+.file-image img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline);
+}
+.file-image-meta {
+  font-family: var(--font-code);
+  font-size: 9.5px;
+  color: var(--fg-3);
+}
+
+/* 代码 / 纯文本：左侧行号 + 右侧内容 */
+.file-code {
+  display: flex;
+  align-items: flex-start;
+  min-height: 100%;
+  font-family: var(--font-code);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+.file-code-gutter {
+  flex: none;
+  padding: 8px 6px 8px 0;
+  text-align: right;
+  color: var(--fg-3);
+  opacity: 0.7;
+  user-select: none;
+  border-right: 1px solid var(--hairline);
+  min-width: 34px;
+}
+.file-code-lines {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  white-space: pre;
+}

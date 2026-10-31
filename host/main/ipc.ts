@@ -8,6 +8,10 @@ import {
 } from '@contract/index'
 import {
   clipboardWriteSchema,
+  fileIdSchema,
+  fileOpenSchema,
+  fileReadSchema,
+  filesListSchema,
   modelSelectSchema,
   projectPathSchema,
   promptSchema,
@@ -144,6 +148,36 @@ export function registerIpc(state: HostState): () => void {
     clipboard.writeText(text)
   })
 
+  // —— 文件 ——
+
+  ipcMain.handle(IPC.filesList, async (_event, payload: unknown) => {
+    const { cwd, dir } = filesListSchema.parse(payload)
+    return state.listFiles(cwd, dir)
+  })
+
+  ipcMain.handle(IPC.filesRead, async (_event, payload: unknown) => {
+    const { cwd, path } = fileReadSchema.parse(payload)
+    return state.readFile(cwd, path)
+  })
+
+  ipcMain.handle(IPC.filesOpen, async (_event, payload: unknown) => {
+    const { cwd, path } = fileOpenSchema.parse(payload)
+    await state.openFile(cwd, path)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.filesClose, async (_event, payload: unknown) => {
+    const { fileId } = fileIdSchema.parse(payload)
+    await state.closeFile(fileId)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.filesActivate, async (_event, payload: unknown) => {
+    const { fileId } = fileIdSchema.parse(payload)
+    await state.activateFile(fileId)
+    return state.snapshot()
+  })
+
   ipcMain.handle(IPC.modelsList, async (_event, payload: unknown) => {
     const { tabId } = tabIdSchema.parse(payload)
     return state.listModels(tabId)
@@ -167,6 +201,11 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.tabsEntries)
     ipcMain.removeHandler(IPC.promptSend)
     ipcMain.removeHandler(IPC.clipboardWrite)
+    ipcMain.removeHandler(IPC.filesList)
+    ipcMain.removeHandler(IPC.filesRead)
+    ipcMain.removeHandler(IPC.filesOpen)
+    ipcMain.removeHandler(IPC.filesClose)
+    ipcMain.removeHandler(IPC.filesActivate)
     ipcMain.removeHandler(IPC.modelsList)
     ipcMain.removeHandler(IPC.modelsSelect)
   }

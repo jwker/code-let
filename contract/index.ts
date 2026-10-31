@@ -38,6 +38,16 @@ export const IPC = {
   promptSend: 'host:prompt:send',
   /** 把一段文字写入系统剪贴板 */
   clipboardWrite: 'host:clipboard:write',
+  /** 列一个目录下的条目（文件树） */
+  filesList: 'host:files:list',
+  /** 读一个文件的内容 */
+  filesRead: 'host:files:read',
+  /** 打开一个文件（进文件标签栏） */
+  filesOpen: 'host:files:open',
+  /** 关掉一个文件标签 */
+  filesClose: 'host:files:close',
+  /** 切到某个文件标签 */
+  filesActivate: 'host:files:activate',
   /** 列出已配置凭据的模型 */
   modelsList: 'host:models:list',
   /** 切换某个标签的模型 */
@@ -157,6 +167,61 @@ export interface ConversationInfo {
   cwd: string
 }
 
+/**
+ * 一个打开的文件（PLAN.md D22）。
+ *
+ * **文件标签是全局的、跨项目的** —— 跟顶部那排会话标签是两套东西，
+ * 所以不进 `TabInfo`，单独一个数组挂在快照上。
+ */
+export interface FileTab {
+  id: string
+  /** 文件绝对路径 */
+  path: string
+  /**
+   * 这个文件属于哪个目录 —— **打开那一刻的快照**。
+   *
+   * 之后那个会话关了、cwd 变了，这里不变 —— 否则用户关了会话，
+   * 已经打开的文件就没法读了。
+   */
+  cwd: string
+  /** 项目里的相对路径，用来显示和去重 */
+  relPath: string
+}
+
+/** 文件树里的一项 */
+export interface FileEntry {
+  /** 名字（不含目录） */
+  name: string
+  kind: 'dir' | 'file'
+  /** 字节数（目录没有） */
+  size?: number
+}
+
+/** 读一个文件的结果 */
+export type FileContent =
+  | {
+      kind: 'text'
+      text: string
+      /** 行数 —— 渲染时画行号用 */
+      lines: number
+      /** 是不是二进制（内容仍然返回，只是调用方可以选择不渲染） */
+      binary: boolean
+      /** 超过阈值只给提示，不带内容 */
+      tooLarge: boolean
+      size: number
+    }
+  | {
+      kind: 'image'
+      /** data URL，直接塞给 <img src> */
+      dataUrl: string
+      size: number
+    }
+  | {
+      kind: 'unsupported'
+      reason: string
+      size?: number
+    }
+
 /** 一个可选的模型（选择器里的一项） */
 export interface ModelOption {
   provider: string
@@ -212,6 +277,10 @@ export interface HostSnapshot {
    * 见 `host/renderer/src/shell/refreshIndicator.ts`。
    */
   refreshing: boolean
+  /** 打开的文件（按打开顺序）。文件标签是全局的，跟会话标签无关（D22） */
+  files: FileTab[]
+  /** 当前活动的文件（null = 没有） */
+  activeFileId: string | null
   /**
    * **活动标签**的会话状态。
    *
@@ -342,6 +411,16 @@ export interface CodeletApi {
   prompt(tabId: string, text: string): Promise<void>
   /** 把一段文字写入系统剪贴板（复制回复正文） */
   copyText(text: string): Promise<void>
+  /** 列一个目录下的条目 */
+  listFiles(cwd: string, dir: string): Promise<FileEntry[]>
+  /** 读一个文件 */
+  readFile(cwd: string, path: string): Promise<FileContent>
+  /** 打开一个文件（进文件标签栏） */
+  openFile(cwd: string, path: string): Promise<HostSnapshot>
+  /** 关掉一个文件标签 */
+  closeFile(fileId: string): Promise<HostSnapshot>
+  /** 切到某个文件标签 */
+  activateFile(fileId: string): Promise<HostSnapshot>
   /** 列出已配置凭据的模型（选择器用） */
   listModels(tabId: string): Promise<ModelOption[]>
   /** 切某个标签的模型；persist 为真时同时设为新会话默认 */

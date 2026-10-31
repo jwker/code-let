@@ -8,6 +8,7 @@ import { PaneResizer } from './shell/PaneResizer'
 import { Sidebar } from './shell/Sidebar'
 import { TitleBar } from './shell/TitleBar'
 import {
+  FILE_VIEW_MIN,
   INSPECTOR_DEFAULT,
   INSPECTOR_MIN,
   SIDEBAR_DEFAULT,
@@ -29,6 +30,7 @@ export function App() {
   const setItems = useStore((s) => s.setItems)
   const theme = useStore((s) => s.theme)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
+  const nav = useStore((s) => s.nav)
   const inspectorOpen = useStore((s) => s.inspectorOpen)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
@@ -100,6 +102,22 @@ export function App() {
     el.style.setProperty('--side-w', `${sideWidth}px`)
     el.style.setProperty('--insp-w', `${inspWidth}px`)
   }, [sideWidth, inspWidth, sidebarOpen, inspectorOpen])
+
+  /*
+   * 「文件」视图需要宽度（文件树 180 + 内容至少 300）。
+   * 面板太窄时树会被容器查询收起，等于没法浏览文件 —— 所以切到这个视图就拉宽。
+   *
+   * 只在切进来时拉，用户之后拖窄是他自己的选择；切走再切回来还会再拉一次。
+   */
+  useEffect(() => {
+    if (nav !== 'code' || !inspectorOpen) return
+    if (inspWidth >= FILE_VIEW_MIN) return
+    const ceiling = inspectorCeiling(sidebarOpen ? sideWidth : 0, window.innerWidth)
+    const next = Math.min(FILE_VIEW_MIN, ceiling)
+    if (next <= inspWidth) return
+    setInspWidth(next)
+    saveInspectorWidth(next)
+  }, [nav, inspectorOpen, inspWidth, sideWidth, sidebarOpen])
 
   // ⌘B / Ctrl+B：跟编辑器一致，侧栏收放的快捷键
   useEffect(() => {

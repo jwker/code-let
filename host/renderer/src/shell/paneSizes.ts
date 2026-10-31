@@ -36,6 +36,14 @@ export const SIDEBAR_DEFAULT = SIDEBAR_MIN
 export const INSPECTOR_MIN = 300
 export const INSPECTOR_DEFAULT = INSPECTOR_MIN
 
+/**
+ * 「文件」视图需要的面板宽度下限。
+ *
+ * 低于这个值，文件树会被 `@container (max-width: 480px)` 收起 ——
+ * 树没了就没法浏览文件。所以切到这个视图时要把面板拉到位。
+ */
+export const FILE_VIEW_MIN = 520
+
 const SIDEBAR_KEY = 'codelet:sidebar-width'
 const INSPECTOR_KEY = 'codelet:inspector-width'
 
