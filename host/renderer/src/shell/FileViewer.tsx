@@ -1,8 +1,10 @@
+import { useEffect, useState } from 'react'
 import type { FileContent, FileTab } from '@contract/index'
 import { Markdown } from '../conversation/Markdown'
 import { host } from '../host'
 import { useStore } from '../store'
 import { formatSize } from './fileDisplay'
+import { highlight, langOf } from './highlight'
 
 /**
  * 文件内容区 —— 按扩展名分派到不同的渲染方式。
@@ -84,10 +86,46 @@ function TextView({ file, content }: { file: FileTab; content: Extract<FileConte
     return <HtmlView file={file} html={content.text} />
   }
 
-  // 其余：等宽 + 行号
-  const lines = content.text.split('\n')
-  // 末尾换行会多出一个空行，去掉
-  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+  // 其余：能高亮就高亮，不能就等宽 + 行号
+  return <CodeView file={file} code={content.text} />
+}
+
+/**
+ * 代码 / 纯文本 —— 先试语法高亮，失败或语言不认识就降级成纯文本。
+ *
+ * 高亮是异步的（Shiki 要懒加载），所以先渲染纯文本，高亮好了再替换。
+ * 这样不会因为等高亮而出现空白。
+ */
+function CodeView({ file, code }: { file: FileTab; code: string }) {
+  const theme = useStore((s) => s.theme)
+  const [html, setHtml] = useState<string | null>(null)
+
+  const lang = langOf(file.relPath)
+
+  useEffect(() => {
+    setHtml(null)
+    if (!lang) return
+    let cancelled = false
+    void highlight(code, lang, theme).then((result) => {
+      if (!cancelled) setHtml(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [code, lang, theme])
+
+  if (html) {
+    return <div className="file-hl" dangerouslySetInnerHTML={{ __html: html }} />
+  }
+
+  /*
+   * 纯文本兜底：等宽 + 行号。
+   *
+   * **保留末尾换行带出的那个空行** —— Shiki 也保留它（跟编辑器一致）。
+   * 早先这里 pop 掉了，结果同一份内容在「能高亮」和「不能高亮」两种情况下
+   * 行数不一样，看着像渲染错了。
+   */
+  const lines = code.split('\n')
 
   return (
     <div className="file-code">

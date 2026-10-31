@@ -1426,3 +1426,45 @@ ol.md-list {
   font-size: 9.5px;
   color: var(--fg-3);
 }
+
+/* —— 代码高亮（Shiki 的输出）—— */
+.file-hl {
+  min-height: 100%;
+  font-family: var(--font-code);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+/*
+ * Shiki 生成的 <pre> 自带背景色和 padding。
+ * 背景要去掉（跟面板同色），padding 由这里控制。
+ */
+.file-hl pre.shiki {
+  margin: 0;
+  padding: 8px 10px;
+  background: transparent !important;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  overflow: visible;
+}
+.file-hl pre.shiki code {
+  display: block;
+  /* 行号用 CSS 计数器，不进 DOM —— 复制代码时不会带上行号 */
+  counter-reset: shiki-line;
+}
+.file-hl pre.shiki .line {
+  display: block;
+  counter-increment: shiki-line;
+}
+.file-hl pre.shiki .line::before {
+  content: counter(shiki-line);
+  display: inline-block;
+  width: 2.2em;
+  margin-right: 0.8em;
+  text-align: right;
+  color: var(--fg-3);
+  opacity: 0.6;
+  /* 行号不该被选中复制 */
+  user-select: none;
+  -webkit-user-select: none;
+}
