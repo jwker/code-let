@@ -382,8 +382,8 @@ export const useStore = create<RendererStore>((set, get) => ({
   },
 
   openFile: async (cwd, path) => {
+    // 只负责「进标签栏」—— 内容由 FilePane 的 effect 按活动文件加载
     await host.openFile(cwd, path)
-    await get().loadFile(path, cwd)
   },
 
   loadModels: async (tabId) => {

@@ -17,7 +17,7 @@ import { pickDirectory } from './directoryPicker'
 import { listDirectory, readFileContent } from './files'
 import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
-import { TabStore, type StoredTab } from './tabs'
+import { TabStore, type StoredFile, type StoredTab } from './tabs'
 
 /** 宿主这边记的一个标签 */
 interface HostTab {
@@ -195,6 +195,8 @@ export class HostState extends EventEmitter {
     // runtime 等用户点它的时候再建（懒加载）。
     const restored = await this.restoreTabs()
     if (!restored) await this.openFallbackTab()
+    // 文件标签跟会话标签各自恢复（D21）—— 两者互相独立
+    this.restoreFiles()
     // 启动时已经读过一次了 —— 别让紧接着的那次 focus 再扫一遍
     this.initialized = true
   }
@@ -535,6 +537,7 @@ export class HostState extends EventEmitter {
     const existing = this.files.find((f) => f.path === full)
     if (existing) {
       this.activeFileId = existing.id
+      this.persistFiles()
       this.push()
       return
     }
@@ -547,6 +550,7 @@ export class HostState extends EventEmitter {
     }
     this.files.push(tab)
     this.activeFileId = tab.id
+    this.persistFiles()
     this.push()
   }
 
@@ -560,6 +564,7 @@ export class HostState extends EventEmitter {
       const next = this.files[Math.min(index, this.files.length - 1)]
       this.activeFileId = next ? next.id : null
     }
+    this.persistFiles()
     this.push()
   }
 
@@ -567,7 +572,50 @@ export class HostState extends EventEmitter {
   async activateFile(fileId: string): Promise<void> {
     if (!this.files.some((f) => f.id === fileId)) return
     this.activeFileId = fileId
+    this.persistFiles()
     this.push()
+  }
+
+  /** 把文件标签落盘 */
+  private persistFiles(): void {
+    const stored: StoredFile[] = this.files.map((f) => ({
+      id: f.id,
+      path: f.path,
+      cwd: f.cwd,
+      relPath: f.relPath
+    }))
+    this.tabStore.saveFiles(stored, this.activeFileId)
+  }
+
+  /**
+   * 恢复文件标签（PLAN.md D21 / R25）。
+   *
+   * **文件不在了就丢掉这一条** —— 跟会话标签同一个规则：内容就在文件里，
+   * 文件没了内容也没了。但整个列表不能因为一条坏掉就全丢。
+   */
+  private restoreFiles(): void {
+    this.files = []
+    this.activeFileId = null
+    for (const stored of this.tabStore.listFiles()) {
+      if (!existsSync(stored.path)) continue
+      this.files.push({
+        id: stored.id,
+        path: stored.path,
+        cwd: stored.cwd,
+        relPath: stored.relPath
+      })
+    }
+    // 活动文件：原来那个还在就用它，否则落到最后一个
+    const wanted = this.tabStore.activeFile()
+    this.activeFileId =
+      (wanted && this.files.some((f) => f.id === wanted) ? wanted : null) ??
+      this.files[this.files.length - 1]?.id ??
+      null
+    // id 序号推上去，避免新开的标签跟恢复的撞号
+    for (const file of this.files) {
+      const m = /-(\d+)$/.exec(file.id)
+      if (m) this.fileSeq = Math.max(this.fileSeq, Number(m[1]))
+    }
   }
 
   /** 窗口失去焦点 —— 记下时刻，回来时算离开了多久 */
