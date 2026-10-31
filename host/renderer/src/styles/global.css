@@ -1468,3 +1468,89 @@ ol.md-list {
   user-select: none;
   -webkit-user-select: none;
 }
+
+/* —— 文件树顶部的筛选框 —— */
+.file-search {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  margin: 2px 4px 4px;
+  padding: 0 6px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+}
+.file-search-icon {
+  flex: none;
+  color: var(--fg-3);
+  font-size: 9px;
+}
+.file-search-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  color: var(--fg-1);
+  font-size: 10.5px;
+}
+.file-search-input::placeholder {
+  color: var(--fg-3);
+}
+.file-search-clear {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: var(--fg-3);
+  font-size: 10px;
+}
+.file-search-clear:hover {
+  background: var(--accent-wash);
+  color: var(--fg-1);
+}
+.file-search-results {
+  padding-bottom: 4px;
+}
+/* 搜索结果里，右侧显示它属于哪个目录 */
+.file-node-dir {
+  flex: none;
+  max-width: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-code);
+  font-size: 8.5px;
+  color: var(--fg-3);
+  opacity: 0.8;
+}
+
+/* —— 被 .gitignore 命中的条目：置灰，但仍然显示 —— */
+.file-node.is-ignored .file-node-name,
+.file-node.is-ignored .file-node-mark {
+  opacity: 0.45;
+}
+.file-node.is-ignored:hover .file-node-name {
+  opacity: 1;
+}
+
+/* —— 文件标签上的「外部有更新」标记 —— */
+.file-tab-stale {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: var(--warn);
+  font-size: 10px;
+}
+.file-tab-stale:hover {
+  background: var(--accent-wash);
+}

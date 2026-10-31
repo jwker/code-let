@@ -17,7 +17,8 @@ export function FileBrowser({
   files,
   activeFileId,
   onActivate,
-  onClose
+  onClose,
+  onReload
 }: {
   /** 文件树的根 —— 当前活动会话标签的 cwd */
   cwd: string
@@ -25,6 +26,7 @@ export function FileBrowser({
   activeFileId: string | null
   onActivate: (fileId: string) => void
   onClose: (fileId: string) => void
+  onReload: (file: FileTab) => void
 }) {
   const active = files.find((f) => f.id === activeFileId) ?? null
 
@@ -42,6 +44,31 @@ export function FileBrowser({
           >
             <span className="file-tab-mark">{fileMark(file.relPath, 'file')}</span>
             <span className="file-tab-name">{file.relPath.split('/').pop()}</span>
+            {/*
+              文件在别处被改过 —— 给一个重新加载的入口。
+              不自动刷新：用户可能正在看某一段，自动重读会把滚动位置也带走。
+            */}
+            {file.stale && (
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={`重新加载 ${file.relPath}`}
+                title="这个文件在别处有更新，点一下重新加载"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onReload(file)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.stopPropagation()
+                  event.preventDefault()
+                  onReload(file)
+                }}
+                className="file-tab-stale"
+              >
+                ↻
+              </span>
+            )}
             <span
               role="button"
               tabIndex={0}

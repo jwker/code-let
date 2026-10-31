@@ -71,6 +71,7 @@ function FilePane() {
   const files = useStore((s) => s.snapshot.files)
   const activeFileId = useStore((s) => s.snapshot.activeFileId)
   const loadFile = useStore((s) => s.loadFile)
+  const reloadFile = useStore((s) => s.reloadFile)
 
   // 文件树的根 = 当前活动会话标签的 cwd。全关掉时为空 → 树显示空态（D22）
   const cwd = tabs.find((t) => t.id === activeTabId)?.cwd ?? ''
@@ -93,6 +94,7 @@ function FilePane() {
       activeFileId={activeFileId}
       onActivate={(id) => void host.activateFile(id)}
       onClose={(id) => void host.closeFile(id)}
+      onReload={(file) => void reloadFile(file.id, file.path, file.cwd)}
     />
   )
 }
