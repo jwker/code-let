@@ -422,6 +422,10 @@ export function createMockApi(): CodeletApi {
       return publish()
     },
 
+    openFileExternal: async () => {
+      // 浏览器预览里没有系统程序可开
+    },
+
     listModels: async () => FAKE_MODELS,
 
     selectModel: async (tabId, provider, id) => {

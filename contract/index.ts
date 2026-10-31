@@ -48,6 +48,8 @@ export const IPC = {
   filesClose: 'host:files:close',
   /** 切到某个文件标签 */
   filesActivate: 'host:files:activate',
+  /** 用系统默认程序打开一个文件（预览不了时的出路） */
+  filesOpenExternal: 'host:files:openExternal',
   /** 列出已配置凭据的模型 */
   modelsList: 'host:models:list',
   /** 切换某个标签的模型 */
@@ -421,6 +423,12 @@ export interface CodeletApi {
   closeFile(fileId: string): Promise<HostSnapshot>
   /** 切到某个文件标签 */
   activateFile(fileId: string): Promise<HostSnapshot>
+  /**
+   * 用系统默认程序打开一个文件。
+   *
+   * 预览不了的时候（二进制、太大、不支持的类型）唯一的出路。同样要过路径校验。
+   */
+  openFileExternal(cwd: string, path: string): Promise<void>
   /** 列出已配置凭据的模型（选择器用） */
   listModels(tabId: string): Promise<ModelOption[]>
   /** 切某个标签的模型；persist 为真时同时设为新会话默认 */

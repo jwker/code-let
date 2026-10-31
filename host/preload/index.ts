@@ -34,6 +34,7 @@ const api: CodeletApi = {
   openFile: (cwd, path) => ipcRenderer.invoke(IPC.filesOpen, { cwd, path }) as Promise<HostSnapshot>,
   closeFile: (fileId) => ipcRenderer.invoke(IPC.filesClose, { fileId }) as Promise<HostSnapshot>,
   activateFile: (fileId) => ipcRenderer.invoke(IPC.filesActivate, { fileId }) as Promise<HostSnapshot>,
+  openFileExternal: (cwd, path) => ipcRenderer.invoke(IPC.filesOpenExternal, { cwd, path }) as Promise<void>,
   listModels: (tabId) => ipcRenderer.invoke(IPC.modelsList, { tabId }) as Promise<ModelOption[]>,
   selectModel: (tabId, provider, id, persist) =>
     ipcRenderer.invoke(IPC.modelsSelect, { tabId, provider, id, persist }) as Promise<void>,

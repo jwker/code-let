@@ -14,7 +14,8 @@ import type {
 } from '@contract/index'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
-import { listDirectory, readFileContent } from './files'
+import { shell } from 'electron'
+import { listDirectory, readFileContent, resolveInsideCwd } from './files'
 import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
 import { TabStore, type StoredFile, type StoredTab } from './tabs'
@@ -566,6 +567,18 @@ export class HostState extends EventEmitter {
     }
     this.persistFiles()
     this.push()
+  }
+
+  /**
+   * 用系统默认程序打开一个文件。
+   *
+   * 走的是 `shell.openPath` —— 拿系统登记的程序打开，不是执行它。
+   * 同样要过路径校验：不能让渲染进程传 `../../etc/passwd` 过来。
+   */
+  async openFileExternal(cwd: string, path: string): Promise<void> {
+    const full = await resolveInsideCwd(cwd, path)
+    const error = await shell.openPath(full)
+    if (error) throw new Error(error)
   }
 
   /** 切到某个文件标签 */
