@@ -1,6 +1,8 @@
 import type {
   CodeletApi,
   ConversationInfo,
+  FileEntry,
+  FileTab,
   HostSnapshot,
   ModelOption,
   ProjectInfo,
@@ -62,6 +64,48 @@ const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
     }
   ],
   '/Users/demo/Projects/web': []
+}
+
+/** 假文件树：够看出文件浏览器长什么样 */
+const FAKE_TREE: Record<string, FileEntry[]> = {
+  '': [
+    { name: '.git', kind: 'dir' },
+    { name: 'src', kind: 'dir' },
+    { name: 'package.json', kind: 'file', size: 812 },
+    { name: 'README.md', kind: 'file', size: 1420 },
+    { name: 'tsconfig.json', kind: 'file', size: 336 }
+  ],
+  src: [
+    { name: 'memory', kind: 'dir' },
+    { name: 'index.ts', kind: 'file', size: 2048 },
+    { name: 'tokens.ts', kind: 'file', size: 640 }
+  ],
+  'src/memory': [
+    { name: 'cursor.ts', kind: 'file', size: 1180 },
+    { name: 'index.ts', kind: 'file', size: 3460 }
+  ]
+}
+
+/** 假文件内容：按扩展名给一份能看出渲染效果的东西 */
+const FAKE_FILES: Record<string, string> = {
+  'README.md':
+    '# 记忆索引重构\n\n' +
+    '索引写入从**全量重建**改成了增量。\n\n' +
+    '## 改动\n\n' +
+    '- 按 `updatedAt` 游标增量更新\n' +
+    '- 补了 3 个用例\n\n' +
+    '| 用例 | 结果 |\n| --- | --- |\n| rebuildIndex | passed |\n| cursor 边界 | passed |\n',
+  'package.json': '{\n  "name": "codelet",\n  "version": "0.1.0"\n}\n',
+  'tsconfig.json': '{\n  "compilerOptions": {\n    "strict": true\n  }\n}\n',
+  'src/index.ts':
+    "import { readIndex, writeIndex } from './memory'\n\n" +
+    'export async function rebuild(): Promise<void> {\n' +
+    '  const index = await readIndex()\n' +
+    '  await writeIndex(index)\n' +
+    '}\n',
+  'src/tokens.ts': 'export const tokens = { fg: "#1B1B19" }\n',
+  'src/memory/index.ts': 'export async function readIndex() {\n  return []\n}\n',
+  'src/memory/cursor.ts': 'export const cursorVersion = 3\n'
 }
 
 /** 假的内容流：够看出普通模式长什么样 */
@@ -181,6 +225,10 @@ export function createMockApi(): CodeletApi {
   let conversations: ConversationInfo[] = []
   /** 假数据里「用户选中的项目」 */
   let projects: ProjectInfo[] = FAKE_PROJECTS.map((p) => ({ ...p }))
+  /** 假宿主的文件标签 */
+  let files: FileTab[] = []
+  let activeFileId: string | null = null
+  let fileSeq = 0
   let seq = 0
 
   const snapshotListeners = new Set<(snapshot: HostSnapshot) => void>()
@@ -224,6 +272,8 @@ export function createMockApi(): CodeletApi {
       projects,
       conversations,
       refreshing: false,
+      files: files,
+      activeFileId: activeFileId,
       session: {
         ready: Boolean(active),
         cwd: active?.cwd ?? null,
@@ -325,6 +375,52 @@ export function createMockApi(): CodeletApi {
     },
 
     getTabEntries: async (tabId) => tabs.find((t) => t.id === tabId)?.items ?? [],
+
+    listFiles: async (_cwd, dir) => {
+      const rel = dir === '' || dir === '.' ? '' : dir.replace(/^\.\//, '')
+      return FAKE_TREE[rel] ?? []
+    },
+
+    readFile: async (_cwd, path) => {
+      const rel = path.replace(/^.*?\/src\//, 'src/').replace(/^.*\/(?=[^/]+$)/, (m) => (path.includes('/src/') ? '' : m))
+      const key = rel.replace(/^\/+/, '')
+      const text = FAKE_FILES[key] ?? FAKE_FILES[path.split('/').pop() ?? ''] ?? ''
+      if (!text) {
+        return { kind: 'unsupported', reason: '假数据里没有这个文件的内容' }
+      }
+      return {
+        kind: 'text',
+        text,
+        lines: text.split('\n').length - (text.endsWith('\n') ? 1 : 0),
+        binary: false,
+        tooLarge: false,
+        size: text.length
+      }
+    },
+
+    openFile: async (cwd, path) => {
+      const existing = files.find((f) => f.path === path)
+      if (existing) {
+        activeFileId = existing.id
+        return publish()
+      }
+      fileSeq += 1
+      const name = path.split('/').slice(-1)[0] ?? path
+      files = [...files, { id: `file-${fileSeq}`, path, cwd, relPath: name }]
+      activeFileId = `file-${fileSeq}`
+      return publish()
+    },
+
+    closeFile: async (fileId) => {
+      files = files.filter((f) => f.id !== fileId)
+      if (activeFileId === fileId) activeFileId = files[files.length - 1]?.id ?? null
+      return publish()
+    },
+
+    activateFile: async (fileId) => {
+      if (files.some((f) => f.id === fileId)) activeFileId = fileId
+      return publish()
+    },
 
     listModels: async () => FAKE_MODELS,
 

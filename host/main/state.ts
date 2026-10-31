@@ -1,8 +1,11 @@
 import { EventEmitter } from 'node:events'
 import { existsSync, statSync } from 'node:fs'
-import { basename, normalize } from 'node:path'
+import { basename, normalize, relative } from 'node:path'
 import type {
   ConversationInfo,
+  FileContent,
+  FileEntry,
+  FileTab,
   HostSnapshot,
   ModelOption,
   SessionState,
@@ -11,6 +14,7 @@ import type {
 } from '@contract/index'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
+import { listDirectory, readFileContent } from './files'
 import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
 import { TabStore, type StoredTab } from './tabs'
@@ -79,6 +83,16 @@ export class HostState extends EventEmitter {
     modelFallback: null,
     error: null
   }
+  /**
+   * 打开的文件（PLAN.md D22）—— **全局的、跨项目的**，跟会话标签是两套东西。
+   *
+   * 切片 1 先不落盘；持久化在切片 2。
+   */
+  private files: FileTab[] = []
+  /** 当前活动的文件 */
+  private activeFileId: string | null = null
+  /** 文件标签 id 的序号 */
+  private fileSeq = 0
   /** 去抖刷新：把一轮里的多次刷新合成一次 */
   private readonly conversationsRefresh: DebouncedRefresh
   /** 刷新的序号：只认最后一次发起的 */
@@ -123,6 +137,8 @@ export class HostState extends EventEmitter {
       projects: this.projects.list(),
       conversations: this.conversations,
       refreshing: this.pendingRefreshes > 0,
+      files: this.files,
+      activeFileId: this.activeFileId,
       session: this.session
     }
   }
@@ -490,6 +506,67 @@ export class HostState extends EventEmitter {
     tab.seenMtime = mtimeOf(tab.path)
     tab.stale = false
     this.readSession()
+    this.push()
+  }
+
+  // ---------------------------------------------------------------------
+  // 文件（PLAN.md D20 / D22）
+  // ---------------------------------------------------------------------
+
+  /** 列一个目录下的条目 */
+  listFiles(cwd: string, dir: string): Promise<FileEntry[]> {
+    return listDirectory(cwd, dir)
+  }
+
+  /** 读一个文件 */
+  readFile(cwd: string, path: string): Promise<FileContent> {
+    return readFileContent(cwd, path)
+  }
+
+  /**
+   * 打开一个文件（进文件标签栏）。
+   *
+   * 同一个文件重复打开 → 切过去，不新建标签。
+   * `cwd` 是**打开那一刻的快照** —— 之后会话关了、cwd 变了，这个文件的 cwd 不变。
+   */
+  async openFile(cwd: string, path: string): Promise<void> {
+    const root = normalize(cwd)
+    const full = normalize(path)
+    const existing = this.files.find((f) => f.path === full)
+    if (existing) {
+      this.activeFileId = existing.id
+      this.push()
+      return
+    }
+    this.fileSeq += 1
+    const tab: FileTab = {
+      id: `file-${Date.now().toString(36)}-${this.fileSeq}`,
+      path: full,
+      cwd: root,
+      relPath: relative(root, full) || full
+    }
+    this.files.push(tab)
+    this.activeFileId = tab.id
+    this.push()
+  }
+
+  /** 关掉一个文件标签 */
+  async closeFile(fileId: string): Promise<void> {
+    const index = this.files.findIndex((f) => f.id === fileId)
+    if (index < 0) return
+    this.files.splice(index, 1)
+    // 关掉的是活动文件 —— 活动落到相邻的一个
+    if (this.activeFileId === fileId) {
+      const next = this.files[Math.min(index, this.files.length - 1)]
+      this.activeFileId = next ? next.id : null
+    }
+    this.push()
+  }
+
+  /** 切到某个文件标签 */
+  async activateFile(fileId: string): Promise<void> {
+    if (!this.files.some((f) => f.id === fileId)) return
+    this.activeFileId = fileId
     this.push()
   }
 

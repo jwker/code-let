@@ -11,6 +11,26 @@ export const projectPathSchema = z.object({
   path: z.string().min(1)
 })
 
+/** 列目录：cwd 是项目根，dir 是相对它（或绝对，主进程会校验不越界）的目录 */
+export const filesListSchema = z.object({
+  cwd: z.string().min(1),
+  dir: z.string()
+})
+
+export const fileReadSchema = z.object({
+  cwd: z.string().min(1),
+  path: z.string().min(1)
+})
+
+export const fileOpenSchema = z.object({
+  cwd: z.string().min(1),
+  path: z.string().min(1)
+})
+
+export const fileIdSchema = z.object({
+  fileId: z.string().min(1)
+})
+
 export const tabIdSchema = z.object({
   tabId: z.string().min(1)
 })

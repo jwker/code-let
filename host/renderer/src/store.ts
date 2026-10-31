@@ -2,6 +2,8 @@ import { create } from 'zustand'
 import type {
   ConversationMode,
   HostSnapshot,
+  FileContent,
+  FileEntry,
   ModelOption,
   NavEntry,
   SessionEvent,
@@ -18,6 +20,8 @@ const EMPTY_SNAPSHOT: HostSnapshot = {
   projects: [],
   conversations: [],
   refreshing: false,
+  files: [],
+  activeFileId: null,
   session: {
     ready: false,
     cwd: null,
@@ -146,6 +150,21 @@ interface RendererStore {
   /** 模型清单拉取失败的原因 */
   modelsError: string | null
 
+  /**
+   * 文件内容缓存（按绝对路径）。
+   *
+   * 不持久化 —— 内容会过期。切到某个文件时按需读。
+   */
+  fileContents: Record<string, FileContent>
+  /**
+   * 各项目展开的目录 —— **按 cwd 分开记**（D22）。
+   *
+   * 切回项目 A，A 的树恢复到你上次展开的样子。
+   */
+  treeExpanded: Record<string, string[]>
+  /** 各项目已加载的目录内容（按 `cwd + 目录路径`） */
+  treeEntries: Record<string, FileEntry[]>
+
   setSnapshot: (snapshot: HostSnapshot) => void
   setNav: (nav: NavEntry) => void
   setMode: (mode: ConversationMode) => void
@@ -172,6 +191,19 @@ interface RendererStore {
   openModelPicker: (anchor: { left: number; bottom: number }) => void
   /** 关掉模型选择器 */
   closeModelPicker: () => void
+  /** 读某个文件（有缓存就复用） */
+  loadFile: (path: string, cwd: string) => Promise<void>
+  /**
+   * 加载一个目录的条目 —— **只加载，不改展开状态**。
+   *
+   * 文件树第一次进来要先把根目录读出来（不然显示「加载中」），
+   * 但那不等于「展开根目录」。所以这两个动作分开。
+   */
+  loadDir: (cwd: string, dir: string) => Promise<void>
+  /** 展开 / 收起文件树里的一个目录 */
+  toggleDir: (cwd: string, dir: string) => Promise<void>
+  /** 打开某个文件（进文件标签栏） */
+  openFile: (cwd: string, path: string) => Promise<void>
   /** 拉模型清单 */
   loadModels: (tabId: string) => Promise<void>
   /** 切某个标签的模型（persist 时同时设为新会话默认） */
@@ -193,6 +225,9 @@ export const useStore = create<RendererStore>((set, get) => ({
   models: [],
   modelsLoading: false,
   modelsError: null,
+  fileContents: {},
+  treeExpanded: {},
+  treeEntries: {},
 
   setSnapshot: (snapshot) => {
     const previousSessionId = get().snapshot.session.sessionId
@@ -302,6 +337,54 @@ export const useStore = create<RendererStore>((set, get) => ({
   },
 
   closeModelPicker: () => set({ modelPickerAnchor: null }),
+
+  loadFile: async (path, cwd) => {
+    if (get().fileContents[path]) return
+    try {
+      const content = await host.readFile(cwd, path)
+      set((state) => ({ fileContents: { ...state.fileContents, [path]: content } }))
+    } catch {
+      set((state) => ({
+        fileContents: {
+          ...state.fileContents,
+          [path]: { kind: 'unsupported', reason: '读不了这个文件' }
+        }
+      }))
+    }
+  },
+
+  loadDir: async (cwd, dir) => {
+    const key = `${cwd}\u0001${dir}`
+    if (get().treeEntries[key]) return
+    try {
+      const entries = await host.listFiles(cwd, dir)
+      set((state) => ({ treeEntries: { ...state.treeEntries, [key]: entries } }))
+    } catch {
+      // 读不了（权限、被删）—— 记成空，别让界面一直转
+      set((state) => ({ treeEntries: { ...state.treeEntries, [key]: [] } }))
+    }
+  },
+
+  toggleDir: async (cwd, dir) => {
+    const expanded = get().treeExpanded[cwd] ?? []
+    if (expanded.includes(dir)) {
+      set((state) => ({
+        treeExpanded: { ...state.treeExpanded, [cwd]: expanded.filter((d) => d !== dir) }
+      }))
+      return
+    }
+    // 展开：还没加载过就先加载这一层
+    await get().loadDir(cwd, dir)
+    if (!get().treeEntries[`${cwd}\u0001${dir}`]) return
+    set((state) => ({
+      treeExpanded: { ...state.treeExpanded, [cwd]: [...(state.treeExpanded[cwd] ?? []), dir] }
+    }))
+  },
+
+  openFile: async (cwd, path) => {
+    await host.openFile(cwd, path)
+    await get().loadFile(path, cwd)
+  },
 
   loadModels: async (tabId) => {
     set({ modelsLoading: true, modelsError: null })

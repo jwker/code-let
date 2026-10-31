@@ -16,7 +16,7 @@ import { IconAgent, IconBoard, IconCode, IconGit, IconMemory, IconTerminal } fro
 const ENTRIES: Array<{ key: NavEntry; label: string; icon: () => ReactElement }> = [
   { key: 'board', label: '看板', icon: IconBoard },
   { key: 'memory', label: '记忆', icon: IconMemory },
-  { key: 'code', label: '代码', icon: IconCode },
+  { key: 'code', label: '文件', icon: IconCode },
   { key: 'terminal', label: '终端', icon: IconTerminal },
   { key: 'git', label: 'Git', icon: IconGit },
   { key: 'agent', label: 'Agent', icon: IconAgent }
