@@ -478,6 +478,14 @@ export class HostState extends EventEmitter {
     let changed = false
     for (const tab of this.tabs) {
       if (!tab.path) continue
+      /*
+       * 这个标签的 agent 正在跑 —— 文件是我们自己在写，不算「别处改过」。
+       *
+       * 不跳过会误报：用户消息落盘之后 mtime 就变了，而 `markWritten` 要等
+       * `agent_settled` 才更新 seenMtime。这一整轮里标签都会被标成 stale，
+       * 输入框跟着被禁用 —— AI 回复期间用户就打不了字了。
+       */
+      if (this.pi.tabState(tab.id).streaming) continue
       const stale = mtimeOf(tab.path) > tab.seenMtime
       if (stale !== tab.stale) {
         tab.stale = stale

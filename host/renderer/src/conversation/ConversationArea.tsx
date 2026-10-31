@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
@@ -40,6 +40,19 @@ export function ConversationArea() {
   })
   const [reloading, setReloading] = useState(false)
   const [draft, setDraft] = useState('')
+
+  /*
+   * 输入法组词状态。
+   *
+   * 为什么不能只靠 `event.nativeEvent.isComposing`：有些输入法在
+   * `compositionend` **之后**才发 `keydown(Enter)`，那时 `isComposing` 已经是 false
+   * —— 只看它会把「选词的回车」当成「发送的回车」，一句话就被发出去了。
+   *
+   * 所以两个条件都判：组词中（`composing`）或者刚结束组词的这一小段时间
+   * （`composeEndedAt`，80ms）里的回车，都不发送。
+   */
+  const composing = useRef(false)
+  const composeEndedAt = useRef(0)
 
   // 实时流往下长 —— 视图要跟着走，不然用户看不到刚出来的内容（R2）
   const { setRef, scrollToBottom, jumpTo, scrollable, atBottom } = useAutoScroll(
@@ -140,11 +153,26 @@ export function ConversationArea() {
             <textarea
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
+              onCompositionStart={() => {
+                composing.current = true
+              }}
+              onCompositionEnd={() => {
+                composing.current = false
+                composeEndedAt.current = Date.now()
+              }}
               onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                  event.preventDefault()
-                  void send()
-                }
+                if (event.key !== 'Enter') return
+                /*
+                 * 输入法相关的回车一律不发：
+                 * - 正在组词（`composing` / `isComposing`）
+                 * - 刚结束组词 80ms 内 —— 覆盖「compositionend 之后才发 keydown」的输入法
+                 */
+                if (composing.current || event.nativeEvent.isComposing) return
+                if (Date.now() - composeEndedAt.current < 80) return
+                // Shift+Enter 换行，交给 textarea 自己处理（不 preventDefault）
+                if (event.shiftKey) return
+                event.preventDefault()
+                void send()
               }}
               rows={2}
               disabled={stale}
@@ -173,7 +201,7 @@ export function ConversationArea() {
                 </span>
                 <span className="conv-model-caret flex-none text-fg-3">▾</span>
               </button>
-              <span className="conv-hint flex-none text-[11.5px] text-fg-3">⌘↵ 发送</span>
+              <span className="conv-hint flex-none text-[11.5px] text-fg-3">↵ 发送 · ⇧↵ 换行</span>
               {session.error && (
                 <span className="min-w-0 flex-1 truncate text-[11.5px] text-danger" title={session.error}>
                   {session.error}
