@@ -43,6 +43,16 @@ export function App() {
   const shellRef = useRef<HTMLDivElement>(null)
   const [sideWidth, setSideWidth] = useState(loadSidebarWidth)
   const [inspWidth, setInspWidth] = useState(loadInspectorWidth)
+  /*
+   * 检视器宽度的最新值 —— 给「切到文件视图时检查宽度」那个 effect 用。
+   *
+   * 它**不能进那个 effect 的依赖**：用户拖动提交后 `inspWidth` 会变，
+   * effect 重跑就会把宽度又拉回 FILE_VIEW_MIN —— 拖动等于被撤销。
+   * 用 ref 读最新值、只依赖 `nav`，才是「只在切进来那一刻检查一次」。
+   */
+  const inspWidthRef = useRef(inspWidth)
+  inspWidthRef.current = inspWidth
+
   // 拖拽时宽度只写 DOM、不动 state，所以窗口 resize 的回调要从这里读最新值
   const layoutRef = useRef({
     side: sideWidth,
@@ -105,19 +115,25 @@ export function App() {
 
   /*
    * 「文件」视图需要宽度（文件树 180 + 内容至少 300）。
-   * 面板太窄时树会被容器查询收起，等于没法浏览文件 —— 所以切到这个视图就拉宽。
+   * 面板太窄时树会被容器查询收起，等于没法浏览文件 —— 所以**切到这个视图那一刻**
+   * 检查一次，不够就拉宽。
    *
-   * 只在切进来时拉，用户之后拖窄是他自己的选择；切走再切回来还会再拉一次。
+   * **只在切入时检查，之后不再干预**：用户拖窄是他自己的选择，
+   * 拖完又被拉回去会让人以为「拖不动」。切走再切回来会再检查一次 ——
+   * 那时确实又需要看树了。
    */
   useEffect(() => {
     if (nav !== 'code' || !inspectorOpen) return
-    if (inspWidth >= FILE_VIEW_MIN) return
+    const current = inspWidthRef.current
+    if (current >= FILE_VIEW_MIN) return
     const ceiling = inspectorCeiling(sidebarOpen ? sideWidth : 0, window.innerWidth)
     const next = Math.min(FILE_VIEW_MIN, ceiling)
-    if (next <= inspWidth) return
+    if (next <= current) return
     setInspWidth(next)
     saveInspectorWidth(next)
-  }, [nav, inspectorOpen, inspWidth, sideWidth, sidebarOpen])
+    // 故意不依赖 inspWidth / sideWidth / sidebarOpen —— 见上面那段注释
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nav, inspectorOpen])
 
   // ⌘B / Ctrl+B：跟编辑器一致，侧栏收放的快捷键
   useEffect(() => {
