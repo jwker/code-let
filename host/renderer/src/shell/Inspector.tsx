@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import type { NavEntry } from '@contract/index'
 import { host } from '../host'
 import { useStore } from '../store'
@@ -69,9 +70,21 @@ function FilePane() {
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
   const files = useStore((s) => s.snapshot.files)
   const activeFileId = useStore((s) => s.snapshot.activeFileId)
+  const loadFile = useStore((s) => s.loadFile)
 
   // 文件树的根 = 当前活动会话标签的 cwd。全关掉时为空 → 树显示空态（D22）
   const cwd = tabs.find((t) => t.id === activeTabId)?.cwd ?? ''
+  const active = files.find((f) => f.id === activeFileId) ?? null
+
+  /*
+   * 活动文件变了就读它的内容。
+   *
+   * 不能只靠「打开文件」那一步加载 —— 重启恢复出来的文件没走过 `openFile`，
+   * 缓存是空的，内容区会一直显示「加载中」。`loadFile` 自己有缓存判断，重复调无妨。
+   */
+  useEffect(() => {
+    if (active) void loadFile(active.path, active.cwd)
+  }, [active?.path, active?.cwd, loadFile])
 
   return (
     <FileBrowser
