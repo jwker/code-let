@@ -50,6 +50,8 @@ export const IPC = {
   filesActivate: 'host:files:activate',
   /** 用系统默认程序打开一个文件（预览不了时的出路） */
   filesOpenExternal: 'host:files:openExternal',
+  /** 文件被外部改过之后，重新加载 */
+  filesReload: 'host:files:reload',
   /** 列出已配置凭据的模型 */
   modelsList: 'host:models:list',
   /** 切换某个标签的模型 */
@@ -188,6 +190,13 @@ export interface FileTab {
   cwd: string
   /** 项目里的相对路径，用来显示和去重 */
   relPath: string
+  /**
+   * 这个文件在别处被改过（打开了之后又被别的程序写过）。
+   *
+   * 跟会话标签的 `stale` 同一个思路：标出来让用户决定要不要重新读，
+   * 不自动刷新 —— 用户可能正在看某一段，自动重读会把滚动位置也带走。
+   */
+  stale?: boolean
 }
 
 /** 文件树里的一项 */
@@ -197,6 +206,12 @@ export interface FileEntry {
   kind: 'dir' | 'file'
   /** 字节数（目录没有） */
   size?: number
+  /**
+   * 被项目根的 `.gitignore` 命中。
+   *
+   * **只置灰，不隐藏** —— 用户可能就是想看 `node_modules` 里的某个文件。
+   */
+  ignored?: boolean
 }
 
 /** 读一个文件的结果 */
@@ -429,6 +444,8 @@ export interface CodeletApi {
    * 预览不了的时候（二进制、太大、不支持的类型）唯一的出路。同样要过路径校验。
    */
   openFileExternal(cwd: string, path: string): Promise<void>
+  /** 文件被外部改过之后，重新加载（清掉 stale） */
+  reloadFile(fileId: string): Promise<HostSnapshot>
   /** 列出已配置凭据的模型（选择器用） */
   listModels(tabId: string): Promise<ModelOption[]>
   /** 切某个标签的模型；persist 为真时同时设为新会话默认 */

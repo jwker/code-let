@@ -183,6 +183,12 @@ export function registerIpc(state: HostState): () => void {
     await state.openFileExternal(cwd, path)
   })
 
+  ipcMain.handle(IPC.filesReload, async (_event, payload: unknown) => {
+    const { fileId } = fileIdSchema.parse(payload)
+    await state.reloadFile(fileId)
+    return state.snapshot()
+  })
+
   ipcMain.handle(IPC.modelsList, async (_event, payload: unknown) => {
     const { tabId } = tabIdSchema.parse(payload)
     return state.listModels(tabId)
@@ -212,6 +218,7 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.filesClose)
     ipcMain.removeHandler(IPC.filesActivate)
     ipcMain.removeHandler(IPC.filesOpenExternal)
+    ipcMain.removeHandler(IPC.filesReload)
     ipcMain.removeHandler(IPC.modelsList)
     ipcMain.removeHandler(IPC.modelsSelect)
   }

@@ -94,6 +94,10 @@ export class HostState extends EventEmitter {
   private activeFileId: string | null = null
   /** 文件标签 id 的序号 */
   private fileSeq = 0
+  /** 每个文件标签「已经看到」的 mtime */
+  private fileMtime = new Map<string, number>()
+  /** 被外部改过的文件标签 */
+  private fileStale = new Set<string>()
   /** 去抖刷新：把一轮里的多次刷新合成一次 */
   private readonly conversationsRefresh: DebouncedRefresh
   /** 刷新的序号：只认最后一次发起的 */
@@ -138,7 +142,8 @@ export class HostState extends EventEmitter {
       projects: this.projects.list(),
       conversations: this.conversations,
       refreshing: this.pendingRefreshes > 0,
-      files: this.files,
+      // stale 是派生状态，不存在 FileTab 里，推快照时合进去
+      files: this.files.map((f) => (this.fileStale.has(f.id) ? { ...f, stale: true } : f)),
       activeFileId: this.activeFileId,
       session: this.session
     }
@@ -538,6 +543,9 @@ export class HostState extends EventEmitter {
     const existing = this.files.find((f) => f.path === full)
     if (existing) {
       this.activeFileId = existing.id
+      // 重新打开视为「看过了」—— 把已看到的时间推上去，清掉 stale
+      this.fileMtime.set(existing.id, mtimeOf(full))
+      this.fileStale.delete(existing.id)
       this.persistFiles()
       this.push()
       return
@@ -551,6 +559,7 @@ export class HostState extends EventEmitter {
     }
     this.files.push(tab)
     this.activeFileId = tab.id
+    this.fileMtime.set(tab.id, mtimeOf(full))
     this.persistFiles()
     this.push()
   }
@@ -565,6 +574,8 @@ export class HostState extends EventEmitter {
       const next = this.files[Math.min(index, this.files.length - 1)]
       this.activeFileId = next ? next.id : null
     }
+    this.fileMtime.delete(fileId)
+    this.fileStale.delete(fileId)
     this.persistFiles()
     this.push()
   }
@@ -586,6 +597,44 @@ export class HostState extends EventEmitter {
     if (!this.files.some((f) => f.id === fileId)) return
     this.activeFileId = fileId
     this.persistFiles()
+    this.push()
+  }
+
+  /**
+   * 检查打开的文件有没有在别处被改过。
+   *
+   * 跟会话标签的 `checkStale` 同一个思路：文件 mtime 比「已看到」的时间新就是 stale。
+   * 只标记、不自动重读 —— 用户可能正在看某一段，自动刷新会把滚动位置也带走。
+   */
+  private checkFilesStale(): void {
+    let changed = false
+    for (const file of this.files) {
+      const seen = this.fileMtime.get(file.id)
+      // 没记录过的（刚恢复出来的）先补上，不算 stale
+      if (seen === undefined) {
+        this.fileMtime.set(file.id, mtimeOf(file.path))
+        continue
+      }
+      const stale = mtimeOf(file.path) > seen
+      if (stale !== this.fileStale.has(file.id)) {
+        if (stale) this.fileStale.add(file.id)
+        else this.fileStale.delete(file.id)
+        changed = true
+      }
+    }
+    if (changed) this.push()
+  }
+
+  /**
+   * 重新加载一个文件：把它「已看到」的时间推到当下，清掉 stale。
+   *
+   * 内容由渲染进程重新读（`fileContents` 是按路径缓存的，清掉就会重读）。
+   */
+  async reloadFile(fileId: string): Promise<void> {
+    const file = this.files.find((f) => f.id === fileId)
+    if (!file) return
+    this.fileMtime.set(fileId, mtimeOf(file.path))
+    this.fileStale.delete(fileId)
     this.push()
   }
 
@@ -657,6 +706,8 @@ export class HostState extends EventEmitter {
     // 消费掉这次离开记录 —— 同一次离开只触发一次重读
     this.blurredAt = 0
     await this.refreshConversations()
+    // 顺便看看打开的文件有没有被别处改过
+    this.checkFilesStale()
   }
 
   /**

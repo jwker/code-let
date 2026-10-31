@@ -1,4 +1,5 @@
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path'
 import type { FileContent, FileEntry } from '@contract/index'
 
@@ -124,11 +125,106 @@ export async function listDirectory(cwd: string, dir: string): Promise<FileEntry
     items.push({ name: entry.name, kind: isDir ? 'dir' : 'file', size })
   }
 
+  // 顺手标一下哪些被 .gitignore 命中 —— 界面会置灰，但仍然显示
+  const rules = await gitignoreRules(cwd)
+  if (rules.length > 0) {
+    for (const item of items) {
+      const rel = dir ? `${dir}/${item.name}` : item.name
+      // 目录规则要能匹配到目录本身，所以命中时也试一下带斜杠的形式
+      const hit = rules.some((re) => re.test(rel) || (item.kind === 'dir' && re.test(`${rel}/`)))
+      if (hit) item.ignored = true
+    }
+  }
+
   items.sort((a, b) => {
     if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1
     return a.name.localeCompare(b.name)
   })
   return items
+}
+
+/**
+ * 把一条 `.gitignore` 规则转成正则。
+ *
+ * 只支持最常用的语法：`*`（不跨 `/`）、`**`（跨目录）、`?`、`!` 取反、结尾 `/` 表示目录。
+ * 完整实现（字符类 `[abc]`、转义）没做 —— 够挡住 `node_modules/`、`dist/` 这些常见的就行，
+ * 反正命中也只是置灰，不是不显示。
+ */
+function gitignoreToRegex(pattern: string): RegExp | null {
+  let p = pattern.trimEnd()
+  if (p === '' || p.startsWith('#')) return null
+
+  // 结尾的 / 表示只匹配目录 —— 但我们不知道目标是不是目录，按「名字后面是 / 或者结尾」处理
+  const dirOnly = p.endsWith('/')
+  if (dirOnly) p = p.slice(0, -1)
+
+  // 开头没有 /、中间也没有 / 的规则，匹配任意层的同名文件（gitignore 的规矩）
+  const anchored = p.startsWith('/') || p.includes('/')
+  if (p.startsWith('/')) p = p.slice(1)
+
+  let re = ''
+  for (let i = 0; i < p.length; i++) {
+    const ch = p[i]
+    if (ch === '*') {
+      if (p[i + 1] === '*') {
+        re += '.*'
+        i += 1
+        // **/ 也要吃掉后面的斜杠
+        if (p[i + 1] === '/') i += 1
+      } else {
+        re += '[^/]*'
+      }
+    } else if (ch === '?') {
+      re += '[^/]'
+    } else if ('.+^${}()|[]\\'.includes(ch)) {
+      re += `\\${ch}`
+    } else {
+      re += ch
+    }
+  }
+
+  // 不锚定的话允许前面有任意层目录
+  const prefix = anchored ? '^' : '(?:^|/)'
+  // 目录规则匹配它自己或它下面的所有东西
+  const suffix = dirOnly ? '(?:/.*)?$' : '$'
+  try {
+    return new RegExp(prefix + re + suffix)
+  } catch {
+    return null
+  }
+}
+
+/** `.gitignore` 的规则缓存 —— 按 cwd 存，避免每次列目录都读一遍 */
+const gitignoreCache = new Map<string, { mtime: number; rules: RegExp[] }>()
+
+/**
+ * 读项目根的 `.gitignore`，返回编译好的规则。
+ *
+ * 只读根目录那一份，不处理嵌套的 `.gitignore`（子目录里的）——
+ * 那种要记「哪条规则相对哪个目录」，复杂度上去了，收益是把少数文件也置灰。
+ */
+async function gitignoreRules(cwd: string): Promise<RegExp[]> {
+  const file = resolveInside(cwd, '.gitignore')
+  if (!existsSync(file)) return []
+  try {
+    const info = await stat(file)
+    const cached = gitignoreCache.get(cwd)
+    if (cached && cached.mtime === info.mtimeMs) return cached.rules
+    const text = await readFile(file, 'utf8')
+    const rules = text
+      .split('\n')
+      .map(gitignoreToRegex)
+      .filter((r): r is RegExp => r !== null)
+    gitignoreCache.set(cwd, { mtime: info.mtimeMs, rules })
+    return rules
+  } catch {
+    return []
+  }
+}
+
+/** 纯字符串形式的「在 cwd 之内」—— 不做 realpath，给只拼路径用 */
+function resolveInside(cwd: string, target: string): string {
+  return isAbsolute(target) ? resolve(target) : resolve(resolve(cwd), target)
 }
 
 /** 前 SNIFF_BYTES 字节里有没有 NUL —— 有就当二进制 */

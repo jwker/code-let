@@ -51,6 +51,37 @@ function saveTheme(theme: Theme): void {
   }
 }
 
+const TREE_KEY = 'codelet:tree-expanded'
+
+/**
+ * 各项目展开的目录 —— 落 localStorage（PLAN.md D21：纯 UI 状态，不进宿主）。
+ *
+ * 存的是 `{ [cwd]: [展开的目录相对路径] }`。一个项目的目录再多也就几百条，
+ * 单条路径一百来字节，离 localStorage 的额度还很远。
+ */
+function loadTreeExpanded(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(TREE_KEY)
+    const parsed = raw ? (JSON.parse(raw) as Record<string, string[]>) : {}
+    if (!parsed || typeof parsed !== 'object') return {}
+    const out: Record<string, string[]> = {}
+    for (const [cwd, dirs] of Object.entries(parsed)) {
+      if (Array.isArray(dirs)) out[cwd] = dirs.filter((d): d is string => typeof d === 'string')
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function saveTreeExpanded(value: Record<string, string[]>): void {
+  try {
+    localStorage.setItem(TREE_KEY, JSON.stringify(value))
+  } catch {
+    // 存不下就算了
+  }
+}
+
 const MODE_KEY = 'codelet:conversation-mode'
 
 const INSPECTOR_KEY = 'codelet:inspector-open'
@@ -204,6 +235,8 @@ interface RendererStore {
   toggleDir: (cwd: string, dir: string) => Promise<void>
   /** 打开某个文件（进文件标签栏） */
   openFile: (cwd: string, path: string) => Promise<void>
+  /** 文件被外部改过之后重新加载：清掉内容缓存，重读一遍 */
+  reloadFile: (fileId: string, path: string, cwd: string) => Promise<void>
   /** 拉模型清单 */
   loadModels: (tabId: string) => Promise<void>
   /** 切某个标签的模型（persist 时同时设为新会话默认） */
@@ -226,7 +259,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   modelsLoading: false,
   modelsError: null,
   fileContents: {},
-  treeExpanded: {},
+  treeExpanded: loadTreeExpanded(),
   treeEntries: {},
 
   setSnapshot: (snapshot) => {
@@ -368,22 +401,33 @@ export const useStore = create<RendererStore>((set, get) => ({
   toggleDir: async (cwd, dir) => {
     const expanded = get().treeExpanded[cwd] ?? []
     if (expanded.includes(dir)) {
-      set((state) => ({
-        treeExpanded: { ...state.treeExpanded, [cwd]: expanded.filter((d) => d !== dir) }
-      }))
+      const next = { ...get().treeExpanded, [cwd]: expanded.filter((d) => d !== dir) }
+      saveTreeExpanded(next)
+      set({ treeExpanded: next })
       return
     }
     // 展开：还没加载过就先加载这一层
     await get().loadDir(cwd, dir)
     if (!get().treeEntries[`${cwd}\u0001${dir}`]) return
-    set((state) => ({
-      treeExpanded: { ...state.treeExpanded, [cwd]: [...(state.treeExpanded[cwd] ?? []), dir] }
-    }))
+    const next = { ...get().treeExpanded, [cwd]: [...(get().treeExpanded[cwd] ?? []), dir] }
+    saveTreeExpanded(next)
+    set({ treeExpanded: next })
   },
 
   openFile: async (cwd, path) => {
     // 只负责「进标签栏」—— 内容由 FilePane 的 effect 按活动文件加载
     await host.openFile(cwd, path)
+  },
+
+  reloadFile: async (fileId, path, cwd) => {
+    // 先清缓存再读 —— 不清的话 loadFile 看到有缓存就直接返回了
+    set((state) => {
+      const next = { ...state.fileContents }
+      delete next[path]
+      return { fileContents: next }
+    })
+    await host.reloadFile(fileId)
+    await get().loadFile(path, cwd)
   },
 
   loadModels: async (tabId) => {
