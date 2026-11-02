@@ -36,38 +36,5 @@
     "typescript": "^5.9.3",
     "vite": "^7.3.7",
     "vitest": "^5.0.5"
-  },
-  "build": {
-    "appId": "dev.codelet.app",
-    "productName": "Codelet",
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "files": [
-      "out/**/*",
-      "package.json"
-    ],
-    "mac": {
-      "icon": "build/icon.icns",
-      "category": "public.app-category.developer-tools",
-      "target": [
-        "dmg",
-        "zip"
-      ]
-    },
-    "win": {
-      "icon": "build/icon.ico",
-      "target": [
-        "nsis"
-      ]
-    },
-    "linux": {
-      "icon": "build/icon.png",
-      "category": "Development",
-      "target": [
-        "AppImage"
-      ]
-    }
   }
 }
