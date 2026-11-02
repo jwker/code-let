@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    Codelet 应用图标。
+
+    按 macOS Big Sur 之后的规范：1024×1024 画布，实心区域是 824×824 的
+    圆角方块（squircle），四周各留 100px 透明边距，圆角半径 185.4。
+    不留边距的话，Dock 里这个图标会比邻居大一圈。
+
+    图形：字母 C（开口朝右）+ 开口处的方块（终端光标）。
+    C 的圆心就是画布中心，半径 204，笔画 92。
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2A2A27"/>
+      <stop offset="1" stop-color="#141413"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="185.4" fill="url(#bg)"/>
+
+  <path d="M643 356 A204 204 0 1 0 643 668"
+        stroke="#FFFFFF" stroke-width="92" fill="none" stroke-linecap="round"/>
+  <!-- 方块（终端光标）。尺寸是量过的：
+       开口高 336，方块 120 占其中的 36% —— 96 会显得「飘」在 C 旁边，
+       144 就几乎把开口堵死、C 变回 O 了。120 是这两头之间。 -->
+  <rect x="618" y="452" width="120" height="120" rx="20" fill="#FFFFFF"/>
+</svg>

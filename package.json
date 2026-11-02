@@ -9,6 +9,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "icon": "electron scripts/gen-icon.cjs",
     "start": "electron-vite preview",
     "dist": "electron-vite build && electron-builder",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
@@ -35,5 +36,38 @@
     "typescript": "^5.9.3",
     "vite": "^7.3.7",
     "vitest": "^5.0.5"
+  },
+  "build": {
+    "appId": "dev.codelet.app",
+    "productName": "Codelet",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "Development",
+      "target": [
+        "AppImage"
+      ]
+    }
   }
 }
