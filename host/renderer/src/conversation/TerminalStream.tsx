@@ -4,6 +4,7 @@ import { useStore } from '../store'
 import { AnsiText } from './AnsiText'
 import { Markdown } from './Markdown'
 import { useToolOutputs } from './useToolOutputs'
+import { Thinking } from './Thinking'
 
 /**
  * 终端模式 · 等宽执行流。
@@ -30,6 +31,28 @@ export function TerminalStream({
   tabId: string | null
 }) {
   const { outputs, isExpanded } = useToolOutputs(items, tabId)
+
+  /**
+   * 这一轮已经发出去、但还没等到第一个 token。
+   *
+   * 终端模式是扁平列表（不按轮分组），所以要自己从最后一条用户消息往后看。
+   */
+  const awaitingFirstToken = useMemo(() => {
+    if (!streaming) return false
+    let lastUser = -1
+    for (let i = items.length - 1; i >= 0; i -= 1) {
+      const item = items[i]
+      if (item.kind === 'message' && item.role === 'user') {
+        lastUser = i
+        break
+      }
+    }
+    for (let i = lastUser + 1; i < items.length; i += 1) {
+      const item = items[i]
+      if (item.kind === 'message' && item.role === 'assistant') return false
+    }
+    return true
+  }, [items, streaming])
   const setToolExpanded = useStore((s) => s.setToolExpanded)
 
   // 有主的输出归工具行 —— 这里只留没主的（理论上不会有）
@@ -113,6 +136,15 @@ export function TerminalStream({
           }
         }
       })}
+      {/*
+        终端模式也走同一段等待。
+
+        条件是「**这一轮**还没有助手输出」—— 不是「整个会话没有」：
+        会话里本来就有历史，按后者判断的话只有第一次对话才会显示。
+        所以从最后一条用户消息往后找。工具执行期间也 streaming，
+        但那时助手已经说过话，`awaitingFirstToken` 是 false，不会误显示。
+      */}
+      {awaitingFirstToken && <Thinking />}
     </div>
   )
 }

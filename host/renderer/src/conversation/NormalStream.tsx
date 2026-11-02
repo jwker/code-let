@@ -6,6 +6,7 @@ import { groupBody } from './groupBody'
 import { Markdown } from './Markdown'
 import { ReplyMeta } from './ReplyMeta'
 import { summarizeTurn, type TurnSummary } from './turnMeta'
+import { Thinking } from './Thinking'
 import { useToolOutputs } from './useToolOutputs'
 import { formatDuration } from './usageFormat'
 import { IconCaret } from '../shell/icons'
@@ -130,6 +131,12 @@ function TurnRow({
     return (
       <div className="flex flex-col gap-2">
         <UserBubble item={turn.user} />
+        {/*
+          消息发出去了、首个 token 还没回来 —— 这一轮除了用户消息什么都没有。
+          `turn.body.length === 0` 比 `streaming` 更准：工具执行期间也 streaming，
+          但那时候已经有内容了，不该再说「思考中」。
+        */}
+        {streaming && turn.body.length === 0 && <Thinking />}
         <Body
           items={turn.body}
           outputs={outputs}
