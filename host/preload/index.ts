@@ -3,6 +3,7 @@ import {
   IPC,
   IPC_EVENTS,
   type CodeletApi,
+  type DeleteConversationsResult,
   type FileContent,
   type FileEntry,
   type HostSnapshot,
@@ -21,6 +22,8 @@ const api: CodeletApi = {
   getSnapshot: () => ipcRenderer.invoke(IPC.snapshotGet) as Promise<HostSnapshot>,
   openProject: () => ipcRenderer.invoke(IPC.projectsOpen) as Promise<HostSnapshot>,
   removeProject: (path) => ipcRenderer.invoke(IPC.projectsRemove, { path }) as Promise<HostSnapshot>,
+  deleteConversations: (paths) =>
+    ipcRenderer.invoke(IPC.conversationsDelete, { paths }) as Promise<DeleteConversationsResult>,
   openConversation: (path, cwd) => ipcRenderer.invoke(IPC.tabsOpen, { path, cwd }) as Promise<HostSnapshot>,
   newConversation: (cwd) => ipcRenderer.invoke(IPC.tabsNew, { cwd }) as Promise<HostSnapshot>,
   activateTab: (tabId) => ipcRenderer.invoke(IPC.tabsActivate, { tabId }) as Promise<HostSnapshot>,

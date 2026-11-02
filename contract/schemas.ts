@@ -11,6 +11,11 @@ export const projectPathSchema = z.object({
   path: z.string().min(1)
 })
 
+/** 删除会话：只传会话文件路径；路径还要在主进程里跟当前会话列表对一遍 */
+export const conversationsDeleteSchema = z.object({
+  paths: z.array(z.string().min(1)).min(1)
+})
+
 /** 列目录：cwd 是项目根，dir 是相对它（或绝对，主进程会校验不越界）的目录 */
 export const filesListSchema = z.object({
   cwd: z.string().min(1),

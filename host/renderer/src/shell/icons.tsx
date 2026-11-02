@@ -255,3 +255,25 @@ export const IconCheck = () => (
     <polyline points="20 6 9 17 4 12" />
   </Icon>
 )
+
+/** 废纸篓 —— 单条删除与会话选择模式里的删除按钮 */
+export const IconTrash = ({ size = 15 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l.9 12.5h9.2L17.5 7M10 11v5M14 11v5" />
+  </Icon>
+)
+
+/** 全选 —— 勾选标记 + 两条横线 */
+export const IconSelectAll = ({ size = 15 }: { size?: number }) => (
+  <Icon size={size}>
+    <path d="m3 6.5 1.8 1.8L8 5M3 15.5l1.8 1.8L8 14M11 7h10M11 16h10" />
+  </Icon>
+)
+
+/** 清空选择 —— 方框里一道横线，跟全选的勾选标记区分开 */
+export const IconClearSelection = ({ size = 15 }: { size?: number }) => (
+  <Icon size={size}>
+    <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+    <path d="M8 12h8" />
+  </Icon>
+)

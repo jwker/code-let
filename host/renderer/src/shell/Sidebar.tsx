@@ -2,17 +2,41 @@ import { useEffect, useRef, useState } from 'react'
 import type { ConversationInfo, ProjectInfo, TabInfo } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
-import { IconCollapseAll, IconExpandAll, IconFolder, IconSliders } from './icons'
+import {
+  IconClearSelection,
+  IconCollapseAll,
+  IconExpandAll,
+  IconFolder,
+  IconSelectAll,
+  IconSliders,
+  IconTrash
+} from './icons'
 import { ConfirmDialog } from './ConfirmDialog'
+import { batchDeleteCopy, countAffectedTabs, projectNamesOf, singleDeleteCopy } from './conversationDelete'
+import {
+  allSelected,
+  clearSelection,
+  exitSelection,
+  extendSelection,
+  groupCheck,
+  pruneSelection,
+  selectAll,
+  setGroupSelection,
+  startSelection,
+  toggleSelection,
+  type ConversationSelection
+} from './conversationSelection'
 import { collapseAll, expandAll, showExpandAll } from './sidebarCollapse'
 
 /**
  * 上下文侧栏 —— 宿主独占（PLAN.md D11 修订）。
  *
- * 顶部是**标题「项目」+ 一颗选项钮**（sliders）—— 标题不是按钮，
- * 所有动作（打开项目、收起/展开全部）都在那颗钮的浮层里。
+ * 顶部是**标题「项目」+ 两颗按钮**（收放全部、选项）。
  * 下面是**按项目分组**的全部会话。
- * 没有「当前项目」了 —— 标签栏之后每个标签自带自己的目录（PLAN.md D4 修订）。
+ *
+ * 删除会话（PLAN.md D23）有两种入口：
+ * - 单条：行悬停时右侧出现废纸篓，确认后移入系统废纸篓
+ * - 批量：项目选项菜单里进「选择对话」，勾选后从工具条删
  */
 
 /** 分组状态记在 localStorage —— 渲染进程的 UI 状态，不进主进程 */
@@ -36,6 +60,11 @@ function saveCollapsed(collapsed: Set<string>): void {
   }
 }
 
+/** 待确认的删除：单条记标题，批量只记路径（数量从快照现算） */
+type PendingDelete =
+  | { kind: 'single'; path: string; title: string }
+  | { kind: 'batch'; paths: string[] }
+
 export function Sidebar() {
   const conversations = useStore((s) => s.snapshot.conversations)
   const projects = useStore((s) => s.snapshot.projects)
@@ -47,10 +76,24 @@ export function Sidebar() {
   const [removing, setRemoving] = useState<ProjectInfo | null>(null)
   /** 头部那颗 sliders 打开的浮层 */
   const [optionsOpen, setOptionsOpen] = useState(false)
+  /** 批量选择状态 —— 纯界面状态，不落盘 */
+  const [selection, setSelection] = useState<ConversationSelection>(exitSelection)
+  /** 待确认的删除 */
+  const [pending, setPending] = useState<PendingDelete | null>(null)
+  /** 删除请求进行中 */
+  const [deleting, setDeleting] = useState(false)
+  /** 删除失败的原因 */
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const optionsRef = useRef<HTMLDivElement>(null)
 
   // 分组只按**清单里的项目**分 —— 不是 Pi 聊过的所有项目
   const groups = groupByProject(projects, conversations)
+  const allPaths = conversations.map((conversation) => conversation.path)
+  /** 范围选择只覆盖当前可见的行（折叠组里的要靠整组勾选） */
+  const visibleOrder = groups.flatMap((group) =>
+    collapsed.has(group.path) ? [] : group.conversations.map((conversation) => conversation.path)
+  )
+  const everySelected = allSelected(selection.paths, allPaths)
 
   // 浮层开着的时候，点外面或按 Esc 关掉
   useEffect(() => {
@@ -68,6 +111,27 @@ export function Sidebar() {
       document.removeEventListener('keydown', onKey)
     }
   }, [optionsOpen])
+
+  // 选择模式里按 Esc 退出；确认框开着的时候交给 ConfirmDialog 自己关
+  useEffect(() => {
+    if (!selection.active || pending) return
+    function onKey(event: KeyboardEvent): void {
+      if (event.key === 'Escape') setSelection(exitSelection())
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [selection.active, pending])
+
+  // 快照刷新后剔掉已经不存在的会话（比如删成功了、或者别处删了）
+  useEffect(() => {
+    setSelection((current) => {
+      if (!current.active) return current
+      const next = pruneSelection(current, new Set(conversations.map((c) => c.path)))
+      if (next === current) return current
+      // 列表空了就退出选择模式，否则留着让用户接着选
+      return conversations.length === 0 ? exitSelection() : next
+    })
+  }, [conversations])
 
   function toggle(project: string): void {
     setCollapsed((prev) => {
@@ -91,46 +155,148 @@ export function Sidebar() {
   /** 该显示「展开全部项目」还是「收起全部项目」 */
   const expandAllShown = showExpandAll(projects, collapsed)
 
+  /** 选择模式里点一行：Shift 走范围选择，否则切换勾选 */
+  function pickRow(path: string, shiftKey: boolean): void {
+    setSelection((current) =>
+      shiftKey ? extendSelection(current, path, visibleOrder) : toggleSelection(current, path)
+    )
+  }
+
+  function pickGroup(paths: string[], selected: boolean): void {
+    setSelection((current) => setGroupSelection(current, paths, selected))
+  }
+
+  function askDeleteOne(conversation: ConversationInfo): void {
+    setDeleteError(null)
+    setPending({ kind: 'single', path: conversation.path, title: conversation.title })
+  }
+
+  function askDeleteSelected(): void {
+    if (selection.paths.size === 0) return
+    setDeleteError(null)
+    setPending({ kind: 'batch', paths: [...selection.paths] })
+  }
+
+  /** 确认框里点了删除 —— 两种确认共用一个流程 */
+  async function confirmDelete(): Promise<void> {
+    if (!pending || deleting) return
+    const current = pending
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const paths = current.kind === 'single' ? [current.path] : current.paths
+      const result = await host.deleteConversations(paths)
+      if (result.failed.length > 0) {
+        setDeleteError(`有 ${result.failed.length} 个没删掉：${result.failed[0].reason}`)
+        // 批量删除部分失败 —— 留在选择模式，只保留失败的那些，方便直接重试
+        if (current.kind === 'batch') {
+          setSelection({
+            active: true,
+            paths: new Set(result.failed.map((item) => item.path)),
+            anchor: null
+          })
+        }
+      } else if (current.kind === 'batch') {
+        setSelection(exitSelection())
+      }
+      setPending(null)
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : String(error))
+      setPending(null)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const pendingPaths = pending
+    ? pending.kind === 'single'
+      ? [pending.path]
+      : pending.paths
+    : []
+  const affected = countAffectedTabs(pendingPaths, tabs)
+  const copy = pending
+    ? pending.kind === 'single'
+      ? singleDeleteCopy(pending.title, affected)
+      : batchDeleteCopy(pending.paths.length, projectNamesOf(pending.paths, conversations, projects), affected)
+    : null
+
   return (
     <aside className="shell-card side">
       <div className="side-panel">
-        {/*
-          头部：标题 + 两颗按钮。
-          标题就是标题 —— 看着是个分区标题，点它没反应。
-          右边两颗：收放全部（直接生效，不藏在菜单里）、选项（浮层里是「打开项目」）。
-          收放全部单独拎出来，因为它是一次性动作，跟「打开项目」那种会开浮层的不是一类；
-          而且常收常展，每次点两下太绕。
-        */}
         <div className="relative px-2.5 pt-3" ref={optionsRef}>
-          <div className="flex items-center gap-1">
-            <span className="flex-1 pl-1.5 text-[12.5px] font-semibold text-fg-2">项目</span>
-            {/* 一个项目都没有时没有可收放的东西 */}
-            {projects.length > 0 && (
+          {selection.active ? (
+            /* 选择模式：头部换成工具条 */
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                aria-label={expandAllShown ? '展开全部项目' : '收起全部项目'}
-                title={expandAllShown ? '展开全部项目' : '收起全部项目'}
-                onClick={toggleAll}
+                onClick={() => setSelection(exitSelection())}
+                className="h-6 flex-none rounded-md border border-hairline-strong px-2 text-[12px] text-fg-1 transition-colors hover:bg-sunken"
+              >
+                取消
+              </button>
+              <span
+                aria-live="polite"
+                className="min-w-0 flex-1 truncate text-center font-mono text-[11.5px] text-fg-2"
+              >
+                已选 {selection.paths.size} / {conversations.length}
+              </span>
+              <button
+                type="button"
+                title={everySelected ? '清空选择' : '全选'}
+                aria-label={everySelected ? '清空选择' : '全选'}
+                onClick={() =>
+                  setSelection((current) =>
+                    allSelected(current.paths, allPaths)
+                      ? clearSelection(current)
+                      : selectAll(current, allPaths)
+                  )
+                }
                 className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1"
               >
-                {expandAllShown ? <IconExpandAll /> : <IconCollapseAll />}
+                {everySelected ? <IconClearSelection size={15} /> : <IconSelectAll size={15} />}
               </button>
-            )}
-            <button
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={optionsOpen}
-              aria-label="项目选项"
-              title="项目选项"
-              onClick={() => setOptionsOpen((v) => !v)}
-              className={[
-                'flex h-7 w-7 flex-none items-center justify-center rounded-lg transition-colors',
-                optionsOpen ? 'bg-sunken text-fg-1' : 'text-fg-3 hover:bg-sunken hover:text-fg-1'
-              ].join(' ')}
-            >
-              <IconSliders />
-            </button>
-          </div>
+              <button
+                type="button"
+                title="删除选中的对话"
+                aria-label="删除选中的对话"
+                disabled={selection.paths.size === 0}
+                onClick={askDeleteSelected}
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-danger transition-colors hover:bg-danger-wash disabled:cursor-default disabled:text-fg-3 disabled:opacity-50 disabled:hover:bg-transparent"
+              >
+                <IconTrash size={15} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <span className="flex-1 pl-1.5 text-[12.5px] font-semibold text-fg-2">项目</span>
+              {/* 一个项目都没有时没有可收放的东西 */}
+              {projects.length > 0 && (
+                <button
+                  type="button"
+                  aria-label={expandAllShown ? '展开全部项目' : '收起全部项目'}
+                  title={expandAllShown ? '展开全部项目' : '收起全部项目'}
+                  onClick={toggleAll}
+                  className="flex h-7 w-7 flex-none items-center justify-center rounded-lg text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1"
+                >
+                  {expandAllShown ? <IconExpandAll /> : <IconCollapseAll />}
+                </button>
+              )}
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={optionsOpen}
+                aria-label="项目选项"
+                title="项目选项"
+                onClick={() => setOptionsOpen((v) => !v)}
+                className={[
+                  'flex h-7 w-7 flex-none items-center justify-center rounded-lg transition-colors',
+                  optionsOpen ? 'bg-sunken text-fg-1' : 'text-fg-3 hover:bg-sunken hover:text-fg-1'
+                ].join(' ')}
+              >
+                <IconSliders />
+              </button>
+            </div>
+          )}
 
           {optionsOpen && (
             <div
@@ -152,11 +318,38 @@ export function Sidebar() {
                 </span>
                 <span>打开项目…</span>
               </button>
+              <div className="my-1 h-px bg-hairline" />
+              <button
+                type="button"
+                role="menuitem"
+                disabled={conversations.length === 0}
+                onClick={() => {
+                  setOptionsOpen(false)
+                  setDeleteError(null)
+                  setSelection(startSelection())
+                }}
+                className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
+              >
+                <span className="flex-none text-fg-2">
+                  <IconSelectAll size={15} />
+                </span>
+                <span>选择对话</span>
+              </button>
             </div>
           )}
         </div>
 
         <div className="mx-2.5 mt-2 h-px bg-hairline" />
+
+        {deleteError && (
+          <div
+            role="alert"
+            style={{ borderColor: 'var(--danger-line)' }}
+            className="mx-2.5 mt-2 rounded-lg border bg-danger-wash px-2.5 py-1.5 text-[11.5px] leading-snug text-danger"
+          >
+            {deleteError}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto pb-4">
           {groups.length === 0 && (
@@ -179,6 +372,11 @@ export function Sidebar() {
               conversations={group.conversations}
               tabs={tabs}
               activeTabId={activeTabId}
+              selecting={selection.active}
+              selectedPaths={selection.paths}
+              onToggleGroup={pickGroup}
+              onRowClick={pickRow}
+              onDeleteRow={askDeleteOne}
             />
           ))}
         </div>
@@ -198,6 +396,22 @@ export function Sidebar() {
           }}
         />
       )}
+
+      {copy && pending && (
+        <ConfirmDialog
+          title={copy.title}
+          body={copy.body}
+          warning={copy.warning}
+          confirmText={copy.confirmText}
+          danger
+          busy={deleting}
+          busyText="删除中…"
+          onCancel={() => {
+            if (!deleting) setPending(null)
+          }}
+          onConfirm={() => void confirmDelete()}
+        />
+      )}
     </aside>
   )
 }
@@ -212,7 +426,12 @@ function ProjectGroup({
   onRemove,
   conversations,
   tabs,
-  activeTabId
+  activeTabId,
+  selecting,
+  selectedPaths,
+  onToggleGroup,
+  onRowClick,
+  onDeleteRow
 }: {
   project: string
   name: string
@@ -223,9 +442,16 @@ function ProjectGroup({
   conversations: ConversationInfo[]
   tabs: TabInfo[]
   activeTabId: string | null
+  selecting: boolean
+  selectedPaths: ReadonlySet<string>
+  onToggleGroup: (paths: string[], selected: boolean) => void
+  onRowClick: (path: string, shiftKey: boolean) => void
+  onDeleteRow: (conversation: ConversationInfo) => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+  const groupPaths = conversations.map((conversation) => conversation.path)
+  const check = groupCheck(selectedPaths, groupPaths)
 
   // 点外面关掉菜单
   useEffect(() => {
@@ -247,6 +473,19 @@ function ProjectGroup({
   return (
     <div className="px-2 pt-2">
       <div className="group/grp relative flex h-7 items-center gap-1 rounded-lg px-1.5 hover:bg-sunken">
+        {selecting && (
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={check === 'some' ? 'mixed' : check === 'all'}
+            aria-label={`选择 ${name} 的全部对话`}
+            title={`选择 ${name} 的全部对话`}
+            onClick={() => onToggleGroup(groupPaths, check !== 'all')}
+            className="flex h-5 w-5 flex-none items-center justify-center rounded"
+          >
+            <Checkbox checked={check === 'all'} mixed={check === 'some'} />
+          </button>
+        )}
         <button
           type="button"
           onClick={onToggle}
@@ -321,14 +560,23 @@ function ProjectGroup({
           {groupByTime(conversations).map((group) => (
             <div key={group.label}>
               <div className="px-2 pb-1 pt-2 text-[11px] text-fg-3">{group.label}</div>
-              {group.conversations.map((conversation) => (
-                <ConversationRow
-                  key={conversation.path}
-                  conversation={conversation}
-                  tab={tabs.find((t) => t.path === conversation.path)}
-                  active={tabs.find((t) => t.path === conversation.path)?.id === activeTabId}
-                />
-              ))}
+              {group.conversations.map((conversation) => {
+                const tab = tabs.find((candidate) => candidate.path === conversation.path)
+                return (
+                  <ConversationRow
+                    key={conversation.path}
+                    conversation={conversation}
+                    tab={tab}
+                    active={tab?.id === activeTabId}
+                    selecting={selecting}
+                    selected={selectedPaths.has(conversation.path)}
+                    onActivate={() => void openConversation(conversation, tab)}
+                    onToggle={() => onRowClick(conversation.path, false)}
+                    onExtend={() => onRowClick(conversation.path, true)}
+                    onDelete={() => onDeleteRow(conversation)}
+                  />
+                )
+              })}
             </div>
           ))}
         </div>
@@ -337,47 +585,129 @@ function ProjectGroup({
   )
 }
 
+/** 打开一条会话：已经在标签栏里开着就切过去 */
+async function openConversation(conversation: ConversationInfo, tab: TabInfo | undefined): Promise<void> {
+  if (tab) {
+    await host.activateTab(tab.id)
+    return
+  }
+  await host.openConversation(conversation.path, conversation.cwd)
+}
+
 /** 一条会话 */
 function ConversationRow({
   conversation,
   tab,
-  active
+  active,
+  selecting,
+  selected,
+  onActivate,
+  onToggle,
+  onExtend,
+  onDelete
 }: {
   conversation: ConversationInfo
   tab: TabInfo | undefined
   active: boolean
+  selecting: boolean
+  selected: boolean
+  onActivate: () => void
+  onToggle: () => void
+  onExtend: () => void
+  onDelete: () => void
 }) {
-  async function open(): Promise<void> {
-    // 已经在标签栏里开着 → 切过去，不要再开一个
-    if (tab) {
-      await host.activateTab(tab.id)
-      return
-    }
-    await host.openConversation(conversation.path, conversation.cwd)
+  const title = conversation.title
+
+  if (selecting) {
+    return (
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={selected}
+        onClick={(event) => (event.shiftKey ? onExtend() : onToggle())}
+        title={title}
+        className={[
+          'flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors',
+          selected ? 'bg-accent-wash text-fg-1' : 'text-fg-2 hover:bg-sunken'
+        ].join(' ')}
+      >
+        <Checkbox checked={selected} />
+        <TabDot tab={tab} />
+        <span className="min-w-0 flex-1 truncate text-[13.5px]">{title}</span>
+      </button>
+    )
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void open()}
-      title={conversation.title}
+    <div
       className={[
-        'group flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors',
+        'group relative flex w-full items-center rounded-lg transition-colors',
         active ? 'bg-accent-wash text-fg-1' : 'text-fg-2 hover:bg-sunken'
       ].join(' ')}
     >
-      {tab?.streaming ? (
-        <span className="h-1.5 w-1.5 flex-none animate-pulse rounded-full bg-info" />
-      ) : tab ? (
-        <span className="h-1.5 w-1.5 flex-none rounded-full bg-fg-3 opacity-60" />
+      <button
+        type="button"
+        onClick={onActivate}
+        title={title}
+        className="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1 text-left"
+      >
+        <TabDot tab={tab} />
+        <span
+          className={['min-w-0 flex-1 truncate text-[13.5px]', active ? 'font-medium' : ''].join(' ')}
+        >
+          {title}
+        </span>
+        <span className="flex-none font-mono text-[10px] text-fg-3 transition-opacity group-hover:opacity-0">
+          {relativeTime(conversation.modified)}
+        </span>
+      </button>
+      <button
+        type="button"
+        title={`删除「${title}」`}
+        aria-label={`删除「${title}」`}
+        onClick={onDelete}
+        className="absolute right-1 top-1/2 flex h-[22px] w-[22px] -translate-y-1/2 items-center justify-center rounded-md text-fg-3 opacity-0 transition-opacity hover:bg-danger-wash hover:text-danger focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        <IconTrash size={14} />
+      </button>
+    </div>
+  )
+}
+
+/** 会话是否开着标签：开着的灰点，正在跑的蓝点 */
+function TabDot({ tab }: { tab: TabInfo | undefined }) {
+  if (!tab) return null
+  return (
+    <span
+      className={[
+        'h-1.5 w-1.5 flex-none rounded-full',
+        tab.streaming ? 'animate-pulse bg-info' : 'bg-fg-3 opacity-60'
+      ].join(' ')}
+    />
+  )
+}
+
+/** 自定义复选框 —— 原生 input 的对勾在暗色下难对齐，用 span + SVG */
+function Checkbox({ checked, mixed = false }: { checked: boolean; mixed?: boolean }) {
+  const on = checked || mixed
+  return (
+    <span
+      aria-hidden="true"
+      className={[
+        'flex h-[15px] w-[15px] flex-none items-center justify-center rounded-[4px] border',
+        on ? 'border-accent bg-accent text-accent-fg' : 'border-hairline-strong bg-surface'
+      ].join(' ')}
+    >
+      {mixed ? (
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M2 5h6" />
+        </svg>
+      ) : checked ? (
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M2 5.2 4.1 7.3 8 3.2" />
+        </svg>
       ) : null}
-      <span className={['min-w-0 flex-1 truncate text-[13.5px]', active ? 'font-medium' : ''].join(' ')}>
-        {conversation.title}
-      </span>
-      <span className="flex-none font-mono text-[10px] text-fg-3 opacity-0 transition-opacity group-hover:opacity-100">
-        {relativeTime(conversation.modified)}
-      </span>
-    </button>
+    </span>
   )
 }
 

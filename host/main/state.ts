@@ -3,6 +3,7 @@ import { existsSync, statSync } from 'node:fs'
 import { basename, normalize, relative } from 'node:path'
 import type {
   ConversationInfo,
+  DeleteConversationsResult,
   FileContent,
   FileEntry,
   FileTab,
@@ -18,6 +19,7 @@ import { shell } from 'electron'
 import { listDirectory, readFileContent, resolveInsideCwd } from './files'
 import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
+import { moveSessionFilesToTrash } from './sessionFiles'
 import { TabStore, type StoredFile, type StoredTab } from './tabs'
 
 /** 宿主这边记的一个标签 */
@@ -117,6 +119,10 @@ export class HostState extends EventEmitter {
    * 用集合不用单值：多标签可以同时在跑、同时被停。
    */
   private aborting = new Set<string>()
+  /** 同一时间只允许一个删除请求 —— 连点、单条与批量并发都靠它挡住 */
+  private deleting = false
+  /** 会话文件移入废纸篓的方式 —— 注入是为了测试不启动 Electron */
+  private readonly trashFile: (path: string) => Promise<void>
   /** init() 跑完了没 —— 没跑完之前不响应焦点刷新（init 自己会读一次） */
   private initialized = false
   /** 窗口上次失去焦点的时刻 —— 回来时用「离开多久」决定要不要重读 */
@@ -128,12 +134,14 @@ export class HostState extends EventEmitter {
     tabStore?: TabStore
     projects?: ProjectStore
     pickDirectory?: () => Promise<string | null>
+    trashFile?: (path: string) => Promise<void>
   }) {
     super()
     this.pi = options?.pi ?? new PiRuntime()
     this.projects = options?.projects ?? new ProjectStore()
     this.tabStore = options?.tabStore ?? new TabStore()
     this.pickDirectory = options?.pickDirectory ?? pickDirectory
+    this.trashFile = options?.trashFile ?? ((path) => shell.trashItem(path))
     this.conversationsRefresh = new DebouncedRefresh(() => this.refreshConversations())
   }
 
@@ -381,21 +389,103 @@ export class HostState extends EventEmitter {
     this.push()
   }
 
-  /** 关掉某个标签 */
-  async closeTab(tabId: string): Promise<void> {
-    const index = this.tabs.findIndex((t) => t.id === tabId)
-    if (index < 0) return
-    await this.pi.closeTab(tabId)
-    this.tabs.splice(index, 1)
-    // 关掉的正好是活动标签 —— 活动标签落到相邻的一个
-    if (this.activeTabId === tabId) {
-      const next = this.tabs[Math.min(index, this.tabs.length - 1)]
-      this.activeTabId = next ? next.id : null
-      if (next) await this.pi.activateTab(next.id)
+  /**
+   * 从宿主的标签列表里摘掉一批标签（同步，不碰 runtime、不推快照）。
+   *
+   * 关单个标签和批量删会话共用这段：都先把「哪些标签还在」定下来，再动 runtime。
+   * 返回活动标签有没有变、新的活动标签是谁 —— 变了的话调用方要把新的 runtime
+   * 建起来（懒加载的标签点开才建）。
+   */
+  private detachTabs(tabIds: string[]): { activeChanged: boolean; nextActiveId: string | null } {
+    const ids = new Set(tabIds)
+    if (ids.size === 0) return { activeChanged: false, nextActiveId: this.activeTabId }
+    let activeChanged = false
+    for (const id of ids) {
+      const index = this.tabs.findIndex((t) => t.id === id)
+      if (index < 0) continue
+      const wasActive = this.activeTabId === id
+      this.tabs.splice(index, 1)
+      // 关掉的正好是活动标签 —— 活动标签落到相邻的一个
+      if (wasActive) {
+        activeChanged = true
+        const next = this.tabs[Math.min(index, this.tabs.length - 1)]
+        this.activeTabId = next ? next.id : null
+      }
     }
     this.persistTabs()
+    return { activeChanged, nextActiveId: this.activeTabId }
+  }
+
+  /** 关掉某个标签 */
+  async closeTab(tabId: string): Promise<void> {
+    if (!this.tabs.some((t) => t.id === tabId)) return
+    const { activeChanged, nextActiveId } = this.detachTabs([tabId])
+    await this.pi.closeTab(tabId)
+    // 新的活动标签如果是懒加载的，把它建起来
+    if (activeChanged && nextActiveId) await this.pi.activateTab(nextActiveId)
     this.readSession()
     this.push()
+  }
+
+  /**
+   * 删除一批会话（PLAN.md D23）。
+   *
+   * 顺序是硬约束：
+   * 1. 先确认路径都在当前会话列表里 —— 会话文件在 `~/.pi/agent/sessions/` 下，
+   *    不在项目目录里，`resolveInsideCwd()` 那套校验用不上，白名单是唯一可靠的校验。
+   * 2. 摘掉引用它们的标签与文件标签。
+   * 3. 关掉标签的 runtime（`closeTab` 内部先 abort 等结算，再 dispose）。
+   *    文件删了而 runtime 还活着的话，下一条消息会用 `appendFileSync`
+   *    重建一个没有头部的会话文件。
+   * 4. 最后才把文件移入废纸篓。
+   */
+  async deleteConversations(paths: string[]): Promise<DeleteConversationsResult> {
+    if (this.deleting) throw new Error('上一次删除还没结束')
+    this.deleting = true
+    try {
+      const targets = [...new Set(paths.map((path) => normalize(path)))]
+      const known = new Set(this.conversations.map((conversation) => normalize(conversation.path)))
+      const unknown = targets.filter((path) => !known.has(path))
+      if (unknown.length > 0) throw new Error(`不在当前对话列表里：${unknown.join('、')}`)
+      const targetSet = new Set(targets)
+
+      // 会话文件没了，预览它的文件标签也一起关掉
+      const fileIds = this.files
+        .filter((file) => targetSet.has(normalize(file.path)))
+        .map((file) => file.id)
+      for (const fileId of fileIds) this.removeFileTab(fileId)
+      if (fileIds.length > 0) this.persistFiles()
+
+      const tabIds = this.tabs
+        .filter((tab) => tab.path && targetSet.has(normalize(tab.path)))
+        .map((tab) => tab.id)
+      const previousActiveTabId = this.activeTabId
+      const { nextActiveId } = this.detachTabs(tabIds)
+
+      // 先关 runtime 再动文件 —— runtime 里还拿着这个会话文件路径。
+      // 用 allSettled 等所有标签都停稳：一条失败也要等其他的关完，
+      // 否则 deleting 已经放开了、别的 runtime 还在写。
+      const closeResults = await Promise.allSettled(tabIds.map((tabId) => this.pi.closeTab(tabId)))
+      const closeFailure = closeResults.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected'
+      )
+      if (closeFailure) {
+        throw closeFailure.reason instanceof Error ? closeFailure.reason : new Error(String(closeFailure.reason))
+      }
+
+      // 活动标签被删了的话，把新的活动标签建起来（懒加载的这时才建）
+      if (this.activeTabId !== previousActiveTabId && nextActiveId) {
+        await this.pi.activateTab(nextActiveId)
+      }
+
+      const outcome = await moveSessionFilesToTrash(targets, this.trashFile)
+      await this.refreshConversations()
+      this.readSession()
+      this.push()
+      return outcome
+    } finally {
+      this.deleting = false
+    }
   }
 
   /** 把当前的标签列表落盘（顺序即标签栏的顺序） */
@@ -579,10 +669,10 @@ export class HostState extends EventEmitter {
     this.push()
   }
 
-  /** 关掉一个文件标签 */
-  async closeFile(fileId: string): Promise<void> {
+  /** 从宿主的文件标签列表里摘掉一个文件（同步，不落盘、不推快照） */
+  private removeFileTab(fileId: string): boolean {
     const index = this.files.findIndex((f) => f.id === fileId)
-    if (index < 0) return
+    if (index < 0) return false
     this.files.splice(index, 1)
     // 关掉的是活动文件 —— 活动落到相邻的一个
     if (this.activeFileId === fileId) {
@@ -591,6 +681,12 @@ export class HostState extends EventEmitter {
     }
     this.fileMtime.delete(fileId)
     this.fileStale.delete(fileId)
+    return true
+  }
+
+  /** 关掉一个文件标签 */
+  async closeFile(fileId: string): Promise<void> {
+    if (!this.removeFileTab(fileId)) return
     this.persistFiles()
     this.push()
   }

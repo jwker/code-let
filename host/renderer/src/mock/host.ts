@@ -223,6 +223,8 @@ export function createMockApi(): CodeletApi {
   const tabs: FakeTab[] = []
   let activeTabId: string | null = null
   let conversations: ConversationInfo[] = []
+  /** 假数据里被删掉的会话 —— FAKE_CONVERSATIONS 是静态的，删完要记住 */
+  const removedConversations = new Set<string>()
   /** 假数据里「用户选中的项目」 */
   let projects: ProjectInfo[] = FAKE_PROJECTS.map((p) => ({ ...p }))
   /** 假宿主的文件标签 */
@@ -304,7 +306,9 @@ export function createMockApi(): CodeletApi {
 
   /** 假数据里这些项目的会话 */
   function allConversations(): ConversationInfo[] {
-    return projects.flatMap((project) => FAKE_CONVERSATIONS[project.path] ?? [])
+    return projects.flatMap((project) =>
+      (FAKE_CONVERSATIONS[project.path] ?? []).filter((c) => !removedConversations.has(c.path))
+    )
   }
 
   // 开场就有一个标签
@@ -337,6 +341,37 @@ export function createMockApi(): CodeletApi {
       projects = projects.filter((p) => p.path !== path)
       conversations = allConversations()
       return publish()
+    },
+
+    deleteConversations: async (paths) => {
+      const deleted = paths.filter((path) => conversations.some((c) => c.path === path))
+      const wanted = new Set(deleted)
+      for (const path of deleted) removedConversations.add(path)
+      conversations = allConversations()
+
+      // 关掉引用这些会话的标签
+      for (const path of deleted) {
+        let index = tabs.findIndex((t) => t.path === path)
+        while (index >= 0) {
+          const wasActive = activeTabId === tabs[index].id
+          // 让还在跑的假回复下一段自己退出
+          aborted.add(tabs[index].id)
+          tabs.splice(index, 1)
+          if (wasActive) activeTabId = tabs[Math.min(index, tabs.length - 1)]?.id ?? null
+          index = tabs.findIndex((t) => t.path === path)
+        }
+      }
+
+      // 同路径的文件标签也一起关
+      for (const file of files.filter((f) => wanted.has(f.path))) {
+        const index = files.findIndex((f) => f.id === file.id)
+        if (index < 0) continue
+        files.splice(index, 1)
+        if (activeFileId === file.id) activeFileId = files[Math.min(index, files.length - 1)]?.id ?? null
+      }
+
+      publish()
+      return { deleted, failed: [] }
     },
 
     openConversation: async (path, cwd) => {

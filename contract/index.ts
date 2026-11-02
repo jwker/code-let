@@ -22,6 +22,8 @@ export const IPC = {
   projectsOpen: 'host:projects:open',
   /** 从清单里移除一个项目（对话文件不动） */
   projectsRemove: 'host:projects:remove',
+  /** 删除会话（会话文件移入系统废纸篓，顺带关掉引用它的标签） */
+  conversationsDelete: 'host:conversations:delete',
   /** 打开一个已有会话 → 开成新标签 */
   tabsOpen: 'host:tabs:open',
   /** 在某个目录里新建会话 → 开成新标签 */
@@ -171,6 +173,17 @@ export interface ConversationInfo {
   messageCount: number
   /** 所属目录 */
   cwd: string
+}
+
+/**
+ * 批量删除会话的结果。
+ *
+ * 逐条报告，不因为一条失败就丢掉其他条的结果。
+ * 文件在删除时已经不在磁盘上的，也算删除成功 —— 目标（它不存在）已经达成。
+ */
+export interface DeleteConversationsResult {
+  deleted: string[]
+  failed: Array<{ path: string; reason: string }>
 }
 
 /**
@@ -422,6 +435,13 @@ export interface CodeletApi {
    * **Pi 存的对话不动** —— 只是这个目录不再出现在清单里。
    */
   removeProject(path: string): Promise<HostSnapshot>
+  /**
+   * 删除一批会话：会话文件移入系统废纸篓，引用它们的标签一起关掉。
+   *
+   * 路径必须都在宿主当前的会话列表里，否则整批拒绝。列表更新走快照推送，
+   * 返回值只用于逐条报告失败。
+   */
+  deleteConversations(paths: string[]): Promise<DeleteConversationsResult>
   /** 打开一个已有会话 → 开成新标签 */
   openConversation(path: string, cwd: string): Promise<HostSnapshot>
   /** 在某个目录里新建会话 → 开成新标签 */
