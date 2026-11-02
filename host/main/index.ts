@@ -22,6 +22,10 @@ function createWindow(): BrowserWindow {
     minWidth: 960,
     minHeight: 640,
     show: false,
+    // 非 macOS 的 Dock/任务栏图标从窗口上取。macOS 走上面 whenReady 里的 app.dock
+    ...(process.platform === 'darwin'
+      ? {}
+      : { icon: join(currentDir, '../../build/icon.png') }),
     // 渲染进程还没画之前的窗口底色 —— 默认主题是亮色
     backgroundColor: '#f4f4f5',
     // macOS：标题栏整条交给渲染进程，红绿灯压在自绘标题栏左侧
@@ -81,6 +85,18 @@ if (!app.requestSingleInstanceLock()) {
   })
 
   app.whenReady().then(async () => {
+    /*
+     * 开发时 Dock 里是 Electron 的默认图标 —— 因为跑的是 node_modules 里那个
+     * Electron 二进制，不是我们的 .app 包，包里没有 icon.icns。
+     * 手动塞一个进去，省得开一次 dev 就看一次蓝电子。
+     *
+     * 打包之后这段不执行：.app 自带 Contents/Resources/icon.icns，
+     * 系统按 Info.plist 自己找，不需要也不应该在这里再设一次。
+     */
+    if (isDev && process.platform === 'darwin') {
+      app.dock?.setIcon(join(currentDir, '../../build/icon.png'))
+    }
+
     if (!isDev) {
       serveRenderer(join(currentDir, '../renderer'))
     }
