@@ -81,6 +81,12 @@ export interface PiRuntimePort {
   selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void>
   /** 往某个标签发一条用户消息 */
   prompt(tabId: string, text: string): Promise<void>
+  /**
+   * 中止某个标签正在跑的那一轮（用户主动停，标签留着）。
+   *
+   * 返回时已经停稳；没在跑就直接返回。
+   */
+  abortTab(tabId: string): Promise<void>
   /** 收摊 */
   stop(): Promise<void>
 }
@@ -333,6 +339,22 @@ export class PiRuntime implements PiRuntimePort {
     const session = this.tabs.get(tabId)?.runtime?.session
     if (!session) throw new Error('runtime 尚未启动')
     await session.prompt(text)
+  }
+
+  /**
+   * 中止某个标签正在跑的那一轮。
+   *
+   * 跟 `closeTab` 里那次 `abort()` 不是一回事：那个是关标签前的收尾，
+   * 这里是用户主动停 —— 停完标签还在、runtime 不动，接着还能发下一条。
+   *
+   * `abort()` 内部会 `await waitForIdle()`：工具正在执行时要等它响应 abort signal，
+   * 可能几秒。所以这个方法会等，调用方要知道它不是瞬时的。
+   */
+  async abortTab(tabId: string): Promise<void> {
+    const session = this.tabs.get(tabId)?.runtime?.session
+    // 没在跑就直接返回 —— 按钮可能连着点了两下，第二次什么都不该发生
+    if (!session || !session.isStreaming) return
+    await session.abort()
   }
 
   async stop(): Promise<void> {

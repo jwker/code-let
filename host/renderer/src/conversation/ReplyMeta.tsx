@@ -57,6 +57,18 @@ export function ReplyMeta({ summary, streaming }: { summary: TurnSummary; stream
         {copied ? <IconCheck /> : <IconCopy />}
         {copied ? '已复制' : '复制'}
       </button>
+      {/*
+        「已中止」—— 这一轮用户中途停掉了，正文是半截的。
+        不放进正文（那会打断这句话本身的阅读，而且半截的话末尾补任何标点
+        都是替用户改写），放在这一行的附注位置上。
+        虚线框而不是实线：它是个提醒，不是状态徽章。
+      */}
+      {summary.aborted && (
+        <span className="flex flex-none items-center gap-1 whitespace-nowrap rounded-full border border-dashed border-hairline-strong px-2 py-0.5 text-[10.5px] text-fg-2">
+          <span className="h-1.5 w-1.5 rounded-[1px] bg-fg-3" aria-hidden="true" />
+          已中止
+        </span>
+      )}
       <Stats summary={summary} streaming={streaming} />
     </div>
   )

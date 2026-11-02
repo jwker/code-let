@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
 import { isPreview } from '../host'
 import { useStore } from '../store'
-import { idleIndicator, needsTick, stepIndicator, type IndicatorState } from './refreshIndicator'
+import { useIndicator } from './useIndicator'
 
 const MODE_LABEL = { normal: '普通', terminal: '终端', html: 'HTML' } as const
 
@@ -20,7 +19,7 @@ export function StatusBar() {
   const eventCount = useStore((s) => s.eventCount)
 
   const fallback = snapshot.session.modelFallback
-  const spinning = useRefreshIndicator(snapshot.refreshing)
+  const spinning = useIndicator(snapshot.refreshing)
 
   return (
     <footer className="shell-bar flex items-center gap-4 px-4 text-[10.5px] text-fg-3">
@@ -59,32 +58,3 @@ export function StatusBar() {
   )
 }
 
-/**
- * 「刷新中」的显示时机。
- *
- * 主进程说 `busy`（在读盘），这里按「延迟 200ms 出现、最短 500ms 停留」算出该不该显示。
- * 不忙的时候完全不起定时器。
- */
-function useRefreshIndicator(busy: boolean): boolean {
-  const [state, setState] = useState<IndicatorState>(idleIndicator)
-  const stateRef = useRef(state)
-  stateRef.current = state
-
-  useEffect(() => {
-    setState((prev) => stepIndicator(prev, busy, Date.now()))
-    if (!needsTick(stateRef.current, busy)) return
-
-    const timer = window.setInterval(() => {
-      const next = stepIndicator(stateRef.current, busy, Date.now())
-      if (next !== stateRef.current) {
-        stateRef.current = next
-        setState(next)
-      }
-      if (!needsTick(next, busy)) window.clearInterval(timer)
-    }, 50)
-
-    return () => window.clearInterval(timer)
-  }, [busy])
-
-  return state.visible
-}

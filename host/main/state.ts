@@ -111,6 +111,12 @@ export class HostState extends EventEmitter {
    * 布尔会在第一个结束时就把「刷新中」关掉。
    */
   private pendingRefreshes = 0
+  /**
+   * 正在中止的标签。
+   *
+   * 用集合不用单值：多标签可以同时在跑、同时被停。
+   */
+  private aborting = new Set<string>()
   /** init() 跑完了没 —— 没跑完之前不响应焦点刷新（init 自己会读一次） */
   private initialized = false
   /** 窗口上次失去焦点的时刻 —— 回来时用「离开多久」决定要不要重读 */
@@ -142,6 +148,7 @@ export class HostState extends EventEmitter {
       projects: this.projects.list(),
       conversations: this.conversations,
       refreshing: this.pendingRefreshes > 0,
+      aborting: [...this.aborting],
       // stale 是派生状态，不存在 FileTab 里，推快照时合进去
       files: this.files.map((f) => (this.fileStale.has(f.id) ? { ...f, stale: true } : f)),
       activeFileId: this.activeFileId,
@@ -772,6 +779,26 @@ export class HostState extends EventEmitter {
   /** 往某个标签发一条用户消息 */
   async prompt(tabId: string, text: string): Promise<void> {
     await this.pi.prompt(tabId, text)
+  }
+
+  /**
+   * 中止某个标签正在跑的那一轮。
+   *
+   * 先把 tabId 记进 `aborting` 再推快照 —— 界面要靠它显示「停止中」，
+   * 而 `abort()` 可能要等好几秒（工具在执行）。
+   *
+   * 已经在停的标签直接返回：按钮连点两下不该调两次 `abort()`。
+   */
+  async abortPrompt(tabId: string): Promise<void> {
+    if (this.aborting.has(tabId)) return
+    this.aborting.add(tabId)
+    this.emit('snapshot', this.snapshot())
+    try {
+      await this.pi.abortTab(tabId)
+    } finally {
+      this.aborting.delete(tabId)
+      this.emit('snapshot', this.snapshot())
+    }
   }
 
   async dispose(): Promise<void> {

@@ -36,6 +36,8 @@ export const IPC = {
   tabsEntries: 'host:tabs:entries',
   /** 往某个标签发一条用户消息 */
   promptSend: 'host:prompt:send',
+  /** 中止某个标签正在跑的那一轮 */
+  promptAbort: 'host:prompt:abort',
   /** 把一段文字写入系统剪贴板 */
   clipboardWrite: 'host:clipboard:write',
   /** 列一个目录下的条目（文件树） */
@@ -294,6 +296,12 @@ export interface HostSnapshot {
    * 见 `host/renderer/src/shell/refreshIndicator.ts`。
    */
   refreshing: boolean
+  /**
+   * 正在中止的标签（`abortPrompt` 还没返回的那些）。
+   *
+   * 跟 `refreshing` 一样只管事实 —— 什么时候显示「停止中」是渲染进程的事。
+   */
+  aborting: string[]
   /** 打开的文件（按打开顺序）。文件标签是全局的，跟会话标签无关（D22） */
   files: FileTab[]
   /** 当前活动的文件（null = 没有） */
@@ -372,6 +380,13 @@ export type StreamItem =
        * 工具调用那一轮没有正文，就没有这一项 —— 两条来源一致。
        */
       stats?: ReplyStats
+      /**
+       * 这条助手消息是被用户中止的（Pi 的 `stopReason === "aborted"`）。
+       *
+       * 只读这个字段，不另存「哪一轮被中止过」的状态 —— 会话文件里本来就写着，
+       * 所以重启之后历史记录里那次中止还标着。
+       */
+      aborted?: boolean
     }
   | {
       kind: 'tool'
@@ -426,6 +441,14 @@ export interface CodeletApi {
   getTabEntries(tabId: string): Promise<StreamItem[]>
   /** 往某个标签发一条消息 */
   prompt(tabId: string, text: string): Promise<void>
+  /**
+   * 中止某个标签正在跑的那一轮。
+   *
+   * 返回时**已经停稳**（Pi 的 `abort()` 内部 `await waitForIdle()`），
+   * 所以等待期间界面要靠 `aborting` 显示「停止中」。
+   * 没在跑、或者已经在停 —— 直接返回，不报错。
+   */
+  abortPrompt(tabId: string): Promise<void>
   /** 把一段文字写入系统剪贴板（复制回复正文） */
   copyText(text: string): Promise<void>
   /** 列一个目录下的条目 */

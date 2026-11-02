@@ -187,6 +187,22 @@ export const IconArrowUp = () => (
   </Icon>
 )
 
+/**
+ * 停止 —— 实心方块。
+ *
+ * 全站图标都是 1.6px 描边的线性风格，这个是唯一一个例外：
+ * 它是「按下去会打断正在进行的事情」的那个钮，实心在 18px 下重得多，
+ * 扫一眼不会跟旁边的发送箭头混。
+ *
+ * 尺寸取 10×10 居中（不是描边图的 12×12）—— 实心方形视觉上比同尺寸的描边方
+ * 看着大一圈，收到 10 才跟箭头一样重。
+ */
+export const IconStop = () => (
+  <Icon>
+    <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" />
+  </Icon>
+)
+
 /** 跳到顶部 / 底部用「箭头 + 横线」—— 别跟发送那个光箭头长一样 */
 export const IconArrowUpToLine = () => (
   <Icon>

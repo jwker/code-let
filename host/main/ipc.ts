@@ -14,6 +14,7 @@ import {
   filesListSchema,
   modelSelectSchema,
   projectPathSchema,
+  promptAbortSchema,
   promptSchema,
   tabIdSchema,
   tabNewSchema,
@@ -143,6 +144,11 @@ export function registerIpc(state: HostState): () => void {
     await state.prompt(tabId, text)
   })
 
+  ipcMain.handle(IPC.promptAbort, async (_event, payload: unknown) => {
+    const { tabId } = promptAbortSchema.parse(payload)
+    await state.abortPrompt(tabId)
+  })
+
   ipcMain.handle(IPC.clipboardWrite, (_event, payload: unknown) => {
     const { text } = clipboardWriteSchema.parse(payload)
     clipboard.writeText(text)
@@ -211,6 +217,7 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.tabsReload)
     ipcMain.removeHandler(IPC.tabsEntries)
     ipcMain.removeHandler(IPC.promptSend)
+    ipcMain.removeHandler(IPC.promptAbort)
     ipcMain.removeHandler(IPC.clipboardWrite)
     ipcMain.removeHandler(IPC.filesList)
     ipcMain.removeHandler(IPC.filesRead)

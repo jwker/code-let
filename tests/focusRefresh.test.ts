@@ -58,6 +58,9 @@ class FakePi implements PiRuntimePort {
   }
   async selectModel(): Promise<void> {}
   async prompt(): Promise<void> {}
+  async abortTab(): Promise<void> {
+    // 测试里没有真 agent，中止是空操作
+  }
   async stop(): Promise<void> {
     this.listeners.clear()
   }

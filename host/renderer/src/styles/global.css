@@ -592,6 +592,30 @@
   }
 }
 
+/*
+ * 「停止中」的转圈 —— 用在发送按钮里（accent 底上的白环）。
+ *
+ * 跟 .refresh-ring 是同一个形状，但那个是给浅底状态栏用的（深色环），
+ * 这个是白底反色，所以单独一条。尺寸也大一号：按钮里的图标是 18px。
+ */
+.conv-stop-ring {
+  /* 同样是 <span>，必须 inline-block，不然宽高不生效 */
+  display: inline-block;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in oklab, currentColor 30%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: refresh-spin 700ms linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conv-stop-ring {
+    animation: none;
+  }
+}
+
 .shell-bar {
   grid-area: bar;
   flex: none;

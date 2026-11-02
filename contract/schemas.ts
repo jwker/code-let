@@ -52,6 +52,11 @@ export const promptSchema = z.object({
   text: z.string().min(1)
 })
 
+/** 中止只要一个 tabId —— 没有别的东西可传 */
+export const promptAbortSchema = z.object({
+  tabId: z.string().min(1)
+})
+
 export const clipboardWriteSchema = z.object({
   text: z.string()
 })

@@ -36,6 +36,13 @@ interface RawMessage {
   durationMs?: number
   /** 请求发出的时刻（Unix 毫秒） */
   timestamp?: number
+  /**
+   * 这条助手消息是怎么结束的（Pi 的 StopReason）。
+   *
+   * 只关心 'aborted' —— 用户中途停掉的那一轮，UI 要标出来。
+   * 别的值（stop / toolUse / error / length）现在不影响渲染。
+   */
+  stopReason?: string
 }
 
 interface RawUsage {
@@ -208,6 +215,7 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
     if (message.role === 'assistant') {
       const blocks = Array.isArray(message.content) ? (message.content as RawBlock[]) : []
       const stats = statsOf(message)
+      const aborted = message.stopReason === 'aborted'
       // 一条助手消息可能拆成好几项（正文与工具交替）——
       // 计量挂在它产生的**第一项**正文上（后面由渲染层按轮聚合）
       const start = items.length
@@ -230,12 +238,13 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
         // thinking 这一轮不显示
       }
       flush()
-      // 这一条消息产生的第一项正文 —— 计量挂上去
-      if (stats) {
+      // 这一条消息产生的第一项正文 —— 计量和中止标记挂上去。
+      // 挂第一项就行：中止后面不会再有内容，渲染层按轮聚合时从头找得到。
+      if (stats || aborted) {
         for (let i = start; i < items.length; i += 1) {
           const item = items[i]
           if (item.kind === 'message' && item.role === 'assistant') {
-            items[i] = { ...item, stats }
+            items[i] = { ...item, ...(stats ? { stats } : {}), ...(aborted ? { aborted } : {}) }
             break
           }
         }
@@ -359,6 +368,9 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
         const text = assistantText(message)
         const calls = toolCallsOf(message)
         const stats = statsOf(message)
+        // 中止的标记跟计量一样挂在这条消息的正文项上
+        const aborted = message.stopReason === 'aborted'
+        const marks = { ...(stats ? { stats } : {}), ...(aborted ? { aborted } : {}) }
         // 工具调用在这里落地成独立的 tool 项 —— 跟历史那条路同一个来源（R3）
         const toolItems: StreamItem[] = calls.map((call) =>
           toolItem(call.id ?? '', call.name ?? 'tool', 'running', call.arguments)
@@ -371,14 +383,14 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
             : findLastAssistantIndex(items)
         if (index < 0) {
           // 没有对应的助手消息项（没走到 message_start）—— 工具项照建
-          const created: StreamItem[] = text ? [{ kind: 'message', role, text, ...(stats ? { stats } : {}) }] : []
+          const created: StreamItem[] = text ? [{ kind: 'message', role, text, ...marks }] : []
           return [...items, ...created, ...toolItems]
         }
         const current = items[index]
         if (current.kind !== 'message') return items
         const next = items.slice()
         if (text) {
-          next[index] = { ...current, text, ...(stats ? { stats } : {}) }
+          next[index] = { ...current, text, ...marks }
           next.splice(index + 1, 0, ...toolItems)
         } else {
           // 只有工具调用、没有文本的助手消息不留空气泡

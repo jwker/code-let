@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
-import { IconArrowUp } from '../shell/icons'
+import { useIndicator } from '../shell/useIndicator'
+import { IconArrowUp, IconStop } from '../shell/icons'
 import { NormalStream } from './NormalStream'
 import { ScrollJump } from './ScrollJump'
 import { TerminalStream } from './TerminalStream'
@@ -28,6 +29,19 @@ export function ConversationArea() {
   )
   const openPicker = useStore((s) => s.openModelPicker)
   const reloadTab = useStore((s) => s.reloadTab)
+  /**
+   * 这个标签正在中止 —— 主进程说的「abort 还没返回」。
+   *
+   * 不管「该不该显示停止中」—— 那是下面 `useIndicator` 的事。
+   */
+  const aborting = useStore(
+    (s) => (s.snapshot.activeTabId ? s.snapshot.aborting.includes(s.snapshot.activeTabId) : false)
+  )
+  /*
+   * 「停止中」的显示时机。多数中止在几十毫秒内就结束，直接显示会闪一下 ——
+   * 跟状态栏的「刷新中」是同一套规则，共用同一份实现。
+   */
+  const stopping = useIndicator(aborting)
   /**
    * 这个会话在别处被改过 —— 内容流落后了，得先重新加载才能继续说话。
    *
@@ -68,6 +82,19 @@ export function ConversationArea() {
     setDraft('')
     scrollToBottom()
     await host.prompt(activeTabId, text)
+  }
+
+  /**
+   * 中止这一轮。
+   *
+   * 不等它返回再改界面 —— `abort()` 可能要等好几秒（工具在执行），
+   * 期间由主进程推的 `aborting` 驱动「停止中」。
+   */
+  function stop(): void {
+    // 看 `aborting` 而不是 `stopping`：后者是延迟显示的状态，
+    // 在延迟期内它是 false，但实例上已经在中止了 —— 那会儿不该再发一次。
+    if (!activeTabId || aborting) return
+    void host.abortPrompt(activeTabId)
   }
 
   return (
@@ -161,16 +188,42 @@ export function ConversationArea() {
                 composeEndedAt.current = Date.now()
               }}
               onKeyDown={(event) => {
-                if (event.key !== 'Enter') return
                 /*
-                 * 输入法相关的回车一律不发：
+                 * 输入法相关的按键一律不处理：
                  * - 正在组词（`composing` / `isComposing`）
                  * - 刚结束组词 80ms 内 —— 覆盖「compositionend 之后才发 keydown」的输入法
+                 *
+                 * Enter 被当成发送会把半句话发出去；Esc 被当成停止会把打了一半的
+                 * 中文吞掉（输入法用 Esc 取消本次输入）。两个坑是同一类。
                  */
-                if (composing.current || event.nativeEvent.isComposing) return
-                if (Date.now() - composeEndedAt.current < 80) return
+                const composingNow = () =>
+                  composing.current ||
+                  event.nativeEvent.isComposing ||
+                  Date.now() - composeEndedAt.current < 80
+
+                // Esc：中止这一轮。只在有东西在跑的时候有意义
+                if (event.key === 'Escape') {
+                  if (composingNow()) return
+                  if (!streaming) return
+                  event.preventDefault()
+                  stop()
+                  return
+                }
+
+                if (event.key !== 'Enter') return
+                if (composingNow()) return
                 // Shift+Enter 换行，交给 textarea 自己处理（不 preventDefault）
                 if (event.shiftKey) return
+                /*
+                 * 流式期间不发送（方案 C）。
+                 *
+                 * 不让它排队：Pi 中止时会直接丢弃队列（`_handlePostAgentRun` 里
+                 * `abort 后直接 return false`），用户写了半天的话会无声消失。
+                 * 要么等这轮结束，要么停掉再发 —— 不留「看不见的队列」。
+                 *
+                 * 带上 `stopping`：那 500ms 里按钮还在转圈，能发的话就自相矛盾了。
+                 */
+                if (streaming || stopping) return
                 event.preventDefault()
                 void send()
               }}
@@ -201,22 +254,43 @@ export function ConversationArea() {
                 </span>
                 <span className="conv-model-caret flex-none text-fg-3">▾</span>
               </button>
-              <span className="conv-hint flex-none text-[11.5px] text-fg-3">↵ 发送 · ⇧↵ 换行</span>
+              {/*
+                提示文字跟着**按钮**的状态走，不跟着 streaming。
+                两者在「最短停留」那段时间里不一致（streaming 已经 false，
+                但 stopping 还在撑）—— 跟着 streaming 的话会出现「按钮在转圈、
+                提示却说可以发」的矛盾。
+              */}
+              <span className="conv-hint flex-none text-[11.5px] text-fg-3">
+                {stopping ? '正在停止…' : streaming ? 'Esc 停止 · ⇧↵ 换行' : '↵ 发送 · ⇧↵ 换行'}
+              </span>
               {session.error && (
                 <span className="min-w-0 flex-1 truncate text-[11.5px] text-danger" title={session.error}>
                   {session.error}
                 </span>
               )}
-              <button
-                type="button"
-                onClick={() => void send()}
-                disabled={!draft.trim() || stale}
-                aria-label="发送"
-                title="发送"
-                className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-full bg-accent text-accent-fg transition-opacity hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <IconArrowUp />
-              </button>
+              {streaming || stopping ? (
+                <button
+                  type="button"
+                  onClick={stop}
+                  disabled={stopping}
+                  aria-label="停止"
+                  title={stopping ? '正在停止…' : '停止（Esc）'}
+                  className={`ml-auto grid h-8 w-8 flex-none place-items-center rounded-full bg-accent text-accent-fg transition-opacity hover:bg-accent-hover disabled:cursor-not-allowed ${stopping ? 'opacity-45' : ''}`}
+                >
+                  {stopping ? <span className="conv-stop-ring" aria-hidden="true" /> : <IconStop />}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void send()}
+                  disabled={!draft.trim() || stale}
+                  aria-label="发送"
+                  title="发送"
+                  className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-full bg-accent text-accent-fg transition-opacity hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <IconArrowUp />
+                </button>
+              )}
             </div>
           </div>
         </div>

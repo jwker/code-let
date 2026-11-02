@@ -28,6 +28,7 @@ const api: CodeletApi = {
   reloadTab: (tabId) => ipcRenderer.invoke(IPC.tabsReload, { tabId }) as Promise<HostSnapshot>,
   getTabEntries: (tabId) => ipcRenderer.invoke(IPC.tabsEntries, { tabId }) as Promise<StreamItem[]>,
   prompt: (tabId, text) => ipcRenderer.invoke(IPC.promptSend, { tabId, text }),
+  abortPrompt: (tabId) => ipcRenderer.invoke(IPC.promptAbort, { tabId }) as Promise<void>,
   copyText: (text) => ipcRenderer.invoke(IPC.clipboardWrite, { text }) as Promise<void>,
   listFiles: (cwd, dir) => ipcRenderer.invoke(IPC.filesList, { cwd, dir }) as Promise<FileEntry[]>,
   readFile: (cwd, path) => ipcRenderer.invoke(IPC.filesRead, { cwd, path }) as Promise<FileContent>,

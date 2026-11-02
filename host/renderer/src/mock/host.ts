@@ -233,6 +233,10 @@ export function createMockApi(): CodeletApi {
 
   const snapshotListeners = new Set<(snapshot: HostSnapshot) => void>()
   const eventListeners = new Set<(events: SessionEvent[]) => void>()
+  /** 收到中止请求的标签 —— prompt 的循环靠它提前退出 */
+  const aborted = new Set<string>()
+  /** 正在中止的标签 —— 快照里暴露出去，界面靠它显示「停止中」 */
+  const abortingTabs = new Set<string>()
 
   function addTab(options: { cwd: string; path?: string; title?: string; items?: StreamItem[] }): FakeTab {
     seq += 1
@@ -272,6 +276,7 @@ export function createMockApi(): CodeletApi {
       projects,
       conversations,
       refreshing: false,
+      aborting: [...abortingTabs],
       files: files,
       activeFileId: activeFileId,
       session: {
@@ -448,6 +453,23 @@ export function createMockApi(): CodeletApi {
       }
     },
 
+    abortPrompt: async (tabId) => {
+      const tab = tabs.find((t) => t.id === tabId)
+      if (!tab || !tab.streaming) return
+      // 设个标志，正在跑的那个循环下一段就会自己退出，由它发收尾事件
+      aborted.add(tabId)
+      /*
+       * 先把自己记进 aborting 再推快照 —— 界面靠这个显示「停止中」。
+       * 真宿主也是这个顺序（state.abortPrompt 里先 add 再 emit）。
+       */
+      abortingTabs.add(tabId)
+      publish()
+      // 等一下，模拟 abort() 内部的 waitForIdle()
+      await new Promise((r) => setTimeout(r, 260))
+      abortingTabs.delete(tabId)
+      publish()
+    },
+
     prompt: async (tabId, text) => {
       const tab = tabs.find((t) => t.id === tabId)
       if (!tab) return
@@ -464,8 +486,31 @@ export function createMockApi(): CodeletApi {
           timestamp: startedAt
         }
       })
+      // 一段段吐出来，中间留出空隙 —— 不然浏览器预览里根本来不及点「停止」
       for (const chunk of FAKE_REPLY) {
+        if (aborted.has(tabId)) break
         publishEvent(tabId, 'message_update', { type: 'text_delta', contentIndex: 0, delta: chunk })
+        await new Promise((r) => setTimeout(r, 140))
+      }
+
+      /*
+       * 被中止：照 Pi 的行为来 —— 已经生成的部分算一条 stopReason 为 aborted
+       * 的助手消息（真 Pi 也会把它写进会话文件），然后发 agent_settled。
+       */
+      if (aborted.delete(tabId)) {
+        tab.streaming = false
+        publishEvent(tabId, 'message_end', {
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: FAKE_REPLY.slice(0, 3).join('') }],
+            stopReason: 'aborted',
+            usage: { input: 6214, output: 128, cacheRead: 0, cacheWrite: 0 },
+            durationMs: 1200,
+            timestamp: startedAt
+          }
+        })
+        publishEvent(tabId, 'agent_settled', { aborted: true })
+        return
       }
       publishEvent(tabId, 'message_end', {
         message: {

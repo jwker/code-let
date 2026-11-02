@@ -20,6 +20,7 @@ const EMPTY_SNAPSHOT: HostSnapshot = {
   projects: [],
   conversations: [],
   refreshing: false,
+  aborting: [],
   files: [],
   activeFileId: null,
   session: {

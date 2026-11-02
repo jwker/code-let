@@ -76,6 +76,10 @@ class FakePi implements PiRuntimePort {
     this.managers.get(tabId)?.appendMessage(message)
   }
 
+  async abortTab(): Promise<void> {
+    // 测试里没有真 agent，中止是空操作
+  }
+
   readEntries(): StreamItem[] {
     return []
   }

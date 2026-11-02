@@ -21,6 +21,13 @@ export interface TurnSummary {
   processDurationMs?: number
   /** 整轮聚合的计量（老会话可能没有 usage，那就没有这一项） */
   stats?: ReplyStats
+  /**
+   * 这一轮是被用户中止的。
+   *
+   * 从消息自带的 `aborted` 推（Pi 的 `stopReason === "aborted"`），不另存状态 ——
+   * 会话文件里本来就写着，所以重载、重启之后历史记录里那次中止还标着。
+   */
+  aborted: boolean
 }
 
 /**
@@ -75,7 +82,10 @@ export function summarizeTurn(body: readonly StreamItem[]): TurnSummary | undefi
     answer: answerItem.text,
     answerIndex,
     toolCalls,
-    segments
+    segments,
+    // 整轮扫一遍：一条助手消息可能被拆成「正文 + 工具 + 正文」几项，
+    // 中止标记挂在第一项上，答案项不一定带得着
+    aborted: body.some((item) => item.kind === 'message' && item.aborted === true)
   }
 
   if (processStart !== undefined && processEnd !== undefined) {

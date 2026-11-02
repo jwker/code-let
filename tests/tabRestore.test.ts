@@ -73,6 +73,10 @@ class FakePi implements PiRuntimePort {
     // 不参与
   }
 
+  async abortTab(): Promise<void> {
+    // 测试里没有真 agent，中止是空操作
+  }
+
   async stop(): Promise<void> {
     this.files.clear()
   }
