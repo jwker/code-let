@@ -7,6 +7,7 @@ import {
   IconCollapseAll,
   IconExpandAll,
   IconFolder,
+  IconPencil,
   IconSelectAll,
   IconSliders,
   IconTrash
@@ -82,8 +83,12 @@ export function Sidebar() {
   const [pending, setPending] = useState<PendingDelete | null>(null)
   /** 删除请求进行中 */
   const [deleting, setDeleting] = useState(false)
-  /** 删除失败的原因 */
-  const [deleteError, setDeleteError] = useState<string | null>(null)
+  /** 正在内联改名的会话路径 */
+  const [renamingPath, setRenamingPath] = useState<string | null>(null)
+  /** 改名请求进行中 */
+  const [savingRename, setSavingRename] = useState(false)
+  /** 删除 / 改名失败的原因 */
+  const [actionError, setActionError] = useState<string | null>(null)
   const optionsRef = useRef<HTMLDivElement>(null)
 
   // 分组只按**清单里的项目**分 —— 不是 Pi 聊过的所有项目
@@ -133,6 +138,12 @@ export function Sidebar() {
     })
   }, [conversations])
 
+  // 正在改名的会话被删掉了（本机或别处）—— 关掉输入框，别让它提交到一个不存在的路径
+  useEffect(() => {
+    if (!renamingPath) return
+    if (!conversations.some((conversation) => conversation.path === renamingPath)) setRenamingPath(null)
+  }, [conversations, renamingPath])
+
   function toggle(project: string): void {
     setCollapsed((prev) => {
       const next = new Set(prev)
@@ -166,14 +177,48 @@ export function Sidebar() {
     setSelection((current) => setGroupSelection(current, paths, selected))
   }
 
+  function startRename(path: string): void {
+    setActionError(null)
+    setRenamingPath(path)
+  }
+
+  /**
+   * 提交改名。
+   *
+   * 空名字是合法的：清掉自定义名，标题退回首条用户消息。
+   * 名字没变就不发请求，免得往会话文件里写一条无意义的 session_info。
+   */
+  async function commitRename(path: string, value: string): Promise<void> {
+    const conversation = conversations.find((item) => item.path === path)
+    if (!conversation) {
+      setRenamingPath(null)
+      return
+    }
+    const next = value.trim()
+    if (next === (conversation.name ?? '').trim()) {
+      setRenamingPath(null)
+      return
+    }
+    setSavingRename(true)
+    try {
+      await host.renameConversation(path, next)
+      setActionError(null)
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSavingRename(false)
+      setRenamingPath(null)
+    }
+  }
+
   function askDeleteOne(conversation: ConversationInfo): void {
-    setDeleteError(null)
+    setActionError(null)
     setPending({ kind: 'single', path: conversation.path, title: conversation.title })
   }
 
   function askDeleteSelected(): void {
     if (selection.paths.size === 0) return
-    setDeleteError(null)
+    setActionError(null)
     setPending({ kind: 'batch', paths: [...selection.paths] })
   }
 
@@ -182,12 +227,12 @@ export function Sidebar() {
     if (!pending || deleting) return
     const current = pending
     setDeleting(true)
-    setDeleteError(null)
+    setActionError(null)
     try {
       const paths = current.kind === 'single' ? [current.path] : current.paths
       const result = await host.deleteConversations(paths)
       if (result.failed.length > 0) {
-        setDeleteError(`有 ${result.failed.length} 个没删掉：${result.failed[0].reason}`)
+        setActionError(`有 ${result.failed.length} 个没删掉：${result.failed[0].reason}`)
         // 批量删除部分失败 —— 留在选择模式，只保留失败的那些，方便直接重试
         if (current.kind === 'batch') {
           setSelection({
@@ -201,7 +246,7 @@ export function Sidebar() {
       }
       setPending(null)
     } catch (error) {
-      setDeleteError(error instanceof Error ? error.message : String(error))
+      setActionError(error instanceof Error ? error.message : String(error))
       setPending(null)
     } finally {
       setDeleting(false)
@@ -325,7 +370,8 @@ export function Sidebar() {
                 disabled={conversations.length === 0}
                 onClick={() => {
                   setOptionsOpen(false)
-                  setDeleteError(null)
+                  setActionError(null)
+                  setRenamingPath(null)
                   setSelection(startSelection())
                 }}
                 className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent"
@@ -341,13 +387,13 @@ export function Sidebar() {
 
         <div className="mx-2.5 mt-2 h-px bg-hairline" />
 
-        {deleteError && (
+        {actionError && (
           <div
             role="alert"
             style={{ borderColor: 'var(--danger-line)' }}
             className="mx-2.5 mt-2 rounded-lg border bg-danger-wash px-2.5 py-1.5 text-[11.5px] leading-snug text-danger"
           >
-            {deleteError}
+            {actionError}
           </div>
         )}
 
@@ -377,6 +423,11 @@ export function Sidebar() {
               onToggleGroup={pickGroup}
               onRowClick={pickRow}
               onDeleteRow={askDeleteOne}
+              renamingPath={renamingPath}
+              savingRename={savingRename}
+              onStartRename={startRename}
+              onCommitRename={commitRename}
+              onCancelRename={() => setRenamingPath(null)}
             />
           ))}
         </div>
@@ -431,7 +482,12 @@ function ProjectGroup({
   selectedPaths,
   onToggleGroup,
   onRowClick,
-  onDeleteRow
+  onDeleteRow,
+  renamingPath,
+  savingRename,
+  onStartRename,
+  onCommitRename,
+  onCancelRename
 }: {
   project: string
   name: string
@@ -447,6 +503,11 @@ function ProjectGroup({
   onToggleGroup: (paths: string[], selected: boolean) => void
   onRowClick: (path: string, shiftKey: boolean) => void
   onDeleteRow: (conversation: ConversationInfo) => void
+  renamingPath: string | null
+  savingRename: boolean
+  onStartRename: (path: string) => void
+  onCommitRename: (path: string, value: string) => void
+  onCancelRename: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -562,6 +623,7 @@ function ProjectGroup({
               <div className="px-2 pb-1 pt-2 text-[11px] text-fg-3">{group.label}</div>
               {group.conversations.map((conversation) => {
                 const tab = tabs.find((candidate) => candidate.path === conversation.path)
+                const renaming = renamingPath === conversation.path
                 return (
                   <ConversationRow
                     key={conversation.path}
@@ -570,10 +632,15 @@ function ProjectGroup({
                     active={tab?.id === activeTabId}
                     selecting={selecting}
                     selected={selectedPaths.has(conversation.path)}
+                    renaming={renaming}
+                    savingRename={savingRename && renaming}
                     onActivate={() => void openConversation(conversation, tab)}
                     onToggle={() => onRowClick(conversation.path, false)}
                     onExtend={() => onRowClick(conversation.path, true)}
                     onDelete={() => onDeleteRow(conversation)}
+                    onStartRename={() => onStartRename(conversation.path)}
+                    onCommitRename={(value) => onCommitRename(conversation.path, value)}
+                    onCancelRename={onCancelRename}
                   />
                 )
               })}
@@ -601,22 +668,47 @@ function ConversationRow({
   active,
   selecting,
   selected,
+  renaming,
+  savingRename,
   onActivate,
   onToggle,
   onExtend,
-  onDelete
+  onDelete,
+  onStartRename,
+  onCommitRename,
+  onCancelRename
 }: {
   conversation: ConversationInfo
   tab: TabInfo | undefined
   active: boolean
   selecting: boolean
   selected: boolean
+  renaming: boolean
+  savingRename: boolean
   onActivate: () => void
   onToggle: () => void
   onExtend: () => void
   onDelete: () => void
+  onStartRename: () => void
+  onCommitRename: (value: string) => void
+  onCancelRename: () => void
 }) {
   const title = conversation.title
+
+  if (renaming && !selecting) {
+    return (
+      <div className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1">
+        <TabDot tab={tab} />
+        <RenameInput
+          initial={conversation.name ?? ''}
+          placeholder={title}
+          disabled={savingRename}
+          onCommit={onCommitRename}
+          onCancel={onCancelRename}
+        />
+      </div>
+    )
+  }
 
   if (selecting) {
     return (
@@ -657,20 +749,103 @@ function ConversationRow({
         >
           {title}
         </span>
-        <span className="flex-none font-mono text-[10px] text-fg-3 transition-opacity group-hover:opacity-0">
+        <span className="flex-none font-mono text-[10px] text-fg-3 transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">
           {relativeTime(conversation.modified)}
         </span>
       </button>
-      <button
-        type="button"
-        title={`删除「${title}」`}
-        aria-label={`删除「${title}」`}
-        onClick={onDelete}
-        className="absolute right-1 top-1/2 flex h-[22px] w-[22px] -translate-y-1/2 items-center justify-center rounded-md text-fg-3 opacity-0 transition-opacity hover:bg-danger-wash hover:text-danger focus:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
-      >
-        <IconTrash size={14} />
-      </button>
+      <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <button
+          type="button"
+          title={`重命名「${title}」`}
+          aria-label={`重命名「${title}」`}
+          onClick={onStartRename}
+          className="flex h-[22px] w-[22px] items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1"
+        >
+          <IconPencil size={14} />
+        </button>
+        <button
+          type="button"
+          title={`删除「${title}」`}
+          aria-label={`删除「${title}」`}
+          onClick={onDelete}
+          className="flex h-[22px] w-[22px] items-center justify-center rounded-md text-fg-3 transition-colors hover:bg-danger-wash hover:text-danger"
+        >
+          <IconTrash size={14} />
+        </button>
+      </div>
     </div>
+  )
+}
+
+/**
+ * 行内改名输入框。
+ *
+ * 回车提交，Esc 取消，失焦提交。输入法选词的回车不提交。
+ * 初始值是**自定义名**（没有就空），占位符是当前默认标题 ——
+ * 这样“留空 = 恢复默认标题”是看得见的。
+ */
+function RenameInput({
+  initial,
+  placeholder,
+  disabled,
+  onCommit,
+  onCancel
+}: {
+  initial: string
+  placeholder: string
+  disabled: boolean
+  onCommit: (value: string) => void
+  onCancel: () => void
+}) {
+  const [value, setValue] = useState(initial)
+  const committed = useRef(false)
+  const cancelled = useRef(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [])
+
+  function commit(): void {
+    if (committed.current) return
+    committed.current = true
+    onCommit(value)
+  }
+
+  function cancel(): void {
+    cancelled.current = true
+    onCancel()
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      value={value}
+      disabled={disabled}
+      maxLength={80}
+      spellCheck={false}
+      autoComplete="off"
+      placeholder={placeholder}
+      aria-label="对话名称"
+      title="回车保存，Esc 取消；留空恢复默认标题"
+      onChange={(event) => setValue(event.target.value)}
+      onKeyDown={(event) => {
+        // 输入法选词的回车不提交
+        if (event.nativeEvent.isComposing) return
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          commit()
+        } else if (event.key === 'Escape') {
+          event.preventDefault()
+          cancel()
+        }
+      }}
+      onBlur={() => {
+        if (!cancelled.current) commit()
+      }}
+      className="h-6 min-w-0 flex-1 rounded-md border border-hairline-strong bg-surface px-1.5 text-[13px] text-fg-1 outline-none transition-colors focus:border-accent-line disabled:opacity-60"
+    />
   )
 }
 

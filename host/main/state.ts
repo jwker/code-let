@@ -872,6 +872,25 @@ export class HostState extends EventEmitter {
     this.push()
   }
 
+  /**
+   * 给一个会话改名（PLAN.md D24）。
+   *
+   * 名字写进 Pi 的会话文件（`session_info` 条目），重读列表之后标题就变了。
+   * 空名字表示清掉自定义名，标题退回第一条用户消息。
+   *
+   * 路径必须命中当前会话列表 —— 跟删除用同一条白名单规则。
+   */
+  async renameConversation(path: string, name: string): Promise<void> {
+    const target = normalize(path)
+    const conversation = this.conversations.find((item) => normalize(item.path) === target)
+    if (!conversation) throw new Error(`不在当前对话列表里：${path}`)
+    await this.pi.renameSession(conversation.path, name.trim())
+    // 不等去抖：改名要立刻反映到侧栏标题和标签标题上
+    await this.refreshConversations()
+    this.readSession()
+    this.push()
+  }
+
   /** 往某个标签发一条用户消息 */
   async prompt(tabId: string, text: string): Promise<void> {
     await this.pi.prompt(tabId, text)

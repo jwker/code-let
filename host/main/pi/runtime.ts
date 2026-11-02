@@ -11,6 +11,7 @@ import {
   type EventBus
 } from '@earendil-works/pi-coding-agent'
 import { existsSync } from 'node:fs'
+import { normalize } from 'node:path'
 import type { ConversationInfo, ModelOption, StreamItem } from '@contract/index'
 import { entriesToItems } from '@contract/stream'
 
@@ -79,6 +80,13 @@ export interface PiRuntimePort {
   listModels(tabId: string): Promise<ModelOption[]>
   /** 切某个标签的模型（persist 时同时设为新会话默认） */
   selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void>
+  /**
+   * 给某个会话改名。
+   *
+   * 有活着的 runtime 就走它（`setSessionName` 会同时更新内存、写文件、发事件）；
+   * 没有就打开会话文件追加一条 `session_info`。
+   */
+  renameSession(path: string, name: string): Promise<void>
   /** 往某个标签发一条用户消息 */
   prompt(tabId: string, text: string): Promise<void>
   /**
@@ -334,6 +342,26 @@ export class PiRuntime implements PiRuntimePort {
     await session.setModel(model, { persist })
   }
 
+  /**
+   * 给某个会话改名。
+   *
+   * 优先走已经活着的 runtime：`AgentSession.setSessionName()` 会同时把新名字写进
+   * 内存里的 SessionManager、追加到会话文件、发 `session_info_changed` 事件。
+   * 只打开文件写一条的话，runtime 内存里没有这条，之后压缩重写文件时可能丢。
+   */
+  async renameSession(path: string, name: string): Promise<void> {
+    const target = normalize(path)
+    const record = [...this.tabs.values()].find((tab) => tab.path && normalize(tab.path) === target)
+    const session = record?.runtime?.session
+    if (session) {
+      session.setSessionName(name)
+      return
+    }
+    // 没有 runtime：文件必须还在 —— open() 遇到不存在的路径会新建一个会话，改错文件
+    if (!existsSync(path)) throw new TabSessionMissingError(path)
+    SessionManager.open(path).appendSessionInfo(name)
+  }
+
   /** 往某个标签发一条用户消息 */
   async prompt(tabId: string, text: string): Promise<void> {
     const session = this.tabs.get(tabId)?.runtime?.session
@@ -393,6 +421,7 @@ function toConversationInfo(info: {
     id: info.id,
     path: info.path,
     title: pickTitle(info.name, info.firstMessage),
+    name: info.name?.trim() || null,
     modified: new Date(info.modified).toISOString(),
     messageCount: info.messageCount,
     cwd: info.cwd

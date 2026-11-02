@@ -16,6 +16,12 @@ export const conversationsDeleteSchema = z.object({
   paths: z.array(z.string().min(1)).min(1)
 })
 
+/** 改名：名字可以是空串（清掉自定义名）；上限跟侧栏输入框一致 */
+export const conversationRenameSchema = z.object({
+  path: z.string().min(1),
+  name: z.string().max(80)
+})
+
 /** 列目录：cwd 是项目根，dir 是相对它（或绝对，主进程会校验不越界）的目录 */
 export const filesListSchema = z.object({
   cwd: z.string().min(1),

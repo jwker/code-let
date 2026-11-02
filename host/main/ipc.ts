@@ -8,6 +8,7 @@ import {
 } from '@contract/index'
 import {
   clipboardWriteSchema,
+  conversationRenameSchema,
   conversationsDeleteSchema,
   fileIdSchema,
   fileOpenSchema,
@@ -106,6 +107,12 @@ export function registerIpc(state: HostState): () => void {
   ipcMain.handle(IPC.conversationsDelete, async (_event, payload: unknown) => {
     const { paths } = conversationsDeleteSchema.parse(payload)
     return state.deleteConversations(paths)
+  })
+
+  ipcMain.handle(IPC.conversationsRename, async (_event, payload: unknown) => {
+    const { path, name } = conversationRenameSchema.parse(payload)
+    await state.renameConversation(path, name)
+    return state.snapshot()
   })
 
   ipcMain.handle(IPC.tabsOpen, async (_event, payload: unknown) => {
@@ -217,6 +224,7 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.projectsOpen)
     ipcMain.removeHandler(IPC.projectsRemove)
     ipcMain.removeHandler(IPC.conversationsDelete)
+    ipcMain.removeHandler(IPC.conversationsRename)
     ipcMain.removeHandler(IPC.tabsOpen)
     ipcMain.removeHandler(IPC.tabsNew)
     ipcMain.removeHandler(IPC.tabsActivate)

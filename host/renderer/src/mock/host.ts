@@ -32,6 +32,7 @@ const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
       id: 'c1',
       path: '/fake/codelet/1.jsonl',
       title: '记忆索引重构',
+      name: null,
       modified: new Date().toISOString(),
       messageCount: 24,
       cwd: '/Users/demo/Projects/codelet'
@@ -40,6 +41,7 @@ const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
       id: 'c2',
       path: '/fake/codelet/2.jsonl',
       title: '类型声明生成',
+      name: null,
       modified: new Date(Date.now() - 18 * 60_000).toISOString(),
       messageCount: 9,
       cwd: '/Users/demo/Projects/codelet'
@@ -48,6 +50,7 @@ const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
       id: 'c3',
       path: '/fake/codelet/3.jsonl',
       title: '扫描依赖关系',
+      name: null,
       modified: new Date(Date.now() - 26 * 3600_000).toISOString(),
       messageCount: 51,
       cwd: '/Users/demo/Projects/codelet'
@@ -58,6 +61,7 @@ const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
       id: 'c4',
       path: '/fake/pi-sdk/1.jsonl',
       title: '流式输出的三种写法',
+      name: null,
       modified: new Date(Date.now() - 40 * 60_000).toISOString(),
       messageCount: 12,
       cwd: '/Users/demo/Projects/pi-sdk'
@@ -225,6 +229,8 @@ export function createMockApi(): CodeletApi {
   let conversations: ConversationInfo[] = []
   /** 假数据里被删掉的会话 —— FAKE_CONVERSATIONS 是静态的，删完要记住 */
   const removedConversations = new Set<string>()
+  /** 假数据里改过的名字 —— 没改过的用静态标题 */
+  const renamedConversations = new Map<string, string>()
   /** 假数据里「用户选中的项目」 */
   let projects: ProjectInfo[] = FAKE_PROJECTS.map((p) => ({ ...p }))
   /** 假宿主的文件标签 */
@@ -307,7 +313,14 @@ export function createMockApi(): CodeletApi {
   /** 假数据里这些项目的会话 */
   function allConversations(): ConversationInfo[] {
     return projects.flatMap((project) =>
-      (FAKE_CONVERSATIONS[project.path] ?? []).filter((c) => !removedConversations.has(c.path))
+      (FAKE_CONVERSATIONS[project.path] ?? [])
+        .filter((c) => !removedConversations.has(c.path))
+        .map((c) => {
+          const renamed = renamedConversations.get(c.path)
+          if (!renamed) return c
+          // 跟宿主一样：显示标题截到 60 字，自定义名保留原文
+          return { ...c, name: renamed, title: renamed.length > 60 ? `${renamed.slice(0, 60)}…` : renamed }
+        })
     )
   }
 
@@ -372,6 +385,20 @@ export function createMockApi(): CodeletApi {
 
       publish()
       return { deleted, failed: [] }
+    },
+
+    renameConversation: async (path, name) => {
+      if (!conversations.some((c) => c.path === path)) {
+        throw new Error(`不在当前对话列表里：${path}`)
+      }
+      const next = name.trim()
+      if (next) renamedConversations.set(path, next)
+      else renamedConversations.delete(path)
+      conversations = allConversations()
+      const updated = conversations.find((c) => c.path === path)
+      const tab = tabs.find((t) => t.path === path)
+      if (updated && tab) tab.title = updated.title
+      return publish()
     },
 
     openConversation: async (path, cwd) => {

@@ -32,7 +32,7 @@ function tab(overrides: Partial<TabInfo> & { path: string }): TabInfo {
 }
 
 function conversation(path: string, cwd = '/tmp/project', title = '对话'): ConversationInfo {
-  return { id: path, path, title, modified: '2026-01-01T00:00:00.000Z', messageCount: 1, cwd }
+  return { id: path, path, title, name: null, modified: '2026-01-01T00:00:00.000Z', messageCount: 1, cwd }
 }
 
 describe('受影响标签统计', () => {

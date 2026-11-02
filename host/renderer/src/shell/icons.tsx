@@ -174,8 +174,8 @@ export const IconExpandAll = ({ size = 15 }: { size?: number }) => (
   </Icon>
 )
 
-export const IconPencil = () => (
-  <Icon>
+export const IconPencil = ({ size = 18 }: { size?: number }) => (
+  <Icon size={size}>
     <path d="M12 20h9" />
     <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
   </Icon>

@@ -24,6 +24,8 @@ export const IPC = {
   projectsRemove: 'host:projects:remove',
   /** 删除会话（会话文件移入系统废纸篓，顺带关掉引用它的标签） */
   conversationsDelete: 'host:conversations:delete',
+  /** 给会话改名（写进会话文件的 session_info 条目） */
+  conversationsRename: 'host:conversations:rename',
   /** 打开一个已有会话 → 开成新标签 */
   tabsOpen: 'host:tabs:open',
   /** 在某个目录里新建会话 → 开成新标签 */
@@ -168,6 +170,8 @@ export interface ConversationInfo {
   path: string
   /** 显示标题：会话名，没有就退回首条用户消息 */
   title: string
+  /** Pi 会话文件里存的自定义名；没改过名就是 null */
+  name: string | null
   /** ISO 时间串 */
   modified: string
   messageCount: number
@@ -442,6 +446,13 @@ export interface CodeletApi {
    * 返回值只用于逐条报告失败。
    */
   deleteConversations(paths: string[]): Promise<DeleteConversationsResult>
+  /**
+   * 给一个会话改名。空名字表示清掉自定义名，标题退回首条用户消息。
+   *
+   * 名字写进 Pi 的会话文件（`session_info` 条目）；会话开着的话走它的 runtime，
+   * 没有开着就打开会话文件追加一条。
+   */
+  renameConversation(path: string, name: string): Promise<HostSnapshot>
   /** 打开一个已有会话 → 开成新标签 */
   openConversation(path: string, cwd: string): Promise<HostSnapshot>
   /** 在某个目录里新建会话 → 开成新标签 */

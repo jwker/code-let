@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { IPC, IPC_EVENTS, MAX_PAYLOAD_BYTES } from '@contract/index'
-import { promptSchema, tabIdSchema, tabNewSchema, tabOpenSchema } from '@contract/schemas'
+import { promptSchema, tabIdSchema, tabNewSchema, tabOpenSchema, conversationRenameSchema } from '@contract/schemas'
 
 describe('IPC 规格', () => {
   it('通道名互不重复', () => {
@@ -29,5 +29,12 @@ describe('IPC 规格', () => {
   it('载荷上限是有限值', () => {
     expect(MAX_PAYLOAD_BYTES).toBeGreaterThan(0)
     expect(Number.isFinite(MAX_PAYLOAD_BYTES)).toBe(true)
+  })
+
+  it('改名允许空名字（清掉自定义名），拒绝空路径和过长名字', () => {
+    expect(conversationRenameSchema.safeParse({ path: '/a.jsonl', name: '' }).success).toBe(true)
+    expect(conversationRenameSchema.safeParse({ path: '', name: 'x' }).success).toBe(false)
+    expect(conversationRenameSchema.safeParse({ path: '/a.jsonl', name: 'x'.repeat(80) }).success).toBe(true)
+    expect(conversationRenameSchema.safeParse({ path: '/a.jsonl', name: 'x'.repeat(81) }).success).toBe(false)
   })
 })

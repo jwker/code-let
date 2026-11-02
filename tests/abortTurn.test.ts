@@ -71,6 +71,10 @@ class FakePi implements PiRuntimePort {
     if (tab) tab.streaming = false
   }
 
+  async renameSession(): Promise<void> {
+    // 重命名不参与这份测试
+  }
+
   async stop(): Promise<void> {}
 
   /** 测试用：设置某个标签是否在跑 */
