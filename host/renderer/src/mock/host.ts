@@ -474,9 +474,49 @@ export function createMockApi(): CodeletApi {
       const tab = tabs.find((t) => t.id === tabId)
       if (!tab) return
       tab.streaming = true
-      // 假的一次回复：用户消息 → 助手消息一点点长出来
+      /*
+       * 跟 Pi 一样的顺序：agent_start 在最前（runAgentLoop 开头就发），
+       * 然后才是用户消息。中间那段是等首 token —— 真 Pi 这里是
+       * `await streamFunction(...)`，几秒钟；这里用 700ms 模拟。
+       */
+      publishEvent(tabId, 'agent_start', {})
       publishEvent(tabId, 'message_start', { message: { role: 'user', content: text } })
       publishEvent(tabId, 'message_end', { message: { role: 'user', content: text } })
+
+      /*
+       * TTFT：真实里这段时间界面上什么新内容都没有，只有「在跑」的指示。
+       * 切成小段轮询而不是一次 sleep 700ms —— 不然这段里按 Esc 停不下来，
+       * 真 Pi 的 abort() 是能打断等首 token 的。
+       */
+      for (let i = 0; i < 7 && !aborted.has(tabId); i += 1) {
+        await new Promise((r) => setTimeout(r, 100))
+      }
+      if (aborted.delete(tabId)) {
+        tab.streaming = false
+        /*
+         * 真 Pi 在首 token 前被中止也会产生一条消息：`streamAssistantResponse`
+         * 结尾是 `await result()` 然后无条件发 message_start + message_end，
+         * 哪怕流一个字都没吐。内容为空、stopReason 是 aborted。
+         *
+         * 这条空消息到渲染层会被丢掉（没有正文、没有工具调用就没有 item），
+         * 所以界面上不会出现「已中止」—— 那是「一个字都没生成」时的必然结果，
+         * 不是漏了。
+         */
+        publishEvent(tabId, 'message_start', { message: { role: 'assistant', content: [] } })
+        publishEvent(tabId, 'message_end', {
+          message: {
+            role: 'assistant',
+            content: [],
+            stopReason: 'aborted',
+            usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            durationMs: 0,
+            timestamp: Date.now()
+          }
+        })
+        publishEvent(tabId, 'agent_settled', { aborted: true })
+        return
+      }
+
       const startedAt = Date.now()
       publishEvent(tabId, 'message_start', {
         message: {

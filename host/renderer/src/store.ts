@@ -9,7 +9,7 @@ import type {
   SessionEvent,
   StreamItem
 } from '@contract/index'
-import { applyEvent } from '@contract/stream'
+import { applyEvent, nextStreaming } from '@contract/stream'
 import { host } from './host'
 
 export type Theme = 'light' | 'dark'
@@ -317,11 +317,7 @@ export const useStore = create<RendererStore>((set, get) => ({
       let tabStreaming = streaming[tabId] ?? false
       for (const event of list) {
         tabItems = applyEvent(tabItems, event)
-        if (event.type === 'agent_settled') tabStreaming = false
-        if (event.type === 'message_start') {
-          const role = (event.data as { message?: { role?: string } } | undefined)?.message?.role
-          if (role === 'assistant') tabStreaming = true
-        }
+        tabStreaming = nextStreaming(tabStreaming, event)
       }
       items[tabId] = tabItems
       streaming[tabId] = tabStreaming

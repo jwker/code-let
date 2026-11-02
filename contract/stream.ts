@@ -305,6 +305,31 @@ export function trimMessageUpdate(data: unknown): unknown {
  * 事件原样透传（D5），只有 `message_update` 在主进程削过载荷：
  * `{ message: 整条累积消息, assistantMessageEvent }` → `{ type, contentIndex, delta }`。
  */
+/**
+ * 这条事件之后，「这个标签正在跑」是真是假。
+ *
+ * 单独抽出来（不进 `applyEvent`）是因为它管的是**状态**不是**内容** ——
+ * 而且 node 环境下没有 window，测不了 store，只能测纯函数。
+ *
+ * 三个阶段对应三件事：
+ *   - `agent_start`      Pi 开始跑了。**比首 token 早得多** —— 中间那段是
+ *                        `await streamFunction(...)`，也就是 TTFT，实测几秒。
+ *                        只认助手消息的 message_start 的话，这几秒界面上没有
+ *                        任何「在跑」的迹象。
+ *   - `message_start`    又一个兜底：某些路径可能不经过 agent_start。
+ *   - `agent_settled`    这一轮结束（成功、出错、被中止都会发 —— Pi 在
+ *                        `finally` 里调 `_emitAgentSettled()`）。
+ */
+export function nextStreaming(streaming: boolean, event: { type: string; data: unknown }): boolean {
+  if (event.type === 'agent_settled') return false
+  if (event.type === 'agent_start') return true
+  if (event.type === 'message_start') {
+    const role = (event.data as { message?: { role?: string } } | undefined)?.message?.role
+    if (role === 'assistant') return true
+  }
+  return streaming
+}
+
 export function applyEvent(items: StreamItem[], event: { type: string; data: unknown }): StreamItem[] {
   const data = (event.data ?? {}) as Record<string, unknown>
 

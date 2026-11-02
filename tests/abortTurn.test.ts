@@ -7,7 +7,7 @@ import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
 import type { PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
 import type { ModelOption, StreamItem } from '@contract/index'
-import { applyEvent, entriesToItems } from '@contract/stream'
+import { applyEvent, entriesToItems, nextStreaming } from '@contract/stream'
 import { summarizeTurn } from '../host/renderer/src/conversation/turnMeta'
 
 /**
@@ -185,6 +185,37 @@ describe('中止某个标签', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('「在跑」从哪一刻算起', () => {
+  it('agent_start 就置位，不等首 token', () => {
+    // 这是用户能感知的差别：以前要等 assistant 的 message_start（= 首 token 回来，
+    // 实测几秒），那段时间界面上没有任何「在跑」的迹象
+    expect(nextStreaming(false, { type: 'agent_start', data: {} })).toBe(true)
+  })
+
+  it('agent_start 之后、首 token 之前一直是 running', () => {
+    let streaming = false
+    streaming = nextStreaming(streaming, { type: 'agent_start', data: {} })
+    // 用户消息的 start/end 不改变状态
+    streaming = nextStreaming(streaming, { type: 'message_start', data: { message: { role: 'user' } } })
+    streaming = nextStreaming(streaming, { type: 'message_end', data: { message: { role: 'user' } } })
+    expect(streaming).toBe(true)
+  })
+
+  it('助手消息的 message_start 也置位（兜底）', () => {
+    expect(nextStreaming(false, { type: 'message_start', data: { message: { role: 'assistant' } } })).toBe(true)
+  })
+
+  it('agent_settled 清掉 —— 成功、出错、中止都走它', () => {
+    expect(nextStreaming(true, { type: 'agent_settled', data: { aborted: false } })).toBe(false)
+    expect(nextStreaming(true, { type: 'agent_settled', data: { aborted: true } })).toBe(false)
+  })
+
+  it('无关事件不改状态', () => {
+    expect(nextStreaming(true, { type: 'tool_execution_start', data: {} })).toBe(true)
+    expect(nextStreaming(false, { type: 'message_update', data: {} })).toBe(false)
   })
 })
 
