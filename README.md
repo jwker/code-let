@@ -100,4 +100,4 @@ npm run dist       # 打包（electron-builder）
 
 ## 协议
 
-MIT
+[MIT](./LICENSE) © 2026 jwker
