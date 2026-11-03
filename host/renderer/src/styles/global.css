@@ -753,8 +753,8 @@ body.is-pane-resizing * {
   position: absolute;
   z-index: 20;
   left: 14px;
-  top: 20px;
-  bottom: 20px;
+  top: 44px;
+  bottom: 44px;
   width: 34px;
   display: flex;
   flex-direction: column;
@@ -790,11 +790,11 @@ body.is-pane-resizing * {
   z-index: 2;
   flex: none;
   width: 26px;
-  height: 18px;
+  height: 14px;
   display: grid;
   place-items: center;
   color: var(--fg-2);
-  font-size: 14px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1;
   pointer-events: none;
