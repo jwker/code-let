@@ -758,6 +758,7 @@ body.is-pane-resizing * {
   width: 34px;
   display: flex;
   flex-direction: column;
+  align-items: center;
   pointer-events: none;
 }
 
@@ -765,12 +766,17 @@ body.is-pane-resizing * {
   display: flex;
   flex-direction: column;
   align-items: center;
-  max-height: 100%;
-  margin-block: auto;
-  padding: 14px 0;
+  justify-content: center;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  padding: 4px 0;
   overflow-y: auto;
   scrollbar-width: none;
   pointer-events: auto;
+}
+.conv-nav-list.is-overflowing {
+  justify-content: flex-start;
 }
 .conv-nav-list::-webkit-scrollbar {
   display: none;
@@ -781,29 +787,22 @@ body.is-pane-resizing * {
 }
 
 .conv-nav-end {
-  position: absolute;
   z-index: 2;
-  left: 50%;
-  width: 20px;
-  height: 12px;
+  flex: none;
+  width: 26px;
+  height: 18px;
   display: grid;
   place-items: center;
-  transform: translateX(-50%);
-  color: var(--fg-3);
-  font-size: 9px;
+  color: var(--fg-2);
+  font-size: 14px;
+  font-weight: 700;
   line-height: 1;
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 1;
   transition: opacity 160ms var(--ease);
 }
-.conv-nav-end-top {
-  top: 0;
-}
-.conv-nav-end-bottom {
-  bottom: 0;
-}
 .conv-nav-end.is-end {
-  opacity: 0.16;
+  opacity: 0.45;
 }
 
 .conv-nav-item {

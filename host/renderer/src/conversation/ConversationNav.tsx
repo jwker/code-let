@@ -158,20 +158,12 @@ export function ConversationNav({
       }}
     >
       {overflowing && (
-        <>
-          <span
-            className={`conv-nav-end conv-nav-end-top${edges.top ? ' is-end' : ''}`}
-            aria-hidden="true"
-          >
-            ▴
-          </span>
-          <span
-            className={`conv-nav-end conv-nav-end-bottom${edges.bottom ? ' is-end' : ''}`}
-            aria-hidden="true"
-          >
-            ▾
-          </span>
-        </>
+        <span
+          className={`conv-nav-end conv-nav-end-top${edges.top ? ' is-end' : ''}`}
+          aria-hidden="true"
+        >
+          ▲
+        </span>
       )}
 
       <div ref={listRef} className={`conv-nav-list${overflowing ? ' is-overflowing' : ''}`}>
@@ -195,6 +187,15 @@ export function ConversationNav({
           </div>
         ))}
       </div>
+
+      {overflowing && (
+        <span
+          className={`conv-nav-end conv-nav-end-bottom${edges.bottom ? ' is-end' : ''}`}
+          aria-hidden="true"
+        >
+          ▼
+        </span>
+      )}
 
       {hoveredTurn && hovered && (
         <div
