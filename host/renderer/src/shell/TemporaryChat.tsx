@@ -15,24 +15,16 @@ import { IconArrowUp, IconPaperclip, IconStop } from './icons'
 
 const EMPTY_ITEMS: StreamItem[] = []
 
-/** 贴住对话主区域左下角；主区尺寸变化时跟着重新算 */
-function temporaryBounds(): { left: number; bottom: number; width: number; height: number } {
+/** 贴在输入框上沿左侧；输入框变高或主区变窄时重新算 */
+function temporaryBounds(): { left: number; bottom: number } {
   const main = document.querySelector<HTMLElement>('.shell-card.main')
-  const rect = main?.getBoundingClientRect()
-  if (!rect) {
-    const width = Math.min(520, window.innerWidth - 48)
-    return {
-      left: 24,
-      bottom: 24,
-      width,
-      height: Math.min(640, window.innerHeight - 48)
-    }
-  }
+  const composer = document.querySelector<HTMLElement>('.conv-footer')
+  const mainRect = main?.getBoundingClientRect()
+  const composerRect = composer?.getBoundingClientRect()
+  if (!mainRect) return { left: 24, bottom: 24 }
   return {
-    left: rect.left + 16,
-    bottom: window.innerHeight - rect.bottom + 16,
-    width: Math.min(520, Math.max(320, rect.width - 32)),
-    height: Math.min(640, Math.max(360, rect.height - 32))
+    left: mainRect.left + 12,
+    bottom: composerRect ? window.innerHeight - composerRect.top + 12 : 24
   }
 }
 
@@ -61,23 +53,38 @@ export function TemporaryChat() {
   const [modelPicker, setModelPicker] = useState<{ left: number; bottom: number } | null>(null)
   const [models, setModels] = useState<ModelOption[]>([])
   const [bounds, setBounds] = useState(temporaryBounds)
+  const [done, setDone] = useState(false)
+  const wasStreaming = useRef(streaming)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { setRef, scrollToBottom } = useAutoScroll(items, streaming, temp?.id ?? null)
 
-  // 浮层跟着对话主区域走：左下角、随窗口/侧栏/检视器变化重算
+  // 浮层跟着输入框上沿走：输入框变高、主区变窄时都重算
   useEffect(() => {
     if (!temp) return
     const main = document.querySelector<HTMLElement>('.shell-card.main')
+    const composer = document.querySelector<HTMLElement>('.conv-footer')
     const update = (): void => setBounds(temporaryBounds())
     update()
     const observer = new ResizeObserver(update)
     if (main) observer.observe(main)
+    if (composer) observer.observe(composer)
     window.addEventListener('resize', update)
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', update)
     }
   }, [temp?.id])
+
+  // 最小化期间如果一轮跑完，球显示对勾；恢复窗口后回到箭头
+  useEffect(() => {
+    if (!minimized) {
+      setDone(false)
+      wasStreaming.current = streaming
+      return
+    }
+    if (wasStreaming.current && !streaming) setDone(true)
+    wasStreaming.current = streaming
+  }, [minimized, streaming])
 
   // 新临时会话：清空窗口内的草稿和附件（最小化恢复不走这里）
   useEffect(() => {
@@ -87,6 +94,8 @@ export function TemporaryChat() {
     setConfirmClose(false)
     setModelPicker(null)
     setClosing(false)
+    setDone(false)
+    wasStreaming.current = false
   }, [temp?.id])
 
   // 渲染进程重载/最小化恢复时，内容流可能不在 store 里；从内存会话读一次
@@ -136,28 +145,26 @@ export function TemporaryChat() {
   if (!temp) return null
 
   if (minimized) {
+    const status = streaming ? '回答中…' : done ? '已完成' : '可继续'
     return (
-      <div
-        className="fixed z-[80] rounded-2xl bg-canvas/55 p-1.5 shadow-[var(--sh-lg)] backdrop-blur-md"
+      <button
+        type="button"
+        onClick={() => setMinimized(false)}
         style={{ left: bounds.left, bottom: bounds.bottom }}
+        className="fixed z-[80] grid h-11 w-11 place-items-center rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+        title={`临时对话 · ${status}`}
+        aria-label="恢复临时对话"
       >
-        <button
-          type="button"
-          onClick={() => setMinimized(false)}
-          className="flex items-center gap-2 rounded-xl border border-hairline-strong bg-raised px-3 py-2 text-[11px] text-fg-2 shadow-sm transition-colors hover:bg-sunken"
-          title="恢复临时对话"
-          aria-label="恢复临时对话"
-        >
-          <span className="grid h-5 w-5 place-items-center rounded-full border border-dashed border-hairline-strong text-[11px] text-fg-3">
-            ◌
-          </span>
-          <span className="font-medium">临时对话</span>
-          <span className="border-l border-hairline pl-2 text-[10px] text-fg-3">
-            {streaming ? '回答中…' : '可继续'}
-          </span>
-          <span className="text-fg-3">↗</span>
-        </button>
-      </div>
+        <span className="grid h-10 w-10 place-items-center rounded-full bg-[#171715] text-[#FAFAF9] shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5)]">
+          {streaming ? (
+            <span className="conv-stop-ring h-4 w-4" aria-hidden="true" />
+          ) : done ? (
+            <span className="text-[15px] font-bold" aria-hidden="true">✓</span>
+          ) : (
+            <span className="text-[17px]" aria-hidden="true">↗</span>
+          )}
+        </span>
+      </button>
     )
   }
 
