@@ -11,7 +11,7 @@ import {
   type ComposerAttachment
 } from '../conversation/composerCommands'
 import { ModelPicker } from './ModelPicker'
-import { IconArrowUp, IconPaperclip, IconStop } from './icons'
+import { IconArrowUp, IconPaperclip, IconSession, IconStop } from './icons'
 
 const EMPTY_ITEMS: StreamItem[] = []
 
@@ -53,8 +53,6 @@ export function TemporaryChat() {
   const [modelPicker, setModelPicker] = useState<{ left: number; bottom: number } | null>(null)
   const [models, setModels] = useState<ModelOption[]>([])
   const [bounds, setBounds] = useState(temporaryBounds)
-  const [done, setDone] = useState(false)
-  const wasStreaming = useRef(streaming)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { setRef, scrollToBottom } = useAutoScroll(items, streaming, temp?.id ?? null)
 
@@ -75,17 +73,6 @@ export function TemporaryChat() {
     }
   }, [temp?.id])
 
-  // 最小化期间如果一轮跑完，球显示对勾；恢复窗口后回到箭头
-  useEffect(() => {
-    if (!minimized) {
-      setDone(false)
-      wasStreaming.current = streaming
-      return
-    }
-    if (wasStreaming.current && !streaming) setDone(true)
-    wasStreaming.current = streaming
-  }, [minimized, streaming])
-
   // 新临时会话：清空窗口内的草稿和附件（最小化恢复不走这里）
   useEffect(() => {
     setDraft('')
@@ -94,8 +81,6 @@ export function TemporaryChat() {
     setConfirmClose(false)
     setModelPicker(null)
     setClosing(false)
-    setDone(false)
-    wasStreaming.current = false
   }, [temp?.id])
 
   // 渲染进程重载/最小化恢复时，内容流可能不在 store 里；从内存会话读一次
@@ -145,7 +130,7 @@ export function TemporaryChat() {
   if (!temp) return null
 
   if (minimized) {
-    const status = streaming ? '回答中…' : done ? '已完成' : '可继续'
+    const status = streaming ? '生成中…' : '可继续'
     return (
       <button
         type="button"
@@ -158,10 +143,8 @@ export function TemporaryChat() {
         <span className="grid h-10 w-10 place-items-center rounded-full bg-[#171715] text-[#FAFAF9] shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5)]">
           {streaming ? (
             <span className="conv-stop-ring conv-ball-ring" aria-hidden="true" />
-          ) : done ? (
-            <span className="text-[15px] font-bold" aria-hidden="true">✓</span>
           ) : (
-            <span className="text-[17px]" aria-hidden="true">↗</span>
+            <IconSession />
           )}
         </span>
       </button>

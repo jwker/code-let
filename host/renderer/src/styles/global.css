@@ -614,6 +614,7 @@
 .conv-stop-ring.conv-ball-ring {
   width: 24px;
   height: 24px;
+  animation-duration: 1.6s;
 }
 
 @media (prefers-reduced-motion: reduce) {
