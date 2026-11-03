@@ -15,6 +15,27 @@ import { IconArrowUp, IconPaperclip, IconStop } from './icons'
 
 const EMPTY_ITEMS: StreamItem[] = []
 
+/** 贴住对话主区域左下角；主区尺寸变化时跟着重新算 */
+function temporaryBounds(): { left: number; bottom: number; width: number; height: number } {
+  const main = document.querySelector<HTMLElement>('.shell-card.main')
+  const rect = main?.getBoundingClientRect()
+  if (!rect) {
+    const width = Math.min(520, window.innerWidth - 48)
+    return {
+      left: 24,
+      bottom: 24,
+      width,
+      height: Math.min(640, window.innerHeight - 48)
+    }
+  }
+  return {
+    left: rect.left + 16,
+    bottom: window.innerHeight - rect.bottom + 16,
+    width: Math.min(520, Math.max(320, rect.width - 32)),
+    height: Math.min(640, Math.max(360, rect.height - 32))
+  }
+}
+
 /**
  * 临时对话浮层（PLAN.md D40）。
  *
@@ -39,8 +60,24 @@ export function TemporaryChat() {
   const [closing, setClosing] = useState(false)
   const [modelPicker, setModelPicker] = useState<{ left: number; bottom: number } | null>(null)
   const [models, setModels] = useState<ModelOption[]>([])
+  const [bounds, setBounds] = useState(temporaryBounds)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { setRef, scrollToBottom } = useAutoScroll(items, streaming, temp?.id ?? null)
+
+  // 浮层跟着对话主区域走：左下角、随窗口/侧栏/检视器变化重算
+  useEffect(() => {
+    if (!temp) return
+    const main = document.querySelector<HTMLElement>('.shell-card.main')
+    const update = (): void => setBounds(temporaryBounds())
+    update()
+    const observer = new ResizeObserver(update)
+    if (main) observer.observe(main)
+    window.addEventListener('resize', update)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [temp?.id])
 
   // 新临时会话：清空窗口内的草稿和附件（最小化恢复不走这里）
   useEffect(() => {
@@ -100,22 +137,27 @@ export function TemporaryChat() {
 
   if (minimized) {
     return (
-      <button
-        type="button"
-        onClick={() => setMinimized(false)}
-        className="fixed bottom-10 right-5 z-[80] flex items-center gap-2 rounded-full border border-hairline-strong bg-raised px-3 py-2 text-[11px] text-fg-2 shadow-[var(--sh-lg)] transition-colors hover:bg-sunken"
-        title="恢复临时对话"
-        aria-label="恢复临时对话"
+      <div
+        className="fixed z-[80] rounded-2xl bg-canvas/55 p-1.5 shadow-[var(--sh-lg)] backdrop-blur-md"
+        style={{ left: bounds.left, bottom: bounds.bottom }}
       >
-        <span className="grid h-5 w-5 place-items-center rounded-full border border-dashed border-hairline-strong text-[11px] text-fg-3">
-          ◌
-        </span>
-        <span className="font-medium">临时对话</span>
-        <span className="border-l border-hairline pl-2 text-[10px] text-fg-3">
-          {streaming ? '回答中…' : '可继续'}
-        </span>
-        <span className="text-fg-3">↗</span>
-      </button>
+        <button
+          type="button"
+          onClick={() => setMinimized(false)}
+          className="flex items-center gap-2 rounded-xl border border-hairline-strong bg-raised px-3 py-2 text-[11px] text-fg-2 shadow-sm transition-colors hover:bg-sunken"
+          title="恢复临时对话"
+          aria-label="恢复临时对话"
+        >
+          <span className="grid h-5 w-5 place-items-center rounded-full border border-dashed border-hairline-strong text-[11px] text-fg-3">
+            ◌
+          </span>
+          <span className="font-medium">临时对话</span>
+          <span className="border-l border-hairline pl-2 text-[10px] text-fg-3">
+            {streaming ? '回答中…' : '可继续'}
+          </span>
+          <span className="text-fg-3">↗</span>
+        </button>
+      </div>
     )
   }
 
@@ -356,11 +398,6 @@ export function TemporaryChat() {
                 </button>
               )}
             </div>
-          </div>
-          <div className="mt-1.5 flex items-center gap-2 text-[9.5px] text-fg-3">
-            <span>不解析 / 命令与 @ 引用</span>
-            <span className="ml-auto">Esc 不关闭</span>
-            <span>× 关闭前确认</span>
           </div>
         </footer>
 
