@@ -20,7 +20,7 @@ export interface ComposerCommand {
 }
 
 /** Codelet 自己的命令名 —— 这些名字不从 Pi 的命令列表里再列一遍 */
-export const CODELET_COMMAND_NAMES = ['new', 'model', 'rename', 'compact', 'stop', 'thinking'] as const
+export const CODELET_COMMAND_NAMES = ['new', 'model', 'rename', 'compact', 'reload', 'stop', 'thinking'] as const
 
 export type CodeletCommandName = (typeof CODELET_COMMAND_NAMES)[number]
 
@@ -68,6 +68,13 @@ export function codeletCommands(context: CodeletCommandContext): ComposerCommand
       source: 'codelet',
       disabled: busy || context.stale,
       disabledReason: '等这一轮结束再压缩'
+    },
+    {
+      name: 'reload',
+      description: '重新加载扩展和会话',
+      source: 'codelet',
+      disabled: busy || !context.hasCwd,
+      disabledReason: busy ? '等这一轮结束再重新加载' : '这个标签没有目录'
     },
     {
       name: 'stop',

@@ -144,6 +144,7 @@ describe('手打 Codelet 命令', () => {
     expect(parseCodeletCommand('  /stop ')).toEqual({ name: 'stop', args: '' })
     expect(parseCodeletCommand('/new 带参数')).toEqual({ name: 'new', args: '带参数' })
     expect(parseCodeletCommand('/thinking high')).toEqual({ name: 'thinking', args: 'high' })
+    expect(parseCodeletCommand('/reload')).toEqual({ name: 'reload', args: '' })
   })
 
   it('不认识的命令和正文里的斜杠不拦截', () => {
@@ -220,6 +221,7 @@ describe('Codelet 动作的可用性', () => {
       model: true,
       rename: false,
       compact: true,
+      reload: true,
       stop: false,
       thinking: true
     })
@@ -239,6 +241,33 @@ describe('Codelet 动作的可用性', () => {
     expect(disabled.rename).toBe(true)
     expect(disabled.model).toBe(false)
     expect(disabled.thinking).toBe(false)
+    expect(disabled.reload).toBe(false)
+  })
+
+  it('stale 时 reload 仍然可用 —— 它本身就是恢复入口', () => {
+    const commands = codeletCommands({
+      streaming: false,
+      stopping: false,
+      stale: true,
+      hasCwd: true,
+      canRename: false,
+      canModel: true
+    })
+    const reload = commands.find((command) => command.name === 'reload')
+    expect(reload?.disabled).toBe(false)
+  })
+
+  it('没有目录时 reload 不可用', () => {
+    const commands = codeletCommands({
+      streaming: false,
+      stopping: false,
+      stale: false,
+      hasCwd: false,
+      canRename: false,
+      canModel: true
+    })
+    const reload = commands.find((command) => command.name === 'reload')
+    expect(reload?.disabled).toBe(true)
   })
 })
 

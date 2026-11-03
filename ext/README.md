@@ -62,4 +62,4 @@ pi.registerCommand('deploy', {
 结果包在 `text` 代码块里，用 `pi.sendMessage()` 发成 custom 消息。
 它验证了「编译 → 加载 → `/` 菜单 → 执行 → custom 消息」整条链路，也验证了扩展命令在流式期间执行。
 
-改完 `ext/` 后需要重启 `npm run dev` —— 现在没有 `tsc --watch`，不会热重载扩展产物。
+改完 `ext/` 后先跑 `npm run build:ext`，再在输入框执行 `/reload`；它重载的是 `out/ext` 里编译后的 `.js`，不会替你编译源码。现在没有 `tsc --watch`，也不会热重载扩展产物。

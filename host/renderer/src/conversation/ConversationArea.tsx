@@ -592,6 +592,26 @@ export function ConversationArea() {
         void compact()
         return
       }
+      case 'reload': {
+        if (streaming || stopping) {
+          showNotice('error', '等这一轮结束再重新加载')
+          return
+        }
+        if (!activeTabId) return
+        setReloading(true)
+        showNotice('info', '正在重新加载扩展和会话…')
+        try {
+          await reloadTab(activeTabId)
+          // runtime 重建后命令集合可能变了；sessionId 不变时上面的 effect 不会重跑
+          setPiCommands(await host.listCommands(activeTabId))
+          showNotice('info', '已重新加载扩展和会话', 2500)
+        } catch (error) {
+          showNotice('error', error instanceof Error ? error.message : String(error))
+        } finally {
+          setReloading(false)
+        }
+        return
+      }
       case 'stop': {
         stop()
         return
@@ -630,11 +650,13 @@ export function ConversationArea() {
 
   async function send(): Promise<void> {
     const text = draft.trim()
-    // 有外部更新时不让发 —— runtime 是旧上下文，发出去会跟别处冲突
-    if (!text || !activeTabId || stale) return
+    if (!text || !activeTabId) return
+    // 有外部更新时不让发 —— runtime 是旧上下文，发出去会跟别处冲突。
+    // 例外是 `/reload`：它本身就是用来从这个状态恢复的。
+    const codeletCommand = parseCodeletCommand(text)
+    if (stale && codeletCommand?.name !== 'reload') return
 
     // Codelet 自己的命令不发给模型，直接执行
-    const codeletCommand = parseCodeletCommand(text)
     if (codeletCommand) {
       if (codeletCommand.name === 'thinking') {
         void runCodeletCommand('thinking', codeletCommand.args)
