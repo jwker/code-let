@@ -16,6 +16,7 @@ import {
   fileOpenSchema,
   fileReadSchema,
   filesListSchema,
+  filesSearchCancelSchema,
   filesSearchSchema,
   modelSelectSchema,
   projectPathSchema,
@@ -184,8 +185,13 @@ export function registerIpc(state: HostState): () => void {
   })
 
   ipcMain.handle(IPC.filesSearch, async (_event, payload: unknown) => {
-    const { cwd, query, limit } = filesSearchSchema.parse(payload)
-    return state.searchFiles(cwd, query, limit)
+    const { cwd, query, limit, requestId } = filesSearchSchema.parse(payload)
+    return state.searchFiles(cwd, query, limit, requestId)
+  })
+
+  ipcMain.handle(IPC.filesSearchCancel, async (_event, payload: unknown) => {
+    const { requestId } = filesSearchCancelSchema.parse(payload)
+    state.cancelFileSearch(requestId)
   })
 
   ipcMain.handle(IPC.filesRead, async (_event, payload: unknown) => {
@@ -277,6 +283,7 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.clipboardWrite)
     ipcMain.removeHandler(IPC.filesList)
     ipcMain.removeHandler(IPC.filesSearch)
+    ipcMain.removeHandler(IPC.filesSearchCancel)
     ipcMain.removeHandler(IPC.filesRead)
     ipcMain.removeHandler(IPC.filesOpen)
     ipcMain.removeHandler(IPC.filesClose)

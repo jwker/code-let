@@ -168,78 +168,190 @@ function fileMatchScore(path: string, query: string): number {
   return -1
 }
 
+/** 搜索索引重新扫描的最长间隔 */
+const SEARCH_INDEX_TTL_MS = 10_000
+/** 建索引的遍历上限 —— 跟旧版搜索上限一致，避免在大仓库里卡死 */
+const MAX_INDEX_DIRS = 2000
+const MAX_INDEX_DEPTH = 12
+const MAX_INDEX_ENTRIES = 50_000
+const MAX_CACHED_INDEXES = 20
+
+interface SearchIndexEntry {
+  path: string
+  kind: FileSearchResult['kind']
+  ignored: boolean
+}
+
+interface SearchIndex {
+  entries: SearchIndexEntry[]
+}
+
+const searchIndexCache = new Map<string, { index: SearchIndex; at: number }>()
+const searchIndexBuilds = new Map<string, Promise<SearchIndex>>()
+
+/** 搜索请求被取消时用它中断等待；索引构建本身继续，下次查询直接复用 */
+class SearchAbortedError extends Error {
+  constructor() {
+    super('搜索已取消')
+  }
+}
+
+function abortSignalPromise(signal: AbortSignal): Promise<never> {
+  return new Promise((_, reject) => {
+    if (signal.aborted) {
+      reject(new SearchAbortedError())
+      return
+    }
+    signal.addEventListener('abort', () => reject(new SearchAbortedError()), { once: true })
+  })
+}
+
+/**
+ * 建一份项目文件索引。
+ *
+ * 一次遍历把路径、类型、是否被 `.gitignore` 命中都记下来；后续每次输入只做内存匹配。
+ * 不进被忽略的目录，`.git` 跳过；其他隐藏文件照常收。
+ */
+async function buildSearchIndex(cwd: string, root: string): Promise<SearchIndex> {
+  const rules = await gitignoreRules(cwd)
+  const entries: SearchIndexEntry[] = []
+  const stack: Array<{ dir: string; rel: string; depth: number }> = [{ dir: root, rel: '', depth: 0 }]
+  let visited = 0
+
+  while (stack.length > 0 && visited < MAX_INDEX_DIRS && entries.length < MAX_INDEX_ENTRIES) {
+    const current = stack.pop()
+    if (!current) break
+    let items
+    try {
+      items = await readdir(current.dir, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    visited += 1
+    items.sort((a, b) => a.name.localeCompare(b.name))
+
+    for (const entry of items) {
+      if (entry.name === '.git') continue
+      const childRel = current.rel ? `${current.rel}/${entry.name}` : entry.name
+      const kind: FileSearchResult['kind'] = entry.isDirectory() ? 'dir' : 'file'
+      const ignored = isIgnoredPath(rules, childRel, kind === 'dir')
+      entries.push({ path: childRel, kind, ignored })
+      if (entries.length >= MAX_INDEX_ENTRIES) break
+
+      // 忽略的目录不进入 —— 尊重 gitignore，也避免走进 node_modules
+      if (kind === 'dir' && !ignored && current.depth < MAX_INDEX_DEPTH) {
+        stack.push({
+          dir: resolve(current.dir, entry.name),
+          rel: childRel,
+          depth: current.depth + 1
+        })
+      }
+    }
+  }
+
+  return { entries }
+}
+
+/** 取项目索引：TTL 内复用；同一个项目的并发请求共用一次构建 */
+async function getSearchIndex(cwd: string, root: string): Promise<SearchIndex> {
+  const key = resolve(cwd)
+  const cached = searchIndexCache.get(key)
+  if (cached && Date.now() - cached.at < SEARCH_INDEX_TTL_MS) return cached.index
+
+  const pending = searchIndexBuilds.get(key)
+  if (pending) return pending
+
+  const build = buildSearchIndex(cwd, root)
+    .then((index) => {
+      // 简单的容量上限：超过就淘汰最早写入的那份
+      if (searchIndexCache.size >= MAX_CACHED_INDEXES) {
+        const oldest = [...searchIndexCache.entries()].sort((a, b) => a[1].at - b[1].at)[0]
+        if (oldest) searchIndexCache.delete(oldest[0])
+      }
+      searchIndexCache.set(key, { index, at: Date.now() })
+      searchIndexBuilds.delete(key)
+      return index
+    })
+    .catch((error) => {
+      searchIndexBuilds.delete(key)
+      throw error
+    })
+
+  searchIndexBuilds.set(key, build)
+  return build
+}
+
+/** 文件变动后手动丢掉索引；不传 cwd 时清空全部（测试和以后的刷新入口用） */
+export function invalidateFileSearchIndex(cwd?: string): void {
+  if (cwd) searchIndexCache.delete(resolve(cwd))
+  else searchIndexCache.clear()
+}
+
 /**
  * `@` 搜索：按名字/路径找文件和目录。
  *
  * 规则：
- * - 空 query 只列项目根的一层（不递归）。
- * - 非空 query 递归搜索，**不进入被 `.gitignore` 忽略的目录**（尊重 gitignore）；
- *   忽略的文件如果命中仍然返回，排在后面。
+ * - 空 query 只列项目根的一层（不递归，也不建索引）。
+ * - 非空 query 先确保项目索引存在，之后在内存里匹配；不再每次输入都扫盘。
+ * - 索引按项目缓存 10 秒；超过 TTL 或调用 `invalidateFileSearchIndex()` 后重建。
+ * - 不进入被 `.gitignore` 忽略的目录；忽略的文件命中仍然返回，排在后面。
  * - 隐藏文件照常搜（`.git` 目录除外）。
- * - 有遍历上限：2000 个目录、12 层、候选数量是 limit 的 8 倍。
+ * - 传入 `signal` 时，取消只中断这次等待；索引构建会继续，下一次查询直接复用。
  */
-export async function searchFiles(cwd: string, query: string, limit: number): Promise<FileSearchResult[]> {
+export async function searchFiles(
+  cwd: string,
+  query: string,
+  limit: number,
+  signal?: AbortSignal
+): Promise<FileSearchResult[]> {
+  if (signal?.aborted) return []
+
   const root = await resolveInsideCwd(cwd, '.')
-  const rules = await gitignoreRules(cwd)
   const q = query.trim()
+
+  // 空查询只读根目录一层 —— 比为了列目录先建全量索引快得多
+  if (!q) {
+    const items = await listDirectory(cwd, '')
+    return items.slice(0, limit).map((item) => ({
+      path: item.name,
+      kind: item.kind,
+      ...(item.ignored ? { ignored: true } : {})
+    }))
+  }
+
+  if (signal?.aborted) return []
+
+  let index: SearchIndex
+  try {
+    index = signal
+      ? await Promise.race([getSearchIndex(cwd, root), abortSignalPromise(signal)])
+      : await getSearchIndex(cwd, root)
+  } catch (error) {
+    if (error instanceof SearchAbortedError) return []
+    throw error
+  }
+  if (signal?.aborted) return []
+
   const candidates: Array<FileSearchResult & { score: number }> = []
-  const maxVisited = 2000
-  const maxDepth = 12
-  const maxCandidates = Math.max(limit * 8, 200)
-  let visited = 0
-
-  async function walk(dir: string, rel: string, depth: number): Promise<void> {
-    if (visited >= maxVisited || candidates.length >= maxCandidates) return
-    let entries
-    try {
-      entries = await readdir(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
-    visited += 1
-    entries.sort((a, b) => a.name.localeCompare(b.name))
-
-    for (const entry of entries) {
-      // `.git` 不搜；其他隐藏文件照常
-      if (entry.name === '.git') continue
-      const childRel = rel ? `${rel}/${entry.name}` : entry.name
-      const kind: FileSearchResult['kind'] = entry.isDirectory() ? 'dir' : 'file'
-      // 空 query 只列根目录一层
-      if (!q && rel !== '') continue
-
-      const ignored = isIgnoredPath(rules, childRel, kind === 'dir')
-      const score = q ? fileMatchScore(childRel, q) : 0
-      if (!q || score >= 0) {
-        candidates.push({ path: childRel, kind, ...(ignored ? { ignored: true } : {}), score })
-      }
-
-      // 不进入被忽略的目录 —— 尊重 gitignore，也避免走进 node_modules
-      if (q && kind === 'dir' && !ignored && depth < maxDepth) {
-        await walk(resolve(dir, entry.name), childRel, depth + 1)
-      }
-      if (candidates.length >= maxCandidates) return
+  for (const entry of index.entries) {
+    const score = fileMatchScore(entry.path, q)
+    if (score >= 0) {
+      candidates.push({
+        path: entry.path,
+        kind: entry.kind,
+        ...(entry.ignored ? { ignored: true } : {}),
+        score
+      })
     }
   }
 
-  await walk(root, '', 0)
-
-  if (q) {
-    candidates.sort(
-      (a, b) =>
-        b.score - a.score ||
-        Number(Boolean(a.ignored)) - Number(Boolean(b.ignored)) ||
-        a.path.length - b.path.length ||
-        a.path.localeCompare(b.path)
-    )
-  } else {
-    // 根目录：非忽略的在前；同组里文件夹在前、各自按名字
-    candidates.sort(
-      (a, b) =>
-        Number(Boolean(a.ignored)) - Number(Boolean(b.ignored)) ||
-        (a.kind === b.kind ? 0 : a.kind === 'dir' ? -1 : 1) ||
-        a.path.localeCompare(b.path)
-    )
-  }
+  candidates.sort(
+    (a, b) =>
+      b.score - a.score ||
+      Number(Boolean(a.ignored)) - Number(Boolean(b.ignored)) ||
+      a.path.length - b.path.length ||
+      a.path.localeCompare(b.path)
+  )
 
   return candidates.slice(0, limit).map(({ score: _score, ...rest }) => rest)
 }

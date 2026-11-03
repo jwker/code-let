@@ -548,6 +548,8 @@ export function createMockApi(): CodeletApi {
 
     dismissExtensionErrors: async () => publish(),
 
+    cancelFileSearch: async () => {},
+
     searchFiles: async (_cwd, query, limit) => {
       const q = query.trim().toLowerCase()
       const matched = q

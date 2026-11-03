@@ -33,7 +33,12 @@ export const filesListSchema = z.object({
 export const filesSearchSchema = z.object({
   cwd: z.string().min(1),
   query: z.string(),
-  limit: z.number().int().min(1).max(200)
+  limit: z.number().int().min(1).max(200),
+  requestId: z.string().min(1).optional()
+})
+
+export const filesSearchCancelSchema = z.object({
+  requestId: z.string().min(1)
 })
 
 export const fileReadSchema = z.object({

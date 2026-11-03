@@ -86,6 +86,8 @@ export class HostState extends EventEmitter {
   private conversations: ConversationInfo[] = []
   /** 扩展加载 / 执行错误 —— 最多留 20 条，界面顶部提示 */
   private extensionErrors: ExtensionErrorInfo[] = []
+  /** 正在进行的 `@` 文件搜索 —— requestId -> controller */
+  private fileSearches = new Map<string, AbortController>()
   private session: SessionState = {
     ready: false,
     cwd: null,
@@ -907,9 +909,31 @@ export class HostState extends EventEmitter {
     this.push()
   }
 
-  /** `@` 引用用的文件搜索 */
-  searchFiles(cwd: string, query: string, limit: number): Promise<FileSearchResult[]> {
-    return searchProjectFiles(cwd, query, limit)
+  /** `@` 引用用的文件搜索；requestId 用来取消上一次请求 */
+  async searchFiles(
+    cwd: string,
+    query: string,
+    limit: number,
+    requestId?: string
+  ): Promise<FileSearchResult[]> {
+    const controller = new AbortController()
+    if (requestId) {
+      this.fileSearches.get(requestId)?.abort()
+      this.fileSearches.set(requestId, controller)
+    }
+    try {
+      return await searchProjectFiles(cwd, query, limit, controller.signal)
+    } finally {
+      if (requestId && this.fileSearches.get(requestId) === controller) {
+        this.fileSearches.delete(requestId)
+      }
+    }
+  }
+
+  /** 取消一个文件搜索；索引构建本身继续，下一次查询直接复用 */
+  cancelFileSearch(requestId: string): void {
+    this.fileSearches.get(requestId)?.abort()
+    this.fileSearches.delete(requestId)
   }
 
   /** 压缩某个标签的上下文 */
@@ -1003,6 +1027,8 @@ export class HostState extends EventEmitter {
 
   async dispose(): Promise<void> {
     this.conversationsRefresh.dispose()
+    for (const controller of this.fileSearches.values()) controller.abort()
+    this.fileSearches.clear()
     await this.pi.stop()
   }
 }

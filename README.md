@@ -32,7 +32,8 @@ Pi 的会话文件一个字节都不动。
 `/thinking` 用同一套参数菜单选择当前模型的可用等级，底部状态栏显示 `think <level>`。
 `@` 选文件：路径插进正文，同时作为内容附件发送（文本包成 `<file>` 块，图片走
 `PromptOptions.images`），带单文件和总量上限；chip 显示大小与估算 token，并和正文里的
-`@path` 双向同步；PNG/JPEG 发送前按最长边 1568 缩放。搜索尊重 `.gitignore`。
+`@path` 双向同步；PNG/JPEG 发送前按最长边 1568 缩放。搜索尊重 `.gitignore`，按项目缓存索引，
+查询切换时会取消旧请求。
 
 **对话区三种排版。** 普通（Markdown）、终端（ANSI）、HTML。前两种读同一份内容流。
 

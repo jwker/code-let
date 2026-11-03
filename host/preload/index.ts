@@ -48,8 +48,9 @@ const api: CodeletApi = {
   selectThinkingLevel: (tabId, level) =>
     ipcRenderer.invoke(IPC.thinkingSelect, { tabId, level }) as Promise<void>,
   dismissExtensionErrors: () => ipcRenderer.invoke(IPC.extensionErrorsDismiss) as Promise<HostSnapshot>,
-  searchFiles: (cwd, query, limit) =>
-    ipcRenderer.invoke(IPC.filesSearch, { cwd, query, limit }) as Promise<FileSearchResult[]>,
+  searchFiles: (cwd, query, limit, requestId) =>
+    ipcRenderer.invoke(IPC.filesSearch, { cwd, query, limit, requestId }) as Promise<FileSearchResult[]>,
+  cancelFileSearch: (requestId) => ipcRenderer.invoke(IPC.filesSearchCancel, { requestId }) as Promise<void>,
   copyText: (text) => ipcRenderer.invoke(IPC.clipboardWrite, { text }) as Promise<void>,
   listFiles: (cwd, dir) => ipcRenderer.invoke(IPC.filesList, { cwd, dir }) as Promise<FileEntry[]>,
   readFile: (cwd, path) => ipcRenderer.invoke(IPC.filesRead, { cwd, path }) as Promise<FileContent>,

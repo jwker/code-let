@@ -127,6 +127,8 @@ export function ConversationArea() {
   // 插入后的一小段时间里压掉 onSelect 的重复刷新，避免用旧 DOM 值把菜单又打开
   const suppressRefreshUntil = useRef(0)
   const noticeTimer = useRef<number | null>(null)
+  /** `@` 搜索的递增 id —— 每次 effect 一个，旧请求会被显式取消 */
+  const searchSeq = useRef(0)
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId)
   const cwd = activeTab?.cwd ?? session.cwd
@@ -205,12 +207,13 @@ export function ConversationArea() {
   useEffect(() => {
     if (menu?.kind !== 'file' || !cwd) return
     let cancelled = false
+    const requestId = `files-${activeTabId ?? 'none'}-${++searchSeq.current}`
     setFileLoading(true)
     setFileError(null)
     setFileItems([])
     const timer = setTimeout(() => {
       host
-        .searchFiles(cwd, menu.query, 50)
+        .searchFiles(cwd, menu.query, 50, requestId)
         .then((items) => {
           if (cancelled) return
           setFileItems(items)
@@ -226,8 +229,10 @@ export function ConversationArea() {
     return () => {
       cancelled = true
       clearTimeout(timer)
+      // 查询变了/菜单关了：让主进程别再扫这个请求（索引构建会继续）
+      void host.cancelFileSearch(requestId).catch(() => {})
     }
-  }, [menu?.kind, menu?.query, cwd])
+  }, [menu?.kind, menu?.query, cwd, activeTabId])
 
   useEffect(() => {
     setMenu(null)

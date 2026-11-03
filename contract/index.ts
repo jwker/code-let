@@ -50,6 +50,8 @@ export const IPC = {
   filesList: 'host:files:list',
   /** 按名字搜索项目里的文件（@ 引用） */
   filesSearch: 'host:files:search',
+  /** 取消一个还没返回的文件搜索 */
+  filesSearchCancel: 'host:files:search-cancel',
   /** 读一个文件的内容 */
   filesRead: 'host:files:read',
   /** 打开一个文件（进文件标签栏） */
@@ -579,8 +581,10 @@ export interface CodeletApi {
   selectThinkingLevel(tabId: string, level: ThinkingLevel): Promise<void>
   /** 清掉已经显示的扩展错误 */
   dismissExtensionErrors(): Promise<HostSnapshot>
-  /** 按名字搜索项目里的文件 —— `@` 引用用，只返回相对路径 */
-  searchFiles(cwd: string, query: string, limit: number): Promise<FileSearchResult[]>
+  /** 按名字搜索项目里的文件 —— `@` 引用用，只返回相对路径。requestId 用于取消 */
+  searchFiles(cwd: string, query: string, limit: number, requestId?: string): Promise<FileSearchResult[]>
+  /** 取消一个文件搜索；只中断这次等待，索引构建会继续 */
+  cancelFileSearch(requestId: string): Promise<void>
   /** 把一段文字写入系统剪贴板（复制回复正文） */
   copyText(text: string): Promise<void>
   /** 列一个目录下的条目 */

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   PathOutsideCwdError,
   formatSize,
+  invalidateFileSearchIndex,
   listDirectory,
   readFileContent,
   resolveInsideCwd,
@@ -204,6 +205,27 @@ describe('搜索文件（@ 引用）', () => {
     const root = setup()
     const results = await searchFiles(root, '', 2)
     expect(results).toHaveLength(2)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('索引在 TTL 内复用，手动失效后能看到新文件', async () => {
+    const root = setup()
+    expect(await searchFiles(root, 'newfile', 50)).toEqual([])
+
+    writeFileSync(join(root, 'newfile.ts'), 'export const n = 1\n')
+    // 索引还热着：同一个查询暂时看不到新文件
+    expect(await searchFiles(root, 'newfile', 50)).toEqual([])
+
+    invalidateFileSearchIndex(root)
+    expect((await searchFiles(root, 'newfile', 50)).map((item) => item.path)).toContain('newfile.ts')
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('已取消的 signal 直接返回空，不进入索引构建', async () => {
+    const root = setup()
+    const controller = new AbortController()
+    controller.abort()
+    await expect(searchFiles(root, 'index.ts', 50, controller.signal)).resolves.toEqual([])
     rmSync(root, { recursive: true, force: true })
   })
 })
