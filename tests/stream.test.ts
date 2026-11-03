@@ -488,6 +488,77 @@ describe('错过了 message_start 时的增量（刷新页面后正在流的那�
   })
 })
 
+describe('用户消息里的图片缩略图', () => {
+  const image = { type: 'image', mimeType: 'image/png', data: 'AAAA' }
+
+  it('历史把用户消息里的图片块收进 images', () => {
+    const items = entriesToItems([
+      {
+        type: 'message',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: '看图' }, image]
+        }
+      }
+    ])
+    expect(items).toEqual([
+      {
+        kind: 'message',
+        role: 'user',
+        text: '看图',
+        images: [{ mimeType: 'image/png', data: 'AAAA' }]
+      }
+    ])
+  })
+
+  it('实时 message_start/message_end 都保留缩略图', () => {
+    let items = applyEvent([], {
+      type: 'message_start',
+      data: { message: { role: 'user', content: [{ type: 'text', text: '看图' }, image] } }
+    })
+    expect(items[0]).toMatchObject({
+      kind: 'message',
+      role: 'user',
+      text: '看图',
+      images: [{ mimeType: 'image/png', data: 'AAAA' }]
+    })
+
+    items = applyEvent(items, {
+      type: 'message_end',
+      data: { message: { role: 'user', content: [{ type: 'text', text: '看图' }, image] } }
+    })
+    expect(items[0]).toMatchObject({ images: [{ mimeType: 'image/png', data: 'AAAA' }] })
+  })
+
+  it('只有图片、没有文字的用户消息也会保留', () => {
+    const items = applyEvent([], {
+      type: 'message_start',
+      data: { message: { role: 'user', content: [image] } }
+    })
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'message', role: 'user', text: '', images: [{ data: 'AAAA' }] })
+  })
+
+  it('小缩略图能过 IPC 整形，大原图被丢掉', () => {
+    const small = compactSessionEvent({
+      type: 'message_start',
+      data: { message: { role: 'user', content: [image] } }
+    }) as { data: { message: { content: Array<{ type: string }> } } }
+    expect(small.data.message.content).toEqual([image])
+
+    const large = compactSessionEvent({
+      type: 'message_start',
+      data: {
+        message: {
+          role: 'user',
+          content: [{ type: 'image', mimeType: 'image/png', data: 'x'.repeat(400_000) }]
+        }
+      }
+    }) as { data: { message: { content: Array<{ type: string }> } } }
+    expect(large.data.message.content).toEqual([])
+  })
+})
+
 describe('扩展自定义消息', () => {
   it('历史：display=true 的 custom_message 变成 custom 项', () => {
     const items = entriesToItems([

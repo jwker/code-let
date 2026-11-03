@@ -24,6 +24,7 @@ import type {
 } from '@contract/index'
 import type { PromptImage } from '../attachments'
 import { entriesToItems } from '@contract/stream'
+import { thumbnailStreamImage } from '../imageResize'
 
 /** 一条会话流事件 —— 带它属于哪个标签 */
 export interface PiEvent {
@@ -338,8 +339,36 @@ export class PiRuntime implements PiRuntimePort {
   private bind(tabId: string, session: AgentSession): () => void {
     return session.subscribe((event) => {
       const { type, ...rest } = event as unknown as { type: string } & Record<string, unknown>
-      this.emit({ type, data: rest, tabId })
+      this.emit(this.withImageThumbnails({ type, data: rest, tabId }))
     })
+  }
+
+  /** 把实时用户消息里的原图换成缩略图；原图只留在 Pi 的模型请求里 */
+  private withImageThumbnails(event: PiEvent): PiEvent {
+    if (event.type !== 'message_start' && event.type !== 'message_end') return event
+    const data = event.data as { message?: { content?: unknown } }
+    const content = data.message?.content
+    if (!Array.isArray(content)) return event
+
+    let changed = false
+    const next = content.map((block) => {
+      if (!block || typeof block !== 'object') return block
+      const image = block as { type?: string; data?: string; mimeType?: string }
+      if (image.type !== 'image' || typeof image.data !== 'string') return block
+      const thumb = thumbnailStreamImage({
+        data: image.data,
+        mimeType: image.mimeType ?? 'image/png'
+      })
+      if (!thumb) return block
+      changed = true
+      return { ...block, data: thumb.data, mimeType: thumb.mimeType }
+    })
+
+    if (!changed) return event
+    return {
+      ...event,
+      data: { ...data, message: { ...data.message, content: next } }
+    }
   }
 
   /** 激活一个标签：runtime 还没建就建（懒加载） */
@@ -430,7 +459,13 @@ export class PiRuntime implements PiRuntimePort {
     if (!sessionManager) return []
     const branch = sessionManager.getBranch()
     const entries = branch.length > 0 ? branch : sessionManager.getEntries()
-    return entriesToItems(entries)
+    return entriesToItems(entries).map((item) => {
+      if (item.kind !== 'message' || item.role !== 'user' || !item.images?.length) return item
+      const images = item.images
+        .map((image) => thumbnailStreamImage(image))
+        .filter((image): image is NonNullable<typeof image> => image !== null)
+      return { ...item, ...(images.length > 0 ? { images } : { images: undefined }) }
+    })
   }
 
   // -------------------------------------------------------------------------

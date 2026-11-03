@@ -474,6 +474,13 @@ export interface ReplyStats {
   startedAt?: number
 }
 
+/** 用户消息里带的图片缩略图；原图只给模型，不进实时事件流 */
+export interface StreamImage {
+  mimeType: string
+  /** base64，不带 data URL 前缀 */
+  data: string
+}
+
 /**
  * 对话区内容流里的一行。
  *
@@ -485,6 +492,8 @@ export type StreamItem =
       kind: 'message'
       role: 'user' | 'assistant' | 'toolResult'
       text: string
+      /** 用户消息里的图片缩略图（只有 user 有） */
+      images?: StreamImage[]
       /**
        * 工具输出属于哪一次调用（只有 toolResult 有）。
        * 用来把「工具跑到一半的输出」和「工具跑完的最终输出」对上同一项 —— R4。

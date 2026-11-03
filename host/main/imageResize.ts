@@ -1,5 +1,11 @@
+import { nativeImage } from 'electron'
+import type { StreamImage } from '@contract/index'
+
 /** 图片进模型前允许的最长边 —— 再大只会吃 token，不会带来更多细节 */
 export const MAX_IMAGE_EDGE = 1568
+/** 用户消息里缩略图的最长边 */
+const MAX_THUMBNAIL_EDGE = 320
+const MAX_THUMBNAIL_BASE64 = 120_000
 
 const DATA_URL = /^data:([^;]+);base64,([\s\S]*)$/
 
@@ -68,6 +74,39 @@ export async function resizeImageForPrompt(
     }
   } catch {
     // 图片格式/解码问题不应该挡住发送，原图照常走
+    return null
+  }
+}
+
+
+/**
+ * 生成用户消息里显示的缩略图。
+ *
+ * 原图只给模型；内容流和实时事件只拿这个函数产出的 base64 小图。
+ * Node 测试环境没有 Electron 的 nativeImage，直接返回 null。
+ */
+export function thumbnailStreamImage(image: StreamImage): StreamImage | null {
+  if (typeof nativeImage === 'undefined') return null
+  if (!image.data) return null
+
+  try {
+    const original = Buffer.from(image.data, 'base64')
+    const decoded = nativeImage.createFromBuffer(original)
+    if (decoded.isEmpty()) return null
+
+    const size = decoded.getSize()
+    const target = fitImageWithin(size.width, size.height, MAX_THUMBNAIL_EDGE)
+    const resized = decoded.resize({ ...target, quality: 'good' })
+    const output = image.mimeType === 'image/jpeg' ? resized.toJPEG(78) : resized.toPNG()
+    if (output.length === 0) return null
+
+    const data = output.toString('base64')
+    if (data.length > MAX_THUMBNAIL_BASE64) return null
+    return {
+      mimeType: image.mimeType === 'image/jpeg' ? 'image/jpeg' : 'image/png',
+      data
+    }
+  } catch {
     return null
   }
 }

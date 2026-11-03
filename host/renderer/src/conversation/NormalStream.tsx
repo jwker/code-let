@@ -214,13 +214,27 @@ function TurnRow({
 /** 用户气泡（反相深底）—— 没有用户消息时什么也不画 */
 function UserBubble({ item, userIndex }: { item: MessageItem | null; userIndex: number | null }) {
   if (!item) return null
+  // 图片附件在正文里只留了一个空的 <file> 标记；有缩略图时不再把这个标记当文字显示
+  const text = item.text.replace(/<file name="[^"]*"><\/file>/g, '').trim()
   return (
     <div className="flex flex-col items-start">
       <div
         data-user-index={userIndex ?? undefined}
         className="md-bubble is-inverse max-w-[70%] rounded-[14px] bg-bubble px-3.5 py-2.5 text-[14.5px] leading-[1.65] text-bubble-fg"
       >
-        <Markdown text={item.text} variant="normal" />
+        {item.images && item.images.length > 0 && (
+          <div className="mb-2 flex max-w-full flex-wrap gap-2">
+            {item.images.map((image, index) => (
+              <img
+                key={index}
+                src={`data:${image.mimeType};base64,${image.data}`}
+                alt={`用户上传的图片 ${index + 1}`}
+                className="max-h-44 max-w-[280px] rounded-lg border border-white/15 object-contain"
+              />
+            ))}
+          </div>
+        )}
+        {text && <Markdown text={text} variant="normal" />}
       </div>
     </div>
   )

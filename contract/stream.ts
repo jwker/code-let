@@ -11,7 +11,7 @@
  * 传过来的已经是普通 JSON —— 这里只按结构认字段。
  */
 
-import type { ReplyStats, StreamItem } from './index'
+import type { ReplyStats, StreamImage, StreamItem } from './index'
 
 // ---------------------------------------------------------------------------
 // 最小结构：只声明用到的字段，不 import Pi
@@ -23,6 +23,8 @@ interface RawBlock {
   id?: string
   name?: string
   arguments?: unknown
+  data?: string
+  mimeType?: string
 }
 
 interface RawMessage {
@@ -83,6 +85,18 @@ function textOf(content: unknown): string {
     if (block?.type === 'text' && typeof block.text === 'string') out += block.text
   }
   return out
+}
+
+/** 取用户消息里的图片块；只保留缩略图需要的 base64 和 mimeType */
+function imagesOf(content: unknown): StreamImage[] {
+  if (!Array.isArray(content)) return []
+  const images: StreamImage[] = []
+  for (const block of content as RawBlock[]) {
+    if (block?.type === 'image' && typeof block.data === 'string' && typeof block.mimeType === 'string') {
+      images.push({ mimeType: block.mimeType, data: block.data })
+    }
+  }
+  return images
 }
 
 /** 取助手消息里的文本（跳过 thinking 与 toolCall） */
@@ -238,7 +252,10 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
 
     if (message.role === 'user') {
       const text = textOf(message.content)
-      if (text) items.push({ kind: 'message', role: 'user', text })
+      const images = imagesOf(message.content)
+      if (text || images.length > 0) {
+        items.push({ kind: 'message', role: 'user', text, ...(images.length > 0 ? { images } : {}) })
+      }
       continue
     }
 
@@ -331,13 +348,26 @@ export function trimMessageUpdate(data: unknown): unknown {
 
 /** 单条事件里的文本最多留这么多字符；再长就截断，保证事件不会撞 IPC 上限 */
 export const MAX_EVENT_TEXT_CHARS = 32_000
+/** 单张缩略图最多留这么多 base64 字符；大图（原图）直接丢掉 */
+export const MAX_EVENT_IMAGE_CHARS = 120_000
+export const MAX_EVENT_IMAGE_TOTAL_CHARS = 140_000
 
 function compactContent(content: unknown): unknown {
   if (!Array.isArray(content)) return content
   const blocks: unknown[] = []
+  let imageChars = 0
   for (const block of content) {
     if (block && typeof block === 'object' && (block as RawBlock).type === 'image') {
-      // 图片数据只给模型，内容流不显示；留着会把整条 message_start 撞过 IPC 上限
+      const data = (block as RawBlock).data
+      if (
+        typeof data === 'string' &&
+        data.length <= MAX_EVENT_IMAGE_CHARS &&
+        imageChars + data.length <= MAX_EVENT_IMAGE_TOTAL_CHARS
+      ) {
+        imageChars += data.length
+        blocks.push(block)
+      }
+      // 原图只给模型；缩略图由主进程先替换，没替换成功的大图不能进 IPC
       continue
     }
     const raw = block as RawBlock | null
@@ -451,9 +481,19 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
       }
       // 用户消息在 start 时内容就是全的；助手消息是空壳，靠 delta 一点点长出来
       const text = role === 'assistant' ? '' : textOf(message.content)
+      const images = role === 'user' ? imagesOf(message.content) : []
       // 助手消息先挂一份空用量 —— 回复结束时再换真的
       const stats = role === 'assistant' ? statsOf(message) : undefined
-      return [...items, { kind: 'message', role, text, ...(stats ? { stats } : {}) }]
+      return [
+        ...items,
+        {
+          kind: 'message',
+          role,
+          text,
+          ...(images.length > 0 ? { images } : {}),
+          ...(stats ? { stats } : {})
+        }
+      ]
     }
 
     case 'message_update': {
@@ -544,13 +584,20 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
       }
 
       const text = textOf(message.content)
+      const images = imagesOf(message.content)
       const last = items[items.length - 1]
       if (!last || last.kind !== 'message' || last.role !== role) {
-        return text ? [...items, { kind: 'message', role, text }] : items
+        return text || images.length > 0
+          ? [{ kind: 'message', role, text, ...(images.length > 0 ? { images } : {}) }]
+          : items
       }
-      if (last.text === text) return items
+      if (last.text === text && JSON.stringify(last.images ?? []) === JSON.stringify(images)) return items
       const next = items.slice()
-      next[next.length - 1] = { ...last, text }
+      next[next.length - 1] = {
+        ...last,
+        text,
+        ...(images.length > 0 ? { images } : { images: undefined })
+      }
       return next
     }
 

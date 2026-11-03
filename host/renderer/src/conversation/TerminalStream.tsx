@@ -91,6 +91,9 @@ export function TerminalStream({
                   <span style={{ color: 'var(--fg-3)' }}>›</span>
                   <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-fg-1">
                     {item.text}
+                    {item.images && item.images.length > 0 && (
+                      <span className="ml-2 text-fg-3">▧ {item.images.length} 张图片</span>
+                    )}
                   </span>
                 </div>
               )
