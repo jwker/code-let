@@ -28,6 +28,13 @@ test.describe.serial('输入框', () => {
     mkdirSync(join(projectDir, 'src'))
     mkdirSync(join(projectDir, '.pi', 'extensions'), { recursive: true })
     writeFileSync(join(projectDir, 'README.md'), '# E2E\n\n测试项目。\n')
+    writeFileSync(
+      join(projectDir, 'pixel.png'),
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zb1kAAAAASUVORK5CYII=',
+        'base64'
+      )
+    )
     writeFileSync(join(projectDir, 'package.json'), '{"name":"e2e-fixture","type":"module"}\n')
     writeFileSync(join(projectDir, 'src', 'index.ts'), 'export const answer = 42\n')
     // 项目内扩展：只用来验证命令菜单和参数补全，不执行任何真实操作
@@ -56,7 +63,8 @@ test.describe.serial('输入框', () => {
       env: {
         ...process.env,
         CODELET_USER_DATA: userDataDir,
-        PI_CODING_AGENT_DIR: agentDir
+        PI_CODING_AGENT_DIR: agentDir,
+        CODELET_PICK_FILES: JSON.stringify([join(projectDir, 'pixel.png')])
       },
       timeout: 30_000
     })
@@ -81,6 +89,15 @@ test.describe.serial('输入框', () => {
     await expect(menu).toBeVisible()
     await expect(menu.getByRole('option').filter({ hasText: '/reload' })).toBeVisible()
     await expect(menu.getByRole('option').filter({ hasText: '/thinking' })).toBeVisible()
+  })
+
+  test('回形针可以从系统选择器添加图片附件', async () => {
+    await page.getByRole('button', { name: '上传文件或图片' }).click()
+    const chip = page.locator('[aria-label="移除附件「pixel.png」"]')
+    await expect(chip).toBeVisible()
+    await expect(chip.locator('..')).toContainText('tok')
+    await chip.click()
+    await expect(chip).toHaveCount(0)
   })
 
   test('非空 @ 查询能找到嵌套文件（走项目索引）', async () => {

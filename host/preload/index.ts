@@ -37,8 +37,8 @@ const api: CodeletApi = {
   closeTab: (tabId) => ipcRenderer.invoke(IPC.tabsClose, { tabId }) as Promise<HostSnapshot>,
   reloadTab: (tabId) => ipcRenderer.invoke(IPC.tabsReload, { tabId }) as Promise<HostSnapshot>,
   getTabEntries: (tabId) => ipcRenderer.invoke(IPC.tabsEntries, { tabId }) as Promise<StreamItem[]>,
-  prompt: (tabId, text, attachments) =>
-    ipcRenderer.invoke(IPC.promptSend, { tabId, text, attachments }),
+  prompt: (tabId, text, attachments, uploads) =>
+    ipcRenderer.invoke(IPC.promptSend, { tabId, text, attachments, uploads }),
   abortPrompt: (tabId) => ipcRenderer.invoke(IPC.promptAbort, { tabId }) as Promise<void>,
   compactTab: (tabId) => ipcRenderer.invoke(IPC.promptCompact, { tabId }) as Promise<void>,
   pickAttachments: () =>

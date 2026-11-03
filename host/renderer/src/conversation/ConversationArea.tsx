@@ -720,7 +720,7 @@ export function ConversationArea() {
 
   async function send(): Promise<void> {
     const text = draft.trim()
-    if (!text || !activeTabId) return
+    if (!text || !activeTabId || uploading) return
     // 有外部更新时不让发 —— runtime 是旧上下文，发出去会跟别处冲突。
     // 例外是 `/reload`：它本身就是用来从这个状态恢复的。
     const codeletCommand = parseCodeletCommand(text)
@@ -1264,7 +1264,7 @@ export function ConversationArea() {
                 <button
                   type="button"
                   onClick={() => void send()}
-                  disabled={!draft.trim() || stale}
+                  disabled={!draft.trim() || stale || uploading}
                   aria-label="发送"
                   title="发送"
                   className="ml-auto grid h-8 w-8 flex-none place-items-center rounded-full bg-accent text-accent-fg transition-opacity hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
