@@ -550,6 +550,32 @@ export function createMockApi(): CodeletApi {
 
     cancelFileSearch: async () => {},
 
+    pickAttachments: async () => {
+      // 浏览器预览没有 Electron 的 dialog，用隐藏的 <input type=file> 演示 chip
+      if (typeof document === 'undefined') return { attachments: [], errors: [] }
+      const files = await new Promise<File[]>((resolve) => {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.multiple = true
+        input.onchange = () => resolve([...(input.files ?? [])])
+        input.oncancel = () => resolve([])
+        input.click()
+      })
+      return {
+        attachments: files.map((file, index) => {
+          const image = file.type.startsWith('image/')
+          return {
+            id: `preview-${Date.now()}-${index}`,
+            name: file.name,
+            kind: image ? 'image' : 'text',
+            size: file.size,
+            tokens: image ? 1200 : Math.ceil(file.size / 4) + 8
+          }
+        }),
+        errors: []
+      }
+    },
+
     searchFiles: async (_cwd, query, limit) => {
       const q = query.trim().toLowerCase()
       const matched = q

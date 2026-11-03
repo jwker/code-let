@@ -3,7 +3,7 @@ import type { CommandArgumentOption, CommandOption, FileSearchResult, StreamItem
 import { useStore } from '../store'
 import { host } from '../host'
 import { useIndicator } from '../shell/useIndicator'
-import { IconArrowUp, IconStop } from '../shell/icons'
+import { IconArrowUp, IconPaperclip, IconStop } from '../shell/icons'
 import { ConversationNav } from './ConversationNav'
 import { userTurnsOf } from './conversationTurns'
 import { NormalStream } from './NormalStream'
@@ -119,6 +119,7 @@ export function ConversationArea() {
   const [argumentError, setArgumentError] = useState<string | null>(null)
   const [notice, setNotice] = useState<ComposerNotice | null>(null)
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
+  const [uploading, setUploading] = useState(false)
   const attachmentsRef = useRef<ComposerAttachment[]>([])
   const activeTabIdRef = useRef(activeTabId)
   activeTabIdRef.current = activeTabId
@@ -410,22 +411,65 @@ export function ConversationArea() {
     }
   }
 
-  /** 正文里删掉 `@path` 时，同步去掉对应的 chip；程序化清空草稿不走这里 */
+  function attachmentKey(item: ComposerAttachment): string {
+    return item.uploadId ?? item.path
+  }
+
+  function attachmentLabel(item: ComposerAttachment): string {
+    return item.name ?? item.path
+  }
+
+  /** 正文里删掉 `@path` 时，同步去掉对应的 chip；上传附件不依赖正文，保留 */
   function syncAttachmentsWithDraft(text: string): void {
     if (attachmentsRef.current.length === 0) return
     const mentioned = new Set(findMentions(text).map((mention) => mention.path))
-    const next = attachmentsRef.current.filter((item) => mentioned.has(item.path))
+    const next = attachmentsRef.current.filter((item) => item.uploadId || mentioned.has(item.path))
     if (next.length !== attachmentsRef.current.length) updateAttachments(next)
   }
 
-  function removeAttachment(path: string): void {
-    // 反过来：点 chip 的 × 时，把正文里的引用也删掉
-    const result = removeMentions(draft, path, textareaRef.current?.selectionStart ?? draft.length)
-    if (result) {
-      caretAfterInsert.current = result.caret
-      setDraft(result.text)
+  function removeAttachment(item: ComposerAttachment): void {
+    // 项目内附件：点 chip 的 × 时，把正文里的引用也删掉；上传附件没有正文引用
+    if (!item.uploadId) {
+      const result = removeMentions(draft, item.path, textareaRef.current?.selectionStart ?? draft.length)
+      if (result) {
+        caretAfterInsert.current = result.caret
+        setDraft(result.text)
+      }
     }
-    updateAttachments(attachmentsRef.current.filter((item) => item.path !== path))
+    updateAttachments(attachmentsRef.current.filter((next) => attachmentKey(next) !== attachmentKey(item)))
+  }
+
+  /** 系统文件选择器：选中的文件只留在主进程，渲染层拿到 id 和元信息 */
+  async function pickUploads(): Promise<void> {
+    if (!activeTabId || uploading) return
+    const tabId = activeTabId
+    setUploading(true)
+    try {
+      const result = await host.pickAttachments()
+      if (activeTabIdRef.current !== tabId) return
+      for (const picked of result.attachments) {
+        const attachment: ComposerAttachment = {
+          path: picked.name,
+          name: picked.name,
+          uploadId: picked.id,
+          kind: picked.kind,
+          size: picked.size,
+          tokens: picked.tokens
+        }
+        if (attachmentsRef.current.some((item) => attachmentKey(item) === picked.id)) continue
+        const totalError = attachmentTotalError(attachmentsRef.current, attachment)
+        if (totalError) {
+          showNotice('error', totalError)
+          break
+        }
+        updateAttachments([...attachmentsRef.current, attachment])
+      }
+      if (result.errors.length > 0) showNotice('error', result.errors.join('；'))
+    } catch (error) {
+      showNotice('error', error instanceof Error ? error.message : String(error))
+    } finally {
+      setUploading(false)
+    }
   }
 
   /** 根据光标位置决定开 `/` 还是 `@` 菜单。text/caret 显式传入时用于插入后的重算 */
@@ -706,12 +750,13 @@ export function ConversationArea() {
     setNotice(null)
     scrollToBottom()
     try {
+      const projectPaths = previousAttachments.filter((item) => !item.uploadId).map((item) => item.path)
+      const uploadIds = previousAttachments.flatMap((item) => (item.uploadId ? [item.uploadId] : []))
       await host.prompt(
         activeTabId,
         text,
-        !isSlash && previousAttachments.length > 0
-          ? previousAttachments.map((item) => item.path)
-          : undefined
+        !isSlash && projectPaths.length > 0 ? projectPaths : undefined,
+        !isSlash && uploadIds.length > 0 ? uploadIds : undefined
       )
     } catch (error) {
       // 发送失败（附件读不了、没有模型等）—— 用户还没开始写新内容就把草稿和附件放回去
@@ -990,15 +1035,15 @@ export function ConversationArea() {
               <div className="mb-1.5 flex flex-wrap gap-1 px-1">
                 {attachments.map((item) => (
                   <span
-                    key={item.path}
+                    key={attachmentKey(item)}
                     className="flex min-w-0 items-center gap-1 rounded-full border border-hairline bg-sunken py-0.5 pl-2 pr-1 text-[10.5px] text-fg-2"
                   >
                     <span className="flex-none text-fg-3">{item.kind === 'image' ? '▧' : '▤'}</span>
                     <span
                       className="min-w-0 max-w-[220px] truncate"
-                      title={`${item.path} · ${formatBytes(item.size)} · 约 ${item.tokens} tokens（估算）`}
+                      title={`${attachmentLabel(item)} · ${formatBytes(item.size)} · 约 ${item.tokens} tokens（估算）`}
                     >
-                      {item.path}
+                      {attachmentLabel(item)}
                     </span>
                     <span className="flex-none font-mono text-[9px] text-fg-3">
                       {formatBytes(item.size)}
@@ -1008,9 +1053,9 @@ export function ConversationArea() {
                     </span>
                     <button
                       type="button"
-                      aria-label={`移除附件「${item.path}」`}
+                      aria-label={`移除附件「${attachmentLabel(item)}」`}
                       title="移除附件"
-                      onClick={() => removeAttachment(item.path)}
+                      onClick={() => removeAttachment(item)}
                       className="flex h-4 w-4 flex-none items-center justify-center rounded-full text-fg-3 transition-colors hover:bg-danger-wash hover:text-danger"
                     >
                       ×
@@ -1154,6 +1199,22 @@ export function ConversationArea() {
             />
 
             <div className="mt-1 flex items-center gap-3 px-2">
+              {/*
+                上传文件和图片：打开系统选择器。文件只留在主进程，
+                渲染层拿到 id 和元信息；发送时只回传 id。
+              */}
+              <button
+                type="button"
+                disabled={!activeTabId || stale || uploading}
+                onClick={() => void pickUploads()}
+                aria-label="上传文件或图片"
+                aria-busy={uploading}
+                title={uploading ? '正在选择文件…' : '上传文件或图片'}
+                className="grid h-6 w-6 flex-none place-items-center rounded-full text-fg-3 transition-colors hover:bg-sunken hover:text-fg-1 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <IconPaperclip />
+              </button>
+
               {/*
                 模型：显示与切换的唯一位置（换模型是「准备发下一条」时做的决定）。
                 生成中禁用 —— 本轮的模型已经定了，要换得等这轮结束。

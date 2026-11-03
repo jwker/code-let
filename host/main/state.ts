@@ -13,14 +13,22 @@ import type {
   FileTab,
   HostSnapshot,
   ModelOption,
+  PickAttachmentsResult,
   SessionState,
   ThinkingLevel,
   StreamItem,
   TabInfo
 } from '@contract/index'
-import { prepareAttachments } from './attachments'
+import { ATTACHMENT_LIMITS } from '@contract/index'
+import {
+  externalAttachmentName,
+  inspectExternalFile,
+  prepareAttachments,
+  type ExternalAttachment
+} from './attachments'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
+import { pickFiles } from './filePicker'
 import { shell } from 'electron'
 import { listDirectory, readFileContent, resolveInsideCwd, searchFiles as searchProjectFiles } from './files'
 import { PiRuntime, type PiRuntimePort } from './pi/runtime'
@@ -81,6 +89,7 @@ export class HostState extends EventEmitter {
   private readonly projects: ProjectStore
   private readonly tabStore: TabStore
   private readonly pickDirectory: () => Promise<string | null>
+  private readonly pickFiles: () => Promise<string[] | null>
   private tabs: HostTab[] = []
   private activeTabId: string | null = null
   private conversations: ConversationInfo[] = []
@@ -88,6 +97,9 @@ export class HostState extends EventEmitter {
   private extensionErrors: ExtensionErrorInfo[] = []
   /** 正在进行的 `@` 文件搜索 —— requestId -> controller */
   private fileSearches = new Map<string, AbortController>()
+  /** 系统选择器上传的附件 —— id -> 批准的绝对路径 */
+  private uploads = new Map<string, ExternalAttachment>()
+  private uploadSeq = 0
   private session: SessionState = {
     ready: false,
     cwd: null,
@@ -145,6 +157,7 @@ export class HostState extends EventEmitter {
     tabStore?: TabStore
     projects?: ProjectStore
     pickDirectory?: () => Promise<string | null>
+    pickFiles?: () => Promise<string[] | null>
     trashFile?: (path: string) => Promise<void>
   }) {
     super()
@@ -152,6 +165,7 @@ export class HostState extends EventEmitter {
     this.projects = options?.projects ?? new ProjectStore()
     this.tabStore = options?.tabStore ?? new TabStore()
     this.pickDirectory = options?.pickDirectory ?? pickDirectory
+    this.pickFiles = options?.pickFiles ?? pickFiles
     this.trashFile = options?.trashFile ?? ((path) => shell.trashItem(path))
     this.conversationsRefresh = new DebouncedRefresh(() => this.refreshConversations())
   }
@@ -967,17 +981,68 @@ export class HostState extends EventEmitter {
     this.push()
   }
 
-  /** 往某个标签发一条用户消息；attachments 是项目内的相对路径，发送时读取 */
-  async prompt(tabId: string, text: string, attachments?: string[]): Promise<void> {
+  /**
+   * 往某个标签发一条用户消息。
+   *
+   * attachments 是项目内的相对路径；uploads 是 pickAttachments() 返回的 id。
+   * 只有这里能把 id 解析成绝对路径，渲染进程拿不到这个映射。
+   */
+  async prompt(
+    tabId: string,
+    text: string,
+    attachments?: string[],
+    uploadIds?: string[]
+  ): Promise<void> {
     const tab = this.tabs.find((item) => item.id === tabId)
     if (!tab) throw new Error(`标签不存在：${tabId}`)
-    if (!attachments || attachments.length === 0) {
+
+    const external: ExternalAttachment[] = []
+    for (const id of uploadIds ?? []) {
+      const upload = this.uploads.get(id)
+      if (!upload) throw new Error('上传的附件已失效，请重新选择')
+      external.push(upload)
+    }
+
+    if ((!attachments || attachments.length === 0) && external.length === 0) {
       await this.pi.prompt(tabId, text)
       return
     }
-    const prepared = await prepareAttachments(tab.cwd, attachments)
+
+    const prepared = await prepareAttachments(tab.cwd, attachments ?? [], external)
     const merged = prepared.text ? `${text}\n\n${prepared.text}` : text
     await this.pi.prompt(tabId, merged, prepared.images)
+
+    // 发送成功才丢弃上传映射；失败时保留，用户可以直接重试
+    for (const upload of external) this.uploads.delete(upload.id)
+  }
+
+  /** 打开系统文件选择器，读并校验选中的文件，返回可显示的附件元信息 */
+  async pickAttachments(): Promise<PickAttachmentsResult> {
+    const selected = await this.pickFiles()
+    if (!selected || selected.length === 0) return { attachments: [], errors: [] }
+
+    const attachments: PickAttachmentsResult['attachments'] = []
+    const errors: string[] = []
+    for (const path of selected) {
+      const name = externalAttachmentName(path)
+      if (attachments.length >= ATTACHMENT_LIMITS.maxCount) {
+        errors.push(`附件最多 ${ATTACHMENT_LIMITS.maxCount} 个，已忽略「${name}」`)
+        continue
+      }
+      try {
+        const checked = await inspectExternalFile(path)
+        if ('error' in checked) {
+          errors.push(`${name}：${checked.error}`)
+          continue
+        }
+        const id = `upload-${++this.uploadSeq}`
+        this.uploads.set(id, { id, name, path })
+        attachments.push({ id, name, ...checked.attachment })
+      } catch (error) {
+        errors.push(`${name}：${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    return { attachments, errors }
   }
 
   /**
@@ -1029,6 +1094,7 @@ export class HostState extends EventEmitter {
     this.conversationsRefresh.dispose()
     for (const controller of this.fileSearches.values()) controller.abort()
     this.fileSearches.clear()
+    this.uploads.clear()
     await this.pi.stop()
   }
 }

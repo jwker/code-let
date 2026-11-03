@@ -459,6 +459,20 @@ function looksBinary(buffer: Buffer): boolean {
  */
 export async function readFileContent(cwd: string, path: string): Promise<FileContent> {
   const full = await resolveInsideCwd(cwd, path)
+  return readFileAt(full)
+}
+
+/**
+ * 读一个**已经由用户选择器批准**的绝对路径。
+ *
+ * 这个函数不做 cwd 越界校验 —— 只给系统文件选择器选中的上传附件用。
+ * 渲染进程不能直接传绝对路径进来。
+ */
+export async function readFileContentAbsolute(path: string): Promise<FileContent> {
+  return readFileAt(path)
+}
+
+async function readFileAt(full: string): Promise<FileContent> {
   const info = await stat(full)
 
   if (info.isDirectory()) {

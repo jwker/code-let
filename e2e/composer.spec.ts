@@ -74,6 +74,7 @@ test.describe.serial('输入框', () => {
 
   test('斜杠菜单列出内置动作', async () => {
     const composer = page.locator('textarea')
+    await expect(page.getByRole('button', { name: '上传文件或图片' })).toBeVisible()
     await composer.fill('/')
 
     const menu = page.getByRole('listbox', { name: '命令' })

@@ -203,6 +203,12 @@ export const IconStop = () => (
   </Icon>
 )
 
+export const IconPaperclip = () => (
+  <Icon size={16}>
+    <path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l8.9-8.9a4 4 0 1 1 5.7 5.7l-8.9 8.9a2 2 0 1 1-2.8-2.8l8.2-8.2" />
+  </Icon>
+)
+
 /** 跳到顶部 / 底部用「箭头 + 横线」—— 别跟发送那个光箭头长一样 */
 export const IconArrowUpToLine = () => (
   <Icon>

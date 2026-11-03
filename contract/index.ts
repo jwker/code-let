@@ -70,6 +70,8 @@ export const IPC = {
   commandsList: 'host:commands:list',
   /** 列某个扩展命令的参数候选 */
   commandsComplete: 'host:commands:complete',
+  /** 打开系统文件选择器，选择要上传的附件 */
+  attachmentsPick: 'host:attachments:pick',
   /** 列当前模型可用的思考等级 */
   thinkingLevels: 'host:thinking:levels',
   /** 设置某个标签的思考等级 */
@@ -349,6 +351,22 @@ export interface CommandArgumentOption {
   description?: string
 }
 
+/** 系统文件选择器选中的一个附件；path 不暴露给渲染进程，发送时只回传 id */
+export interface PickedAttachment {
+  id: string
+  /** 文件名（不含目录） */
+  name: string
+  kind: 'text' | 'image'
+  size: number
+  tokens: number
+}
+
+export interface PickAttachmentsResult {
+  attachments: PickedAttachment[]
+  /** 选中的文件里不能作为附件的原因，每个文件一条 */
+  errors: string[]
+}
+
 /** 当前 Pi 会话的状态 */
 export interface SessionState {
   /** runtime 是否就绪 */
@@ -559,8 +577,13 @@ export interface CodeletApi {
   reloadTab(tabId: string): Promise<HostSnapshot>
   /** 读某个标签的内容流（历史重建，R1 R5） */
   getTabEntries(tabId: string): Promise<StreamItem[]>
-  /** 往某个标签发一条消息。attachments 是项目内的相对路径，主进程发送时读取并嵌入 */
-  prompt(tabId: string, text: string, attachments?: string[]): Promise<void>
+  /**
+   * 往某个标签发一条消息。
+   *
+   * attachments 是项目内的相对路径；uploads 是 pickAttachments() 返回的 id。
+   * 主进程在发送时读取内容并嵌入。
+   */
+  prompt(tabId: string, text: string, attachments?: string[], uploads?: string[]): Promise<void>
   /**
    * 中止某个标签正在跑的那一轮。
    *
@@ -573,6 +596,8 @@ export interface CodeletApi {
   compactTab(tabId: string): Promise<void>
   /** 列某个标签可用的 `/` 命令（Pi 模板、扩展、技能） */
   listCommands(tabId: string): Promise<CommandOption[]>
+  /** 打开系统文件选择器，选择文本或图片附件 */
+  pickAttachments(): Promise<PickAttachmentsResult>
   /** 列某个扩展命令的参数候选 */
   completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]>
   /** 列当前模型可用的思考等级 */

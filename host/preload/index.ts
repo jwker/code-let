@@ -11,6 +11,7 @@ import {
   type FileSearchResult,
   type HostSnapshot,
   type ModelOption,
+  type PickAttachmentsResult,
   type SessionEvent,
   type StreamItem,
   type ThinkingLevel
@@ -40,6 +41,8 @@ const api: CodeletApi = {
     ipcRenderer.invoke(IPC.promptSend, { tabId, text, attachments }),
   abortPrompt: (tabId) => ipcRenderer.invoke(IPC.promptAbort, { tabId }) as Promise<void>,
   compactTab: (tabId) => ipcRenderer.invoke(IPC.promptCompact, { tabId }) as Promise<void>,
+  pickAttachments: () =>
+    ipcRenderer.invoke(IPC.attachmentsPick) as Promise<PickAttachmentsResult>,
   listCommands: (tabId) => ipcRenderer.invoke(IPC.commandsList, { tabId }) as Promise<CommandOption[]>,
   completeCommand: (tabId, name, prefix) =>
     ipcRenderer.invoke(IPC.commandsComplete, { tabId, name, prefix }) as Promise<CommandArgumentOption[]>,

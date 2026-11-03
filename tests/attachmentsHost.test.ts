@@ -70,7 +70,7 @@ class FakePi implements PiRuntimePort {
 const dirs: string[] = []
 let state: HostState | null = null
 
-function setup() {
+function setup(pickFiles?: () => Promise<string[] | null>) {
   const root = mkdtempSync(join(tmpdir(), 'codelet-attach-host-'))
   dirs.push(root)
   mkdirSync(join(root, 'src'))
@@ -79,7 +79,13 @@ function setup() {
   const projects = new ProjectStore(join(root, 'projects.json'))
   const tabStore = new TabStore(join(root, 'tabs.json'))
   const pi = new FakePi()
-  state = new HostState({ pi, projects, tabStore, trashFile: async () => {} })
+  state = new HostState({
+    pi,
+    projects,
+    tabStore,
+    pickFiles,
+    trashFile: async () => {}
+  })
   return { root, pi }
 }
 
@@ -87,6 +93,50 @@ afterEach(async () => {
   await state?.dispose()
   state = null
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+
+describe('HostState.pickAttachments 的上传附件', () => {
+  it('选择外部文件后返回元信息，发送时读取并只回传 id', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'codelet-upload-outside-'))
+    dirs.push(outside)
+    const textPath = join(outside, 'external.ts')
+    const imagePath = join(outside, 'external.png')
+    writeFileSync(textPath, 'export const external = 1\n')
+    writeFileSync(imagePath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]))
+
+    const { root, pi } = setup(async () => [textPath, imagePath])
+    await state!.init()
+    await state!.newConversation(root)
+    const tabId = state!.snapshot().activeTabId!
+
+    const picked = await state!.pickAttachments()
+    expect(picked.errors).toEqual([])
+    expect(picked.attachments).toHaveLength(2)
+    expect(picked.attachments[0]).toMatchObject({ name: 'external.ts', kind: 'text' })
+    expect(picked.attachments[1]).toMatchObject({ name: 'external.png', kind: 'image' })
+
+    await state!.prompt(tabId, '看外部文件', [], [picked.attachments[0].id])
+    expect(pi.prompts[0].text).toBe(
+      '看外部文件\n\n<file name="external.ts">\nexport const external = 1\n\n</file>'
+    )
+  })
+
+  it('不合格的文件进 errors，发送已失效的上传 id 会拒绝', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'codelet-upload-invalid-'))
+    dirs.push(outside)
+    const binaryPath = join(outside, 'blob.bin')
+    writeFileSync(binaryPath, Buffer.from([0x00, 0x01, 0x02]))
+
+    const { root } = setup(async () => [binaryPath])
+    await state!.init()
+    await state!.newConversation(root)
+    const tabId = state!.snapshot().activeTabId!
+    const picked = await state!.pickAttachments()
+    expect(picked.attachments).toEqual([])
+    expect(picked.errors[0]).toMatch(/二进制/)
+
+    await expect(state!.prompt(tabId, '看', [], ['missing-upload'])).rejects.toThrow(/失效/)
+  })
 })
 
 describe('HostState.prompt 的附件', () => {

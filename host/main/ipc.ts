@@ -158,8 +158,8 @@ export function registerIpc(state: HostState): () => void {
   // —— 会话 ——
 
   ipcMain.handle(IPC.promptSend, async (_event, payload: unknown) => {
-    const { tabId, text, attachments } = promptSchema.parse(payload)
-    await state.prompt(tabId, text, attachments)
+    const { tabId, text, attachments, uploads } = promptSchema.parse(payload)
+    await state.prompt(tabId, text, attachments, uploads)
   })
 
   ipcMain.handle(IPC.promptAbort, async (_event, payload: unknown) => {
@@ -233,6 +233,8 @@ export function registerIpc(state: HostState): () => void {
     return state.listModels(tabId)
   })
 
+  ipcMain.handle(IPC.attachmentsPick, () => state.pickAttachments())
+
   ipcMain.handle(IPC.commandsList, async (_event, payload: unknown) => {
     const { tabId } = tabIdSchema.parse(payload)
     return state.listCommands(tabId)
@@ -291,6 +293,7 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.filesOpenExternal)
     ipcMain.removeHandler(IPC.filesReload)
     ipcMain.removeHandler(IPC.modelsList)
+    ipcMain.removeHandler(IPC.attachmentsPick)
     ipcMain.removeHandler(IPC.commandsList)
     ipcMain.removeHandler(IPC.commandsComplete)
     ipcMain.removeHandler(IPC.thinkingLevels)

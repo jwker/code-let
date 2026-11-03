@@ -74,7 +74,8 @@ export const tabNewSchema = z.object({
 export const promptSchema = z.object({
   tabId: z.string().min(1),
   text: z.string().min(1),
-  attachments: z.array(z.string().min(1)).max(ATTACHMENT_LIMITS.maxCount).optional()
+  attachments: z.array(z.string().min(1)).max(ATTACHMENT_LIMITS.maxCount).optional(),
+  uploads: z.array(z.string().min(1)).max(ATTACHMENT_LIMITS.maxCount).optional()
 })
 
 /** 中止只要一个 tabId —— 没有别的东西可传 */

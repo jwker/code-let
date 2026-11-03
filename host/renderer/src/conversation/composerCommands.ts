@@ -1,4 +1,12 @@
 import { ATTACHMENT_LIMITS, type CommandOption, type CommandSource, type FileContent } from '@contract/index'
+import { estimateTextTokens, IMAGE_TOKEN_ESTIMATE } from '@contract/attachments'
+
+export {
+  estimateTextTokens,
+  formatBytes,
+  formatTokenEstimate,
+  IMAGE_TOKEN_ESTIMATE
+} from '@contract/attachments'
 
 /**
  * 输入框里的 `/` 命令与 `@` 引用的纯逻辑（好测）。
@@ -310,26 +318,6 @@ export function insertArgument(
   return { text: before + inserted + after, caret: before.length + inserted.length }
 }
 
-/** 文本附件的粗略 token 估算：4 字符一个 token，再加 `<file>` 包装的开销 */
-export function estimateTextTokens(text: string): number {
-  return Math.ceil(text.length / 4) + 8
-}
-
-/** 图片附件的固定估算 —— 跟 Pi 压缩估算里的 4800 字符/图片一致 */
-export const IMAGE_TOKEN_ESTIMATE = 1200
-
-export function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
-}
-
-/** 只用于界面提示，明确标成约数 */
-export function formatTokenEstimate(tokens: number): string {
-  if (tokens >= 1000) return `≈${(tokens / 1000).toFixed(1)}k tok`
-  return `≈${tokens} tok`
-}
-
 /** `@` 引用的显示形式；路径有空格时加引号 */
 export function formatMention(path: string, kind: 'dir' | 'file'): string {
   const raw = kind === 'dir' ? `${path}/` : path
@@ -387,6 +375,10 @@ export interface ComposerAttachment {
   size: number
   /** 估算 token，仅用于界面提示 */
   tokens: number
+  /** 上传附件的显示名；项目内 @ 附件为空 */
+  name?: string
+  /** 系统选择器上传的附件 id；项目内 @ 附件为空 */
+  uploadId?: string
 }
 
 export type AttachmentCheck = { attachment: ComposerAttachment } | { error: string }
@@ -426,7 +418,8 @@ export function attachmentTotalError(
   existing: readonly ComposerAttachment[],
   next: ComposerAttachment
 ): string | null {
-  if (existing.some((item) => item.path === next.path)) return null
+  const keyOf = (item: ComposerAttachment): string => item.uploadId ?? item.path
+  if (existing.some((item) => keyOf(item) === keyOf(next))) return null
   if (existing.length >= ATTACHMENT_LIMITS.maxCount) {
     return `附件最多 ${ATTACHMENT_LIMITS.maxCount} 个`
   }

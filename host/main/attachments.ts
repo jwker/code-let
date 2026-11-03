@@ -1,6 +1,7 @@
-import { isAbsolute } from 'node:path'
+import { basename, isAbsolute } from 'node:path'
 import { ATTACHMENT_LIMITS, type FileContent } from '@contract/index'
-import { readFileContent } from './files'
+import { estimateTextTokens, IMAGE_TOKEN_ESTIMATE } from '@contract/attachments'
+import { readFileContent, readFileContentAbsolute } from './files'
 import { resizeImageForPrompt } from './imageResize'
 
 /**
@@ -24,6 +25,52 @@ export interface PreparedAttachments {
   images: PromptImage[]
 }
 
+/** 系统文件选择器选中的外部附件；path 只留在主进程 */
+export interface ExternalAttachment {
+  id: string
+  name: string
+  path: string
+}
+
+export interface AttachmentInfo {
+  kind: 'text' | 'image'
+  size: number
+  tokens: number
+}
+
+export type AttachmentInspection = { attachment: AttachmentInfo } | { error: string }
+
+/** 把一个已经读出来的文件判成可附件 / 不可附件，选择器和发送共用 */
+export function inspectContent(content: FileContent): AttachmentInspection {
+  if (content.kind === 'unsupported') {
+    return { error: `不能作为附件：${content.reason}` }
+  }
+  if (content.kind === 'image') {
+    if (content.size > ATTACHMENT_LIMITS.maxImageFileBytes) {
+      return { error: `超过图片单文件上限 ${kb(ATTACHMENT_LIMITS.maxImageFileBytes)}` }
+    }
+    return { attachment: { kind: 'image', size: content.size, tokens: IMAGE_TOKEN_ESTIMATE } }
+  }
+  if (content.binary) return { error: '是二进制文件，不能作为附件' }
+  if (content.tooLarge) return { error: '太大，不能作为附件' }
+  if (content.size > ATTACHMENT_LIMITS.maxTextFileBytes) {
+    return { error: `超过文本单文件上限 ${kb(ATTACHMENT_LIMITS.maxTextFileBytes)}` }
+  }
+  return {
+    attachment: { kind: 'text', size: content.size, tokens: estimateTextTokens(content.text) }
+  }
+}
+
+/** 读系统选择器选中的外部文件并判定；只在校验通过后返回元信息 */
+export async function inspectExternalFile(path: string): Promise<AttachmentInspection> {
+  const content = await readFileContentAbsolute(path)
+  return inspectContent(content)
+}
+
+export function externalAttachmentName(path: string): string {
+  return basename(path)
+}
+
 const DATA_URL = /^data:([^;]+);base64,([\s\S]*)$/
 
 function fail(path: string, reason: string): Error {
@@ -42,13 +89,36 @@ function escapeName(name: string): string {
     .replace(/>/g, '&gt;')
 }
 
-/** 读并校验附件；任何一条不合格都整次失败，不做部分发送 */
+/**
+ * 读并校验附件；任何一条不合格都整次失败，不做部分发送。
+ *
+ * paths 是项目内相对路径；external 是系统选择器批准过的绝对路径。
+ */
 export async function prepareAttachments(
   cwd: string,
-  paths: readonly string[]
+  paths: readonly string[],
+  external: readonly ExternalAttachment[] = []
 ): Promise<PreparedAttachments> {
-  const unique = [...new Set(paths)]
-  if (unique.length > ATTACHMENT_LIMITS.maxCount) {
+  const sources: Array<{ key: string; name: string; read: () => Promise<FileContent> }> = []
+  const seen = new Set<string>()
+
+  for (const path of paths) {
+    if (isAbsolute(path)) throw fail(path, '必须用项目内的相对路径')
+    if (seen.has(`project:${path}`)) continue
+    seen.add(`project:${path}`)
+    sources.push({ key: `project:${path}`, name: path, read: () => readFileContent(cwd, path) })
+  }
+  for (const upload of external) {
+    if (seen.has(`upload:${upload.id}`)) continue
+    seen.add(`upload:${upload.id}`)
+    sources.push({
+      key: `upload:${upload.id}`,
+      name: upload.name,
+      read: () => readFileContentAbsolute(upload.path)
+    })
+  }
+
+  if (sources.length > ATTACHMENT_LIMITS.maxCount) {
     throw new Error(`附件最多 ${ATTACHMENT_LIMITS.maxCount} 个`)
   }
 
@@ -57,52 +127,42 @@ export async function prepareAttachments(
   let textBytes = 0
   let imageBytes = 0
 
-  for (const path of unique) {
-    if (isAbsolute(path)) throw fail(path, '必须用项目内的相对路径')
-
+  for (const source of sources) {
     let content: FileContent
     try {
-      content = await readFileContent(cwd, path)
+      content = await source.read()
     } catch (error) {
-      throw fail(path, `读不了：${error instanceof Error ? error.message : String(error)}`)
+      throw fail(source.name, `读不了：${error instanceof Error ? error.message : String(error)}`)
     }
 
-    if (content.kind === 'unsupported') {
-      throw fail(path, `不能作为附件：${content.reason}`)
-    }
+    const checked = inspectContent(content)
+    if ('error' in checked) throw fail(source.name, checked.error)
+    if (content.kind === 'unsupported') throw fail(source.name, '不能作为附件')
 
     if (content.kind === 'image') {
-      if (content.size > ATTACHMENT_LIMITS.maxImageFileBytes) {
-        throw fail(path, `超过图片单文件上限 ${kb(ATTACHMENT_LIMITS.maxImageFileBytes)}`)
-      }
       imageBytes += content.size
       if (imageBytes > ATTACHMENT_LIMITS.maxImageTotalBytes) {
         throw new Error(`图片附件总量超过 ${kb(ATTACHMENT_LIMITS.maxImageTotalBytes)}`)
       }
 
       const original = DATA_URL.exec(content.dataUrl)
-      if (!original) throw fail(path, '图片数据格式不对')
+      if (!original) throw fail(source.name, '图片数据格式不对')
 
       // 大图先缩到模型能用的最长边；缩放失败就保留原图
       const resized = await resizeImageForPrompt(content.dataUrl, original[1])
       const payload = DATA_URL.exec(resized?.dataUrl ?? content.dataUrl)
-      if (!payload) throw fail(path, '图片数据格式不对')
+      if (!payload) throw fail(source.name, '图片数据格式不对')
 
       images.push({ type: 'image', mimeType: payload[1], data: payload[2] })
-      blocks.push(`<file name="${escapeName(path)}"></file>`)
+      blocks.push(`<file name="${escapeName(source.name)}"></file>`)
       continue
     }
 
-    if (content.binary) throw fail(path, '是二进制文件，不能作为附件')
-    if (content.tooLarge) throw fail(path, '太大，不能作为附件')
-    if (content.size > ATTACHMENT_LIMITS.maxTextFileBytes) {
-      throw fail(path, `超过文本单文件上限 ${kb(ATTACHMENT_LIMITS.maxTextFileBytes)}`)
-    }
     textBytes += content.size
     if (textBytes > ATTACHMENT_LIMITS.maxTextTotalBytes) {
       throw new Error(`文本附件总量超过 ${kb(ATTACHMENT_LIMITS.maxTextTotalBytes)}`)
     }
-    blocks.push(`<file name="${escapeName(path)}">\n${content.text}\n</file>`)
+    blocks.push(`<file name="${escapeName(source.name)}">\n${content.text}\n</file>`)
   }
 
   return { text: blocks.join('\n'), images }
