@@ -95,6 +95,17 @@ test.describe.serial('对话导航', () => {
     await expect
       .poll(() => list.evaluate((element) => element.scrollTop), { timeout: 10_000 })
       .toBeGreaterThan(0)
+    await expect(page.locator('.conv-nav-end')).toHaveCount(2)
+
+    await list.evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+    })
+    await expect(page.locator('.conv-nav-end-bottom')).toHaveClass(/is-end/)
+
+    await list.evaluate((element) => {
+      element.scrollTop = 0
+    })
+    await expect(page.locator('.conv-nav-end-top')).toHaveClass(/is-end/)
   })
 
   test('悬停圆点展开对应轮次的用户输入', async () => {

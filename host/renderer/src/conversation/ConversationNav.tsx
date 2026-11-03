@@ -23,6 +23,7 @@ export function ConversationNav({
   const [active, setActive] = useState<number | null>(null)
   const [hovered, setHovered] = useState<{ index: number; y: number } | null>(null)
   const [overflowing, setOverflowing] = useState(false)
+  const [edges, setEdges] = useState({ top: true, bottom: true })
   const navRef = useRef<HTMLElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const dotRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -77,10 +78,28 @@ export function ConversationNav({
     }
   }, [active, turnsKey])
 
-  // 溢出时给上下边缘一点渐隐，提示还可以滚动（滚动条本身隐藏）
+  // 溢出时给上下边缘一点渐隐，并记录是否滚到顶/底（滚动条本身隐藏）
   useEffect(() => {
     const list = listRef.current
-    setOverflowing(Boolean(list && list.scrollHeight > list.clientHeight + 1))
+    if (!list) return
+
+    function update(): void {
+      if (!list) return
+      setOverflowing(list.scrollHeight > list.clientHeight + 1)
+      setEdges({
+        top: list.scrollTop <= 1,
+        bottom: list.scrollTop + list.clientHeight >= list.scrollHeight - 1
+      })
+    }
+
+    list.addEventListener('scroll', update, { passive: true })
+    const observer = new ResizeObserver(update)
+    observer.observe(list)
+    update()
+    return () => {
+      list.removeEventListener('scroll', update)
+      observer.disconnect()
+    }
   }, [turnsKey])
 
   if (mode === 'html' || turns.length < 2) return null
@@ -138,6 +157,23 @@ export function ConversationNav({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHovered(null)
       }}
     >
+      {overflowing && (
+        <>
+          <span
+            className={`conv-nav-end conv-nav-end-top${edges.top ? ' is-end' : ''}`}
+            aria-hidden="true"
+          >
+            ▴
+          </span>
+          <span
+            className={`conv-nav-end conv-nav-end-bottom${edges.bottom ? ' is-end' : ''}`}
+            aria-hidden="true"
+          >
+            ▾
+          </span>
+        </>
+      )}
+
       <div ref={listRef} className={`conv-nav-list${overflowing ? ' is-overflowing' : ''}`}>
         {turns.map((turn, ordinal) => (
           <div className="conv-nav-item" key={turn.index}>

@@ -767,7 +767,7 @@ body.is-pane-resizing * {
   align-items: center;
   max-height: 100%;
   margin-block: auto;
-  padding: 4px 0;
+  padding: 14px 0;
   overflow-y: auto;
   scrollbar-width: none;
   pointer-events: auto;
@@ -778,6 +778,32 @@ body.is-pane-resizing * {
 .conv-nav-list.is-overflowing {
   mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 8px), transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 8px), transparent 100%);
+}
+
+.conv-nav-end {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  width: 20px;
+  height: 12px;
+  display: grid;
+  place-items: center;
+  transform: translateX(-50%);
+  color: var(--fg-3);
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 160ms var(--ease);
+}
+.conv-nav-end-top {
+  top: 0;
+}
+.conv-nav-end-bottom {
+  bottom: 0;
+}
+.conv-nav-end.is-end {
+  opacity: 0.16;
 }
 
 .conv-nav-item {
