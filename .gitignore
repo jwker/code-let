@@ -10,6 +10,9 @@ lifecycle-log.json
 .vscode/*
 !.vscode/extensions.json
 .tmp/
+test-results/
+playwright-report/
+blob-report/
 
 # 开发笔记不进仓库：设计稿、计划、缺陷记录都在仓库外的 Codelet-notes/
 # （同目录，跟仓库平级）。仓库里只留 README。

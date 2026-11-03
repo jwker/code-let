@@ -107,6 +107,7 @@ npm run build      # 构建到 out/
 npm start          # 预览构建产物
 npm run typecheck  # 主进程 / 渲染进程两套 tsconfig
 npm test           # vitest
+npm run test:e2e   # 构建后用 Playwright 启动 Electron 跑 UI 测试
 npm run icon       # 重新生成应用图标（需要 Electron）
 npm run dist       # 打包（electron-builder）
 ```

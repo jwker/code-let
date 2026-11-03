@@ -5,6 +5,16 @@ import { registerIpc } from './ipc'
 import { APP_ORIGIN, registerSchemesAsPrivileged, serveRenderer } from './protocol'
 import { HostState } from './state'
 
+/*
+ * 自动化测试用：把 userData 指到临时目录。
+ *
+ * 必须在 HostState 构造之前设置 —— ProjectStore / TabStore 在构造函数里就
+ * 读 app.getPath('userData')，晚一步就会写到真实用户目录。
+ */
+if (process.env.CODELET_USER_DATA) {
+  app.setPath('userData', process.env.CODELET_USER_DATA)
+}
+
 // 必须在 app.ready 之前注册，否则相对路径 / fetch / ES module 脚本会失效
 registerSchemesAsPrivileged()
 
