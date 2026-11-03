@@ -610,6 +610,12 @@
   animation: refresh-spin 700ms linear infinite;
 }
 
+/* 最小化临时对话球里的转圈：设计稿是 24px 直径 */
+.conv-stop-ring.conv-ball-ring {
+  width: 24px;
+  height: 24px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .conv-stop-ring {
     animation: none;

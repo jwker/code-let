@@ -157,7 +157,7 @@ export function TemporaryChat() {
       >
         <span className="grid h-10 w-10 place-items-center rounded-full bg-[#171715] text-[#FAFAF9] shadow-[0_12px_30px_-8px_rgba(0,0,0,0.5)]">
           {streaming ? (
-            <span className="conv-stop-ring h-4 w-4" aria-hidden="true" />
+            <span className="conv-stop-ring conv-ball-ring" aria-hidden="true" />
           ) : done ? (
             <span className="text-[15px] font-bold" aria-hidden="true">✓</span>
           ) : (
