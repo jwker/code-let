@@ -4,6 +4,8 @@ import { useStore } from '../store'
 import { host } from '../host'
 import { useIndicator } from '../shell/useIndicator'
 import { IconArrowUp, IconStop } from '../shell/icons'
+import { ConversationNav } from './ConversationNav'
+import { userTurnsOf } from './conversationTurns'
 import { NormalStream } from './NormalStream'
 import { ScrollJump } from './ScrollJump'
 import { TerminalStream } from './TerminalStream'
@@ -358,11 +360,12 @@ export function ConversationArea() {
   }, [draft])
 
   // 实时流往下长 —— 视图要跟着走，不然用户看不到刚出来的内容（R2）
-  const { setRef, scrollToBottom, jumpTo, scrollable, atBottom } = useAutoScroll(
+  const { setRef, nodeRef: scrollRef, scrollToBottom, jumpTo, scrollable, atBottom } = useAutoScroll(
     items,
     streaming,
     session.sessionId
   )
+  const hasNav = mode !== 'html' && userTurnsOf(items).length >= 2
 
   function showNotice(kind: ComposerNotice['kind'], text: string, timeout = 0): void {
     if (noticeTimer.current !== null) {
@@ -744,7 +747,8 @@ export function ConversationArea() {
         内容往上滚时，文字离卡片上沿始终还有这一段距离。
         滚动容器自己给的 padding 做不到（跟着内容一起滚走）。
       */}
-      <div className="min-h-0 flex-1 pt-3">
+      <div className={`relative min-h-0 flex-1 pt-3 ${hasNav ? 'conv-has-nav' : ''}`}>
+        <ConversationNav items={items} mode={mode} scrollRef={scrollRef} />
         {mode === 'normal' &&
           (items.length > 0 ? (
             <div className="conv-normal" ref={setRef}>

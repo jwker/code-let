@@ -42,6 +42,8 @@ const TOOL_LOOK: Record<ToolItem['status'], { icon: string; color: string }> = {
 interface Turn {
   key: string
   user: MessageItem | null
+  /** 用户消息在完整 items 里的下标；没有用户消息的补偿轮次为 null */
+  userIndex: number | null
   body: StreamItem[]
 }
 
@@ -53,13 +55,13 @@ function splitTurns(items: readonly StreamItem[]): Turn[] {
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i]
     if (item.kind === 'message' && item.role === 'user') {
-      current = { key: `turn-${i}`, user: item, body: [] }
+      current = { key: `turn-${i}`, user: item, userIndex: i, body: [] }
       turns.push(current)
       continue
     }
     if (!current) {
       // 会话开头没有用户消息（扩展注入之类）—— 自己起一轮
-      current = { key: `turn-${i}`, user: null, body: [] }
+      current = { key: `turn-${i}`, user: null, userIndex: null, body: [] }
       turns.push(current)
     }
     current.body.push(item)
@@ -132,7 +134,7 @@ function TurnRow({
   if (!summary) {
     return (
       <div className="flex flex-col gap-2">
-        <UserBubble item={turn.user} />
+        <UserBubble item={turn.user} userIndex={turn.userIndex} />
         {/*
           消息发出去了、首个 token 还没回来 —— 这一轮除了用户消息什么都没有。
           `turn.body.length === 0` 比 `streaming` 更准：工具执行期间也 streaming，
@@ -161,7 +163,7 @@ function TurnRow({
 
   return (
     <div className="flex flex-col gap-2">
-      <UserBubble item={turn.user} />
+      <UserBubble item={turn.user} userIndex={turn.userIndex} />
 
       {processItems.length > 0 && (
         <ProcessBlock
@@ -210,11 +212,14 @@ function TurnRow({
 }
 
 /** 用户气泡（反相深底）—— 没有用户消息时什么也不画 */
-function UserBubble({ item }: { item: MessageItem | null }) {
+function UserBubble({ item, userIndex }: { item: MessageItem | null; userIndex: number | null }) {
   if (!item) return null
   return (
     <div className="flex flex-col items-start">
-      <div className="md-bubble is-inverse max-w-[70%] rounded-[14px] bg-bubble px-3.5 py-2.5 text-[14.5px] leading-[1.65] text-bubble-fg">
+      <div
+        data-user-index={userIndex ?? undefined}
+        className="md-bubble is-inverse max-w-[70%] rounded-[14px] bg-bubble px-3.5 py-2.5 text-[14.5px] leading-[1.65] text-bubble-fg"
+      >
         <Markdown text={item.text} variant="normal" />
       </div>
     </div>

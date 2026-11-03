@@ -97,5 +97,5 @@ export function useAutoScroll(
     })
   }, [])
 
-  return { setRef, scrollToBottom, jumpTo, scrollable, atBottom }
+  return { setRef, nodeRef, scrollToBottom, jumpTo, scrollable, atBottom }
 }

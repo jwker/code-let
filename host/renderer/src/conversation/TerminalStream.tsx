@@ -87,7 +87,7 @@ export function TerminalStream({
           case 'message': {
             if (item.role === 'user') {
               return (
-                <div key={index} className="flex gap-2">
+                <div key={index} data-user-index={index} className="flex gap-2">
                   <span style={{ color: 'var(--fg-3)' }}>›</span>
                   <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-fg-1">
                     {item.text}
