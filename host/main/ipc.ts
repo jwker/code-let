@@ -27,7 +27,7 @@ import {
   tabOpenSchema,
   thinkingSelectSchema
 } from '@contract/schemas'
-import { trimMessageUpdate } from '@contract/stream'
+import { compactSessionEvent, trimMessageUpdate } from '@contract/stream'
 import type { HostState } from './state'
 
 function broadcast(channel: string, payload: unknown): void {
@@ -90,8 +90,9 @@ export function registerIpc(state: HostState): () => void {
   })
 
   state.on('session-event', (event: { type: string; data: unknown; tabId: string }) => {
-    const data = event.type === 'message_update' ? trimMessageUpdate(event.data) : event.data
-    coalescer.push({ type: event.type, data, at: Date.now(), tabId: event.tabId })
+    const compacted = compactSessionEvent(event)
+    const data = compacted.type === 'message_update' ? trimMessageUpdate(compacted.data) : compacted.data
+    coalescer.push({ type: compacted.type, data, at: Date.now(), tabId: event.tabId })
   })
 
   ipcMain.handle(IPC.snapshotGet, () => state.snapshot())

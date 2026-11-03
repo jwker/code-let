@@ -326,6 +326,70 @@ export function trimMessageUpdate(data: unknown): unknown {
 }
 
 // ---------------------------------------------------------------------------
+// IPC 前的会话事件整形
+// ---------------------------------------------------------------------------
+
+/** 单条事件里的文本最多留这么多字符；再长就截断，保证事件不会撞 IPC 上限 */
+export const MAX_EVENT_TEXT_CHARS = 32_000
+
+function compactContent(content: unknown): unknown {
+  if (!Array.isArray(content)) return content
+  const blocks: unknown[] = []
+  for (const block of content) {
+    if (block && typeof block === 'object' && (block as RawBlock).type === 'image') {
+      // 图片数据只给模型，内容流不显示；留着会把整条 message_start 撞过 IPC 上限
+      continue
+    }
+    const raw = block as RawBlock | null
+    if (raw?.type === 'text' && typeof raw.text === 'string' && raw.text.length > MAX_EVENT_TEXT_CHARS) {
+      blocks.push({
+        ...raw,
+        text: `${raw.text.slice(0, MAX_EVENT_TEXT_CHARS)}\n\n…（内容过长，已截断）`
+      })
+    } else {
+      blocks.push(block)
+    }
+  }
+  return blocks
+}
+
+/**
+ * 在会话事件进 IPC 前做一次整形。
+ *
+ * 重点是用户带图片的 `message_start/message_end`：图片 base64 动辄几百 KB，
+ * 整条事件被 `capPayload()` 截断后，渲染层连 role/text 都解析不出来 ——
+ * 用户消息不显示，后面的助手增量就会落到上一条回答上。
+ */
+export function compactSessionEvent(event: { type: string; data: unknown }): {
+  type: string
+  data: unknown
+} {
+  const data = (event.data ?? {}) as Record<string, unknown>
+
+  if (event.type === 'message_start' || event.type === 'message_end') {
+    const message = data.message as RawMessage | undefined
+    if (message && Array.isArray(message.content)) {
+      return {
+        ...event,
+        data: { ...data, message: { ...message, content: compactContent(message.content) } }
+      }
+    }
+  }
+
+  if (event.type === 'tool_execution_update') {
+    const partial = data.partialResult as { content?: unknown } | undefined
+    if (partial && Array.isArray(partial.content)) {
+      return {
+        ...event,
+        data: { ...data, partialResult: { ...partial, content: compactContent(partial.content) } }
+      }
+    }
+  }
+
+  return event
+}
+
+// ---------------------------------------------------------------------------
 // 实时事件 → items
 // ---------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StreamItem } from '@contract/index'
-import { applyEvent, entriesToItems, trimMessageUpdate } from '@contract/stream'
+import { applyEvent, compactSessionEvent, entriesToItems, trimMessageUpdate } from '@contract/stream'
 
 /**
  * 两条来源必须收敛到同一份内容流（.ai/task.md · R1 R2 R5）：
@@ -382,6 +382,48 @@ describe('元信息（token 与耗时）', () => {
       }
     )
     expect(live).toEqual(fromHistory)
+  })
+})
+
+describe('IPC 前的图片/长文本整形', () => {
+  it('用户消息里的图片数据不进入事件，文字保留', () => {
+    const event = {
+      type: 'message_start',
+      data: {
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: '图中是什么内容' },
+            { type: 'image', data: 'x'.repeat(400_000), mimeType: 'image/png' }
+          ]
+        }
+      }
+    }
+    const compacted = compactSessionEvent(event) as {
+      data: { message: { content: Array<{ type: string; text?: string }> } }
+    }
+    expect(compacted.data.message.content).toEqual([{ type: 'text', text: '图中是什么内容' }])
+    expect(JSON.stringify(compacted).length).toBeLessThan(1000)
+  })
+
+  it('超长文本截断，用户消息仍然可解析', () => {
+    const compacted = compactSessionEvent({
+      type: 'message_end',
+      data: {
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'x'.repeat(40_000) }]
+        }
+      }
+    }) as { data: { message: { content: Array<{ text: string }> } } }
+    const text = compacted.data.message.content[0].text
+    expect(text.length).toBeLessThan(33_000)
+    expect(text).toContain('内容过长，已截断')
+  })
+
+  it('不带图片的事件原样返回', () => {
+    const event = { type: 'agent_start', data: {} }
+    expect(compactSessionEvent(event)).toBe(event)
   })
 })
 
