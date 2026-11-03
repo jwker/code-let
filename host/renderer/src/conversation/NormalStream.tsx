@@ -6,6 +6,7 @@ import { groupBody } from './groupBody'
 import { Markdown } from './Markdown'
 import { ReplyMeta } from './ReplyMeta'
 import { summarizeTurn, type TurnSummary } from './turnMeta'
+import { CustomMessage } from './CustomMessage'
 import { Thinking } from './Thinking'
 import { useToolOutputs } from './useToolOutputs'
 import { formatDuration } from './usageFormat'
@@ -29,6 +30,7 @@ import { IconCaret } from '../shell/icons'
 
 type MessageItem = Extract<StreamItem, { kind: 'message' }>
 type ToolItem = Extract<StreamItem, { kind: 'tool' }>
+type CustomItem = Extract<StreamItem, { kind: 'custom' }>
 
 const TOOL_LOOK: Record<ToolItem['status'], { icon: string; color: string }> = {
   running: { icon: '◐', color: 'var(--fg-3)' },
@@ -150,7 +152,10 @@ function TurnRow({
     )
   }
 
-  const processItems = turn.body.slice(0, summary.answerIndex)
+  const beforeAnswer = turn.body.slice(0, summary.answerIndex)
+  // 扩展消息不放进「过程」折叠块 —— 过程一收起来它们就看不见了
+  const processItems = beforeAnswer.filter((item) => item.kind !== 'custom')
+  const customBefore = beforeAnswer.filter((item): item is CustomItem => item.kind === 'custom')
   const answerItem = turn.body[summary.answerIndex]
   const restItems = turn.body.slice(summary.answerIndex + 1)
 
@@ -168,6 +173,14 @@ function TurnRow({
           toolIds={toolIds}
           streaming={streaming}
         />
+      )}
+
+      {customBefore.length > 0 && (
+        <div className="flex flex-col gap-1">
+          {customBefore.map((item, index) => (
+            <CustomMessage key={`custom-before-${index}`} item={item} />
+          ))}
+        </div>
       )}
 
       <div className="min-w-0">
@@ -322,6 +335,11 @@ function Body({
 
   for (const [i, row] of groups.entries()) {
     const isLastRow = i === groups.length - 1
+    if (row.kind === 'custom') {
+      rows.push(<CustomMessage key={`custom-${i}`} item={row.item} />)
+      continue
+    }
+
     if (row.kind === 'output') {
       rows.push(<ToolOutput key={`out-${i}`} text={row.text} />)
       continue

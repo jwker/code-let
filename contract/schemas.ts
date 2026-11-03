@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { ATTACHMENT_LIMITS } from './index'
 
 /**
  * IPC 载荷的 zod 校验（PLAN.md 边界 9：按通道类型校验一次而非逐字段）。
@@ -26,6 +27,13 @@ export const conversationRenameSchema = z.object({
 export const filesListSchema = z.object({
   cwd: z.string().min(1),
   dir: z.string()
+})
+
+/** 搜索文件：query 可以为空（列出根目录） */
+export const filesSearchSchema = z.object({
+  cwd: z.string().min(1),
+  query: z.string(),
+  limit: z.number().int().min(1).max(200)
 })
 
 export const fileReadSchema = z.object({
@@ -60,12 +68,26 @@ export const tabNewSchema = z.object({
 
 export const promptSchema = z.object({
   tabId: z.string().min(1),
-  text: z.string().min(1)
+  text: z.string().min(1),
+  attachments: z.array(z.string().min(1)).max(ATTACHMENT_LIMITS.maxCount).optional()
 })
 
 /** 中止只要一个 tabId —— 没有别的东西可传 */
 export const promptAbortSchema = z.object({
   tabId: z.string().min(1)
+})
+
+/** 扩展命令参数候选：name 是命令名，prefix 是当前参数前缀 */
+export const commandCompleteSchema = z.object({
+  tabId: z.string().min(1),
+  name: z.string().min(1),
+  prefix: z.string()
+})
+
+/** 改思考等级：level 的合法性由主进程按当前模型的可用等级校验 */
+export const thinkingSelectSchema = z.object({
+  tabId: z.string().min(1),
+  level: z.string().min(1)
 })
 
 export const clipboardWriteSchema = z.object({

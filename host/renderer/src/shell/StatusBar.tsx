@@ -27,6 +27,11 @@ export function StatusBar() {
       <span className="truncate font-mono">
         {snapshot.session.sessionId ? `session ${snapshot.session.sessionId.slice(0, 8)}` : 'no session'}
       </span>
+      {snapshot.session.thinkingLevel && (
+        <span className="truncate font-mono" title="当前思考等级">
+          think {snapshot.session.thinkingLevel}
+        </span>
+      )}
 
       <span className="ml-auto flex min-w-0 items-center gap-4">
         {/*

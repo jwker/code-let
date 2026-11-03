@@ -1,4 +1,5 @@
 import { ConversationArea } from '../conversation/ConversationArea'
+import { ExtensionErrorBanner } from './ExtensionErrorBanner'
 
 /**
  * 主工作区 —— 一张卡，**永远是对话**。
@@ -10,6 +11,7 @@ export function MainArea() {
   return (
     <main className="shell-card main">
       <div className="shell-main">
+        <ExtensionErrorBanner />
         <ConversationArea />
       </div>
     </main>

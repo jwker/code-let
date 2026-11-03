@@ -4,23 +4,27 @@ import {
   IPC,
   IPC_EVENTS,
   MAX_PAYLOAD_BYTES,
-  type SessionEvent
+  type SessionEvent,
+  type ThinkingLevel
 } from '@contract/index'
 import {
   clipboardWriteSchema,
+  commandCompleteSchema,
   conversationRenameSchema,
   conversationsDeleteSchema,
   fileIdSchema,
   fileOpenSchema,
   fileReadSchema,
   filesListSchema,
+  filesSearchSchema,
   modelSelectSchema,
   projectPathSchema,
   promptAbortSchema,
   promptSchema,
   tabIdSchema,
   tabNewSchema,
-  tabOpenSchema
+  tabOpenSchema,
+  thinkingSelectSchema
 } from '@contract/schemas'
 import { trimMessageUpdate } from '@contract/stream'
 import type { HostState } from './state'
@@ -153,13 +157,18 @@ export function registerIpc(state: HostState): () => void {
   // —— 会话 ——
 
   ipcMain.handle(IPC.promptSend, async (_event, payload: unknown) => {
-    const { tabId, text } = promptSchema.parse(payload)
-    await state.prompt(tabId, text)
+    const { tabId, text, attachments } = promptSchema.parse(payload)
+    await state.prompt(tabId, text, attachments)
   })
 
   ipcMain.handle(IPC.promptAbort, async (_event, payload: unknown) => {
     const { tabId } = promptAbortSchema.parse(payload)
     await state.abortPrompt(tabId)
+  })
+
+  ipcMain.handle(IPC.promptCompact, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    await state.compactTab(tabId)
   })
 
   ipcMain.handle(IPC.clipboardWrite, (_event, payload: unknown) => {
@@ -172,6 +181,11 @@ export function registerIpc(state: HostState): () => void {
   ipcMain.handle(IPC.filesList, async (_event, payload: unknown) => {
     const { cwd, dir } = filesListSchema.parse(payload)
     return state.listFiles(cwd, dir)
+  })
+
+  ipcMain.handle(IPC.filesSearch, async (_event, payload: unknown) => {
+    const { cwd, query, limit } = filesSearchSchema.parse(payload)
+    return state.searchFiles(cwd, query, limit)
   })
 
   ipcMain.handle(IPC.filesRead, async (_event, payload: unknown) => {
@@ -213,6 +227,32 @@ export function registerIpc(state: HostState): () => void {
     return state.listModels(tabId)
   })
 
+  ipcMain.handle(IPC.commandsList, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    return state.listCommands(tabId)
+  })
+
+  ipcMain.handle(IPC.commandsComplete, async (_event, payload: unknown) => {
+    const { tabId, name, prefix } = commandCompleteSchema.parse(payload)
+    return state.completeCommand(tabId, name, prefix)
+  })
+
+  ipcMain.handle(IPC.thinkingLevels, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    return state.listThinkingLevels(tabId)
+  })
+
+  ipcMain.handle(IPC.thinkingSelect, async (_event, payload: unknown) => {
+    const { tabId, level } = thinkingSelectSchema.parse(payload)
+    await state.selectThinkingLevel(tabId, level as ThinkingLevel)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.extensionErrorsDismiss, () => {
+    state.dismissExtensionErrors()
+    return state.snapshot()
+  })
+
   ipcMain.handle(IPC.modelsSelect, async (_event, payload: unknown) => {
     const { tabId, provider, id, persist } = modelSelectSchema.parse(payload)
     await state.selectModel(tabId, provider, id, persist)
@@ -233,8 +273,10 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.tabsEntries)
     ipcMain.removeHandler(IPC.promptSend)
     ipcMain.removeHandler(IPC.promptAbort)
+    ipcMain.removeHandler(IPC.promptCompact)
     ipcMain.removeHandler(IPC.clipboardWrite)
     ipcMain.removeHandler(IPC.filesList)
+    ipcMain.removeHandler(IPC.filesSearch)
     ipcMain.removeHandler(IPC.filesRead)
     ipcMain.removeHandler(IPC.filesOpen)
     ipcMain.removeHandler(IPC.filesClose)
@@ -242,6 +284,11 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.filesOpenExternal)
     ipcMain.removeHandler(IPC.filesReload)
     ipcMain.removeHandler(IPC.modelsList)
+    ipcMain.removeHandler(IPC.commandsList)
+    ipcMain.removeHandler(IPC.commandsComplete)
+    ipcMain.removeHandler(IPC.thinkingLevels)
+    ipcMain.removeHandler(IPC.thinkingSelect)
+    ipcMain.removeHandler(IPC.extensionErrorsDismiss)
     ipcMain.removeHandler(IPC.modelsSelect)
   }
 }

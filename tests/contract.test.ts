@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { IPC, IPC_EVENTS, MAX_PAYLOAD_BYTES } from '@contract/index'
+import { ATTACHMENT_LIMITS, IPC, IPC_EVENTS, MAX_PAYLOAD_BYTES } from '@contract/index'
 import { promptSchema, tabIdSchema, tabNewSchema, tabOpenSchema, conversationRenameSchema } from '@contract/schemas'
 
 describe('IPC 规格', () => {
@@ -24,6 +24,18 @@ describe('IPC 规格', () => {
     expect(promptSchema.safeParse({ tabId: 'tab-1', text: '' }).success).toBe(false)
     expect(promptSchema.safeParse({ tabId: '', text: 'hi' }).success).toBe(false)
     expect(promptSchema.safeParse({ tabId: 'tab-1', text: 'hi' }).success).toBe(true)
+  })
+
+  it('prompt 允许附件路径数组，但数量不能超过上限', () => {
+    expect(promptSchema.safeParse({ tabId: 't', text: 'hi', attachments: ['src/a.ts'] }).success).toBe(true)
+    expect(promptSchema.safeParse({ tabId: 't', text: 'hi', attachments: [''] }).success).toBe(false)
+    expect(
+      promptSchema.safeParse({
+        tabId: 't',
+        text: 'hi',
+        attachments: Array.from({ length: ATTACHMENT_LIMITS.maxCount + 1 }, (_, index) => `f${index}.ts`)
+      }).success
+    ).toBe(false)
   })
 
   it('载荷上限是有限值', () => {

@@ -30,6 +30,10 @@ interface RawMessage {
   content?: unknown
   toolCallId?: string
   isError?: boolean
+  /** 扩展自定义消息的类型（role === 'custom'） */
+  customType?: string
+  /** 扩展自定义消息要不要显示（role === 'custom'） */
+  display?: boolean
   /** token 用量（Pi 的 usage） */
   usage?: RawUsage
   /** 这次回复的耗时（毫秒） */
@@ -55,11 +59,20 @@ interface RawUsage {
 interface RawEntry {
   type?: string
   message?: RawMessage
+  /** type === 'custom_message' 时的字段 */
+  customType?: string
+  content?: unknown
+  display?: boolean
 }
 
 // ---------------------------------------------------------------------------
 // 工具
 // ---------------------------------------------------------------------------
+
+/** 扩展自定义消息的显示名；空值也给一个占位 */
+function customTypeOf(value: string | undefined): string {
+  return value && value.trim() ? value : 'custom'
+}
 
 /** 取消息里的纯文本（content 可能是字符串，也可能是内容块数组） */
 function textOf(content: unknown): string {
@@ -202,7 +215,24 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
 
   for (const raw of entries) {
     const entry = raw as RawEntry | null
-    if (!entry || entry.type !== 'message') continue
+    if (!entry) continue
+
+    /*
+     * 扩展的 custom_message：只有 display 为 true 才画。
+     * type === 'custom' 是扩展状态（不参与上下文、没有标准显示），这里跳过 ——
+     * 跟 TUI 一样：没注册 entry renderer 就不画。
+     */
+    if (entry.type === 'custom_message') {
+      if (!entry.display) continue
+      items.push({
+        kind: 'custom',
+        customType: customTypeOf(entry.customType),
+        text: textOf(entry.content)
+      })
+      continue
+    }
+
+    if (entry.type !== 'message') continue
     const message = entry.message
     if (!message) continue
 
@@ -338,6 +368,17 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
       const message = data.message as RawMessage | undefined
       if (!message) return items
       const role = message.role
+      if (role === 'custom') {
+        if (!message.display) return items
+        return [
+          ...items,
+          {
+            kind: 'custom',
+            customType: customTypeOf(message.customType),
+            text: textOf(message.content)
+          }
+        ]
+      }
       if (role !== 'user' && role !== 'assistant' && role !== 'toolResult') return items
       if (role === 'toolResult') {
         // 工具结果：中途输出可能已经建过一项 —— 别叠成两块（R4）
@@ -382,6 +423,20 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
       const message = data.message as RawMessage | undefined
       if (!message) return items
       const role = message.role
+      if (role === 'custom') {
+        if (!message.display) return items
+        const customType = customTypeOf(message.customType)
+        const text = textOf(message.content)
+        const last = items[items.length - 1]
+        // 正常路径：message_start 已经建过这一项，这里只补最终正文
+        if (last && last.kind === 'custom' && last.customType === customType) {
+          if (last.text === text) return items
+          const next = items.slice()
+          next[next.length - 1] = { ...last, text }
+          return next
+        }
+        return [...items, { kind: 'custom', customType, text }]
+      }
       if (role !== 'user' && role !== 'assistant' && role !== 'toolResult') return items
 
       if (role === 'toolResult') {

@@ -71,6 +71,10 @@ export function Sidebar() {
   const projects = useStore((s) => s.snapshot.projects)
   const tabs = useStore((s) => s.snapshot.tabs)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
+  const renameRequest = useStore((s) => s.renameRequest)
+  const consumeRenameRequest = useStore((s) => s.consumeRenameRequest)
+  const sidebarOpen = useStore((s) => s.sidebarOpen)
+  const toggleSidebar = useStore((s) => s.toggleSidebar)
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed())
   /** 待确认移除的项目 */
@@ -143,6 +147,19 @@ export function Sidebar() {
     if (!renamingPath) return
     if (!conversations.some((conversation) => conversation.path === renamingPath)) setRenamingPath(null)
   }, [conversations, renamingPath])
+
+  // 输入框发来的改名请求 —— 展开侧栏、退出选择模式、进入行内编辑
+  useEffect(() => {
+    if (!renameRequest) return
+    if (!conversations.some((conversation) => conversation.path === renameRequest.path)) {
+      consumeRenameRequest()
+      return
+    }
+    if (!sidebarOpen) toggleSidebar()
+    setSelection(exitSelection())
+    setRenamingPath(renameRequest.path)
+    consumeRenameRequest()
+  }, [renameRequest, conversations, sidebarOpen, toggleSidebar, consumeRenameRequest])
 
   function toggle(project: string): void {
     setCollapsed((prev) => {

@@ -1,13 +1,16 @@
 import type {
   CodeletApi,
+  CommandOption,
   ConversationInfo,
   FileEntry,
+  FileSearchResult,
   FileTab,
   HostSnapshot,
   ModelOption,
   ProjectInfo,
   SessionEvent,
-  StreamItem
+  StreamItem,
+  ThinkingLevel
 } from '@contract/index'
 
 /**
@@ -111,6 +114,26 @@ const FAKE_FILES: Record<string, string> = {
   'src/memory/index.ts': 'export async function readIndex() {\n  return []\n}\n',
   'src/memory/cursor.ts': 'export const cursorVersion = 3\n'
 }
+
+/** `@` 搜索用的假文件列表（相对项目根） */
+const FAKE_SEARCH_PATHS: FileSearchResult[] = [
+  { path: 'src', kind: 'dir' },
+  { path: 'src/index.ts', kind: 'file' },
+  { path: 'src/tokens.ts', kind: 'file' },
+  { path: 'src/memory', kind: 'dir' },
+  { path: 'src/memory/index.ts', kind: 'file' },
+  { path: 'src/memory/cursor.ts', kind: 'file' },
+  { path: 'package.json', kind: 'file' },
+  { path: 'README.md', kind: 'file' },
+  { path: 'tsconfig.json', kind: 'file' }
+]
+
+/** 假命令列表：模板 / 扩展 / 技能各一条 */
+const FAKE_COMMANDS: CommandOption[] = [
+  { name: 'review', description: '代码审查模板', source: 'template' },
+  { name: 'deploy', description: '发布到预发环境', source: 'extension', hasArgumentCompletions: true },
+  { name: 'skill:pdf', description: 'PDF 处理技能', source: 'skill' }
+]
 
 /** 假的内容流：够看出普通模式长什么样 */
 const FAKE_ITEMS: StreamItem[] = [
@@ -221,6 +244,7 @@ export function createMockApi(): CodeletApi {
     title: string
     items: StreamItem[]
     model: ModelOption | null
+    thinkingLevel: ThinkingLevel
     streaming: boolean
   }
 
@@ -255,6 +279,7 @@ export function createMockApi(): CodeletApi {
       title: options.title ?? '新对话',
       items: options.items ?? [],
       model: FAKE_MODELS[0],
+      thinkingLevel: 'medium',
       streaming: false
     }
     tabs.push(tab)
@@ -287,11 +312,13 @@ export function createMockApi(): CodeletApi {
       aborting: [...abortingTabs],
       files: files,
       activeFileId: activeFileId,
+      extensionErrors: [],
       session: {
         ready: Boolean(active),
         cwd: active?.cwd ?? null,
         sessionId: active ? `s-${active.id}` : null,
         model: active?.model ?? null,
+        thinkingLevel: active?.thinkingLevel ?? null,
         modelFallback: null,
         error: null
       }
@@ -497,6 +524,38 @@ export function createMockApi(): CodeletApi {
 
     listModels: async () => FAKE_MODELS,
 
+    compactTab: async () => {
+      // 假宿主里压缩就是等一下
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    },
+
+    listCommands: async () => FAKE_COMMANDS,
+
+    completeCommand: async (_tabId, name, prefix) => {
+      if (name !== 'deploy') return []
+      return ['staging', 'production']
+        .filter((value) => value.startsWith(prefix))
+        .map((value) => ({ value, label: value }))
+    },
+
+    listThinkingLevels: async () => ['off', 'low', 'medium', 'high', 'xhigh'],
+
+    selectThinkingLevel: async (tabId, level) => {
+      const tab = tabs.find((item) => item.id === tabId)
+      if (tab) tab.thinkingLevel = level as ThinkingLevel
+      publish()
+    },
+
+    dismissExtensionErrors: async () => publish(),
+
+    searchFiles: async (_cwd, query, limit) => {
+      const q = query.trim().toLowerCase()
+      const matched = q
+        ? FAKE_SEARCH_PATHS.filter((item) => item.path.toLowerCase().includes(q))
+        : FAKE_SEARCH_PATHS.filter((item) => !item.path.includes('/'))
+      return matched.slice(0, limit).map((item) => ({ ...item }))
+    },
+
     selectModel: async (tabId, provider, id) => {
       const found = FAKE_MODELS.find((m) => m.provider === provider && m.id === id)
       if (!found) throw new Error(`模型不存在：${provider}/${id}`)
@@ -535,6 +594,21 @@ export function createMockApi(): CodeletApi {
     prompt: async (tabId, text) => {
       const tab = tabs.find((t) => t.id === tabId)
       if (!tab) return
+
+      // 假扩展命令：流式期间也能执行，只发一条 custom 消息，不启动新的一轮
+      if (text.trimStart().startsWith('/deploy')) {
+        const message = {
+          role: 'custom',
+          customType: 'deploy',
+          display: true,
+          content: '部署已触发（浏览器预览假数据）',
+          timestamp: Date.now()
+        }
+        publishEvent(tabId, 'message_start', { message })
+        publishEvent(tabId, 'message_end', { message })
+        return
+      }
+
       tab.streaming = true
       /*
        * 跟 Pi 一样的顺序：agent_start 在最前（runAgentLoop 开头就发），

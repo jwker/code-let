@@ -3,13 +3,17 @@ import {
   IPC,
   IPC_EVENTS,
   type CodeletApi,
+  type CommandArgumentOption,
+  type CommandOption,
   type DeleteConversationsResult,
   type FileContent,
   type FileEntry,
+  type FileSearchResult,
   type HostSnapshot,
   type ModelOption,
   type SessionEvent,
-  type StreamItem
+  type StreamItem,
+  type ThinkingLevel
 } from '@contract/index'
 
 /**
@@ -32,8 +36,20 @@ const api: CodeletApi = {
   closeTab: (tabId) => ipcRenderer.invoke(IPC.tabsClose, { tabId }) as Promise<HostSnapshot>,
   reloadTab: (tabId) => ipcRenderer.invoke(IPC.tabsReload, { tabId }) as Promise<HostSnapshot>,
   getTabEntries: (tabId) => ipcRenderer.invoke(IPC.tabsEntries, { tabId }) as Promise<StreamItem[]>,
-  prompt: (tabId, text) => ipcRenderer.invoke(IPC.promptSend, { tabId, text }),
+  prompt: (tabId, text, attachments) =>
+    ipcRenderer.invoke(IPC.promptSend, { tabId, text, attachments }),
   abortPrompt: (tabId) => ipcRenderer.invoke(IPC.promptAbort, { tabId }) as Promise<void>,
+  compactTab: (tabId) => ipcRenderer.invoke(IPC.promptCompact, { tabId }) as Promise<void>,
+  listCommands: (tabId) => ipcRenderer.invoke(IPC.commandsList, { tabId }) as Promise<CommandOption[]>,
+  completeCommand: (tabId, name, prefix) =>
+    ipcRenderer.invoke(IPC.commandsComplete, { tabId, name, prefix }) as Promise<CommandArgumentOption[]>,
+  listThinkingLevels: (tabId) =>
+    ipcRenderer.invoke(IPC.thinkingLevels, { tabId }) as Promise<ThinkingLevel[]>,
+  selectThinkingLevel: (tabId, level) =>
+    ipcRenderer.invoke(IPC.thinkingSelect, { tabId, level }) as Promise<void>,
+  dismissExtensionErrors: () => ipcRenderer.invoke(IPC.extensionErrorsDismiss) as Promise<HostSnapshot>,
+  searchFiles: (cwd, query, limit) =>
+    ipcRenderer.invoke(IPC.filesSearch, { cwd, query, limit }) as Promise<FileSearchResult[]>,
   copyText: (text) => ipcRenderer.invoke(IPC.clipboardWrite, { text }) as Promise<void>,
   listFiles: (cwd, dir) => ipcRenderer.invoke(IPC.filesList, { cwd, dir }) as Promise<FileEntry[]>,
   readFile: (cwd, path) => ipcRenderer.invoke(IPC.filesRead, { cwd, path }) as Promise<FileContent>,

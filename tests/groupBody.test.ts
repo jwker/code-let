@@ -24,7 +24,9 @@ const result = (id: string, text = 'ok'): StreamItem => ({
 
 /** 把行还原成它们包含的工具 id —— 用来断言「一个都没丢」 */
 function toolIdsOf(rows: ReturnType<typeof groupBody>): string[] {
-  return rows.flatMap((row) => (row.kind === 'output' ? [] : row.tools.map((t) => t.callId)))
+  return rows.flatMap((row) =>
+    row.kind === 'output' || row.kind === 'custom' ? [] : row.tools.map((tool) => tool.callId)
+  )
 }
 
 describe('工具项一个都不能丢', () => {
@@ -87,5 +89,17 @@ describe('正文', () => {
 
   it('空数组没有行', () => {
     expect(groupBody([], new Set())).toEqual([])
+  })
+})
+
+describe('扩展消息', () => {
+  it('单独成一行，不参与「正文 + 工具」的分组', () => {
+    const custom: StreamItem = { kind: 'custom', customType: 'note', text: '扩展说了一句' }
+    const rows = groupBody(
+      [say('先读一下'), tool('t1'), result('t1'), custom],
+      new Set(['t1'])
+    )
+    expect(rows.map((row) => row.kind)).toEqual(['message', 'custom'])
+    expect(toolIdsOf(rows)).toEqual(['t1'])
   })
 })

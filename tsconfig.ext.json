@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["ext/**/*.ts"],
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "out/ext",
+    "rootDir": "ext",
+    "sourceMap": false,
+    "declaration": false,
+    "types": ["node"]
+  }
+}

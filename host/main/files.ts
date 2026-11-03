@@ -1,7 +1,7 @@
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { extname, isAbsolute, relative, resolve, sep } from 'node:path'
-import type { FileContent, FileEntry } from '@contract/index'
+import type { FileContent, FileEntry, FileSearchResult } from '@contract/index'
 
 /**
  * 文件系统 —— 列目录、读文件，以及**路径越界校验**（PLAN.md D20 / R26）。
@@ -130,9 +130,7 @@ export async function listDirectory(cwd: string, dir: string): Promise<FileEntry
   if (rules.length > 0) {
     for (const item of items) {
       const rel = dir ? `${dir}/${item.name}` : item.name
-      // 目录规则要能匹配到目录本身，所以命中时也试一下带斜杠的形式
-      const hit = rules.some((re) => re.test(rel) || (item.kind === 'dir' && re.test(`${rel}/`)))
-      if (hit) item.ignored = true
+      if (isIgnoredPath(rules, rel, item.kind === 'dir')) item.ignored = true
     }
   }
 
@@ -141,6 +139,109 @@ export async function listDirectory(cwd: string, dir: string): Promise<FileEntry
     return a.name.localeCompare(b.name)
   })
   return items
+}
+
+/** 一条相对路径是否被 `.gitignore` 命中；目录规则也匹配目录本身 */
+function isIgnoredPath(rules: RegExp[], rel: string, isDir: boolean): boolean {
+  return rules.some((re) => re.test(rel) || (isDir && re.test(`${rel}/`)))
+}
+
+/**
+ * 名字匹配打分 —— 越大越靠前，-1 表示不匹配。
+ *
+ * 先看文件名本身，再看整条路径；最后允许子序列（`s/i/t` 命中 `src/index.ts`）。
+ */
+function fileMatchScore(path: string, query: string): number {
+  const p = path.toLowerCase()
+  const q = query.toLowerCase()
+  const base = p.slice(p.lastIndexOf('/') + 1)
+  if (base === q) return 100
+  if (base.startsWith(q)) return 80
+  if (base.includes(q)) return 60
+  if (p.startsWith(q)) return 50
+  if (p.includes(q)) return 40
+  let at = 0
+  for (const ch of p) {
+    if (ch === q[at]) at += 1
+    if (at === q.length) return 20
+  }
+  return -1
+}
+
+/**
+ * `@` 搜索：按名字/路径找文件和目录。
+ *
+ * 规则：
+ * - 空 query 只列项目根的一层（不递归）。
+ * - 非空 query 递归搜索，**不进入被 `.gitignore` 忽略的目录**（尊重 gitignore）；
+ *   忽略的文件如果命中仍然返回，排在后面。
+ * - 隐藏文件照常搜（`.git` 目录除外）。
+ * - 有遍历上限：2000 个目录、12 层、候选数量是 limit 的 8 倍。
+ */
+export async function searchFiles(cwd: string, query: string, limit: number): Promise<FileSearchResult[]> {
+  const root = await resolveInsideCwd(cwd, '.')
+  const rules = await gitignoreRules(cwd)
+  const q = query.trim()
+  const candidates: Array<FileSearchResult & { score: number }> = []
+  const maxVisited = 2000
+  const maxDepth = 12
+  const maxCandidates = Math.max(limit * 8, 200)
+  let visited = 0
+
+  async function walk(dir: string, rel: string, depth: number): Promise<void> {
+    if (visited >= maxVisited || candidates.length >= maxCandidates) return
+    let entries
+    try {
+      entries = await readdir(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    visited += 1
+    entries.sort((a, b) => a.name.localeCompare(b.name))
+
+    for (const entry of entries) {
+      // `.git` 不搜；其他隐藏文件照常
+      if (entry.name === '.git') continue
+      const childRel = rel ? `${rel}/${entry.name}` : entry.name
+      const kind: FileSearchResult['kind'] = entry.isDirectory() ? 'dir' : 'file'
+      // 空 query 只列根目录一层
+      if (!q && rel !== '') continue
+
+      const ignored = isIgnoredPath(rules, childRel, kind === 'dir')
+      const score = q ? fileMatchScore(childRel, q) : 0
+      if (!q || score >= 0) {
+        candidates.push({ path: childRel, kind, ...(ignored ? { ignored: true } : {}), score })
+      }
+
+      // 不进入被忽略的目录 —— 尊重 gitignore，也避免走进 node_modules
+      if (q && kind === 'dir' && !ignored && depth < maxDepth) {
+        await walk(resolve(dir, entry.name), childRel, depth + 1)
+      }
+      if (candidates.length >= maxCandidates) return
+    }
+  }
+
+  await walk(root, '', 0)
+
+  if (q) {
+    candidates.sort(
+      (a, b) =>
+        b.score - a.score ||
+        Number(Boolean(a.ignored)) - Number(Boolean(b.ignored)) ||
+        a.path.length - b.path.length ||
+        a.path.localeCompare(b.path)
+    )
+  } else {
+    // 根目录：非忽略的在前；同组里文件夹在前、各自按名字
+    candidates.sort(
+      (a, b) =>
+        Number(Boolean(a.ignored)) - Number(Boolean(b.ignored)) ||
+        (a.kind === b.kind ? 0 : a.kind === 'dir' ? -1 : 1) ||
+        a.path.localeCompare(b.path)
+    )
+  }
+
+  return candidates.slice(0, limit).map(({ score: _score, ...rest }) => rest)
 }
 
 /**

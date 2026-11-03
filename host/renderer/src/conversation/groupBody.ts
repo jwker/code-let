@@ -13,6 +13,7 @@ import type { StreamItem } from '@contract/index'
 
 type MessageItem = Extract<StreamItem, { kind: 'message' }>
 type ToolItem = Extract<StreamItem, { kind: 'tool' }>
+type CustomItem = Extract<StreamItem, { kind: 'custom' }>
 
 export type BodyRow =
   /** 一段正文，后面跟着紧挨的工具行 */
@@ -21,6 +22,8 @@ export type BodyRow =
   | { kind: 'tools'; tools: ToolItem[] }
   /** 没有主的工具输出 */
   | { kind: 'output'; text: string }
+  /** 扩展自定义消息 */
+  | { kind: 'custom'; item: CustomItem }
 
 export function groupBody(
   items: readonly StreamItem[],
@@ -42,6 +45,13 @@ export function groupBody(
       }
       rows.push({ kind: 'tools', tools })
       index = look
+      continue
+    }
+
+    // 扩展消息单独成一行，不参与「正文 + 工具」的分组
+    if (item.kind === 'custom') {
+      rows.push({ kind: 'custom', item })
+      index += 1
       continue
     }
 

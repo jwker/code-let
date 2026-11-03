@@ -42,10 +42,14 @@ export const IPC = {
   promptSend: 'host:prompt:send',
   /** 中止某个标签正在跑的那一轮 */
   promptAbort: 'host:prompt:abort',
+  /** 压缩某个标签的上下文 */
+  promptCompact: 'host:prompt:compact',
   /** 把一段文字写入系统剪贴板 */
   clipboardWrite: 'host:clipboard:write',
   /** 列一个目录下的条目（文件树） */
   filesList: 'host:files:list',
+  /** 按名字搜索项目里的文件（@ 引用） */
+  filesSearch: 'host:files:search',
   /** 读一个文件的内容 */
   filesRead: 'host:files:read',
   /** 打开一个文件（进文件标签栏） */
@@ -60,6 +64,16 @@ export const IPC = {
   filesReload: 'host:files:reload',
   /** 列出已配置凭据的模型 */
   modelsList: 'host:models:list',
+  /** 列出某个标签可用的 `/` 命令 */
+  commandsList: 'host:commands:list',
+  /** 列某个扩展命令的参数候选 */
+  commandsComplete: 'host:commands:complete',
+  /** 列当前模型可用的思考等级 */
+  thinkingLevels: 'host:thinking:levels',
+  /** 设置某个标签的思考等级 */
+  thinkingSelect: 'host:thinking:select',
+  /** 清掉已经显示的扩展错误 */
+  extensionErrorsDismiss: 'host:extension-errors:dismiss',
   /** 切换某个标签的模型 */
   modelsSelect: 'host:models:select'
 } as const
@@ -85,6 +99,21 @@ export const MAX_PAYLOAD_BYTES = 256 * 1024
 
 /** 增量事件的合并窗口（毫秒）。同一窗口内的事件攒成一批再下行。 */
 export const EVENT_COALESCE_MS = 16
+
+/**
+ * `@` 内容附件的上限。
+ *
+ * 文本按字节限：单文件 256KB、总量 1MB —— 再多会把模型上下文吃光。
+ * 图片沿用文件预览的 2MB 单文件上限；总量 8MB。
+ * 数量最多 20 个。
+ */
+export const ATTACHMENT_LIMITS = {
+  maxCount: 20,
+  maxTextFileBytes: 256 * 1024,
+  maxTextTotalBytes: 1024 * 1024,
+  maxImageFileBytes: 2 * 1024 * 1024,
+  maxImageTotalBytes: 8 * 1024 * 1024
+} as const
 
 // ---------------------------------------------------------------------------
 // 领域类型
@@ -233,6 +262,14 @@ export interface FileEntry {
   ignored?: boolean
 }
 
+/** `@` 搜索里的一项。路径是相对项目根的，用 `/` 分隔。 */
+export interface FileSearchResult {
+  path: string
+  kind: 'dir' | 'file'
+  /** 被项目根的 `.gitignore` 命中 */
+  ignored?: boolean
+}
+
 /** 读一个文件的结果 */
 export type FileContent =
   | {
@@ -272,6 +309,44 @@ export interface ModelOption {
   cost: { input: number; output: number }
 }
 
+/** 输入框里用 `/` 调用的 Pi 命令来源 */
+export type CommandSource = 'template' | 'extension' | 'skill'
+
+/** 扩展错误：加载失败，或者执行 handler / session_start 时抛错 */
+export interface ExtensionErrorInfo {
+  /** 属于哪个标签；加载错误在恢复标签时也可能有 */
+  tabId: string | null
+  kind: 'load' | 'runtime'
+  /** 扩展文件路径，或者 `<runtime>` / `<session_start>` */
+  path: string
+  /** 执行错误对应的事件名（command、session_start 等） */
+  event?: string
+  message: string
+  /** 发生时刻（Unix 毫秒），用于排序 */
+  at: number
+}
+
+/** Pi 的思考等级 —— 具体哪些可用由当前模型决定 */
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+/** 一个可在输入框里用 `/` 调用的 Pi 命令 */
+export interface CommandOption {
+  /** 不带前导斜杠 */
+  name: string
+  description?: string
+  argumentHint?: string
+  source: CommandSource
+  /** 扩展提供了 getArgumentCompletions，输入空格后可以弹参数候选 */
+  hasArgumentCompletions?: boolean
+}
+
+/** 扩展命令的一个参数候选 */
+export interface CommandArgumentOption {
+  value: string
+  label: string
+  description?: string
+}
+
 /** 当前 Pi 会话的状态 */
 export interface SessionState {
   /** runtime 是否就绪 */
@@ -286,6 +361,8 @@ export interface SessionState {
    * 换会话就换模型。
    */
   model: ModelOption | null
+  /** 当前会话的思考等级；runtime 没建时是 null */
+  thinkingLevel: ThinkingLevel | null
   /** 恢复会话时没能恢复原模型的原因（没有就为 null） */
   modelFallback: string | null
   /** 创建失败时的原因 */
@@ -323,6 +400,8 @@ export interface HostSnapshot {
   files: FileTab[]
   /** 当前活动的文件（null = 没有） */
   activeFileId: string | null
+  /** 扩展加载 / 执行错误 —— 侧栏主区顶部会提示；清掉后为空 */
+  extensionErrors: ExtensionErrorInfo[]
   /**
    * **活动标签**的会话状态。
    *
@@ -416,6 +495,14 @@ export type StreamItem =
        */
       label?: string
     }
+  | {
+      /** 扩展通过 `pi.sendMessage()` 发出的自定义消息（display 为 true 才显示） */
+      kind: 'custom'
+      /** 扩展自己定的类型，显示在消息左上角 */
+      customType: string
+      /** 只取文本块；可能是空串 */
+      text: string
+    }
 
 // ---------------------------------------------------------------------------
 // 渲染进程看到的宿主 API
@@ -470,8 +557,8 @@ export interface CodeletApi {
   reloadTab(tabId: string): Promise<HostSnapshot>
   /** 读某个标签的内容流（历史重建，R1 R5） */
   getTabEntries(tabId: string): Promise<StreamItem[]>
-  /** 往某个标签发一条消息 */
-  prompt(tabId: string, text: string): Promise<void>
+  /** 往某个标签发一条消息。attachments 是项目内的相对路径，主进程发送时读取并嵌入 */
+  prompt(tabId: string, text: string, attachments?: string[]): Promise<void>
   /**
    * 中止某个标签正在跑的那一轮。
    *
@@ -480,6 +567,20 @@ export interface CodeletApi {
    * 没在跑、或者已经在停 —— 直接返回，不报错。
    */
   abortPrompt(tabId: string): Promise<void>
+  /** 压缩某个标签的上下文。没有 runtime 时抛错 */
+  compactTab(tabId: string): Promise<void>
+  /** 列某个标签可用的 `/` 命令（Pi 模板、扩展、技能） */
+  listCommands(tabId: string): Promise<CommandOption[]>
+  /** 列某个扩展命令的参数候选 */
+  completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]>
+  /** 列当前模型可用的思考等级 */
+  listThinkingLevels(tabId: string): Promise<ThinkingLevel[]>
+  /** 设置某个标签的思考等级 */
+  selectThinkingLevel(tabId: string, level: ThinkingLevel): Promise<void>
+  /** 清掉已经显示的扩展错误 */
+  dismissExtensionErrors(): Promise<HostSnapshot>
+  /** 按名字搜索项目里的文件 —— `@` 引用用，只返回相对路径 */
+  searchFiles(cwd: string, query: string, limit: number): Promise<FileSearchResult[]>
   /** 把一段文字写入系统剪贴板（复制回复正文） */
   copyText(text: string): Promise<void>
   /** 列一个目录下的条目 */

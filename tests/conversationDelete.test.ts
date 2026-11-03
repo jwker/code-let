@@ -72,6 +72,7 @@ class FakePi implements PiRuntimePort {
       sessionFile: manager?.getSessionFile() ?? null,
       streaming: this.streaming.has(tabId),
       model: null,
+      thinkingLevel: null,
       modelFallback: null
     }
   }
@@ -99,6 +100,26 @@ class FakePi implements PiRuntimePort {
 
   async renameSession(): Promise<void> {
     // 重命名不参与这份测试
+  }
+
+  async listCommands(): Promise<never[]> {
+    return []
+  }
+
+  async compactTab(): Promise<void> {
+    // 不参与
+  }
+
+  async completeCommand(): Promise<never[]> {
+    return []
+  }
+
+  thinkingLevels(): never[] {
+    return []
+  }
+
+  setThinkingLevel(): void {
+    // 不参与
   }
 
   async stop(): Promise<void> {

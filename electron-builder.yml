@@ -14,6 +14,7 @@ files:
 
 # Pi 依赖的 photon-node 是 wasm，node-pty 需要原生模块，都不能在 asar 里跑
 asarUnpack:
+  - 'out/ext/**'
   - '**/node_modules/@silvia-odwyer/photon-node/**'
   - '**/node_modules/node-pty/**'
 

@@ -69,6 +69,21 @@ export function TerminalStream({
       {items.map((item, index) => {
         const last = index === items.length - 1
         switch (item.kind) {
+          case 'custom': {
+            return (
+              <div key={index} className="flex gap-2">
+                <span style={{ color: 'var(--fg-3)' }}>◆</span>
+                <div className="min-w-0 flex-1 rounded-lg border border-hairline bg-sunken px-2 py-1">
+                  <div className="font-mono text-[10px] text-fg-3">[{item.customType}]</div>
+                  {item.text ? (
+                    <Markdown text={item.text} variant="terminal" />
+                  ) : (
+                    <span className="text-[11.5px] text-fg-3">扩展消息没有文本内容</span>
+                  )}
+                </div>
+              </div>
+            )
+          }
           case 'message': {
             if (item.role === 'user') {
               return (

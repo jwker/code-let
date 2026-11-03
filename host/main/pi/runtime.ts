@@ -10,9 +10,19 @@ import {
   type CreateAgentSessionRuntimeFactory,
   type EventBus
 } from '@earendil-works/pi-coding-agent'
-import { existsSync } from 'node:fs'
-import { normalize } from 'node:path'
-import type { ConversationInfo, ModelOption, StreamItem } from '@contract/index'
+import { existsSync, readdirSync } from 'node:fs'
+import { join, normalize } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import type {
+  CommandArgumentOption,
+  CommandOption,
+  ConversationInfo,
+  ExtensionErrorInfo,
+  ModelOption,
+  StreamItem,
+  ThinkingLevel
+} from '@contract/index'
+import type { PromptImage } from '../attachments'
 import { entriesToItems } from '@contract/stream'
 
 /** 一条会话流事件 —— 带它属于哪个标签 */
@@ -42,6 +52,8 @@ export interface TabRuntimeState {
   streaming: boolean
   /** 这个标签用的模型 */
   model: ModelOption | null
+  /** 当前思考等级 */
+  thinkingLevel: ThinkingLevel | null
   /** 恢复会话时没能恢复原模型的原因 */
   modelFallback: string | null
 }
@@ -87,8 +99,18 @@ export interface PiRuntimePort {
    * 没有就打开会话文件追加一条 `session_info`。
    */
   renameSession(path: string, name: string): Promise<void>
+  /** 列某个标签可用的 `/` 命令（Pi 模板、扩展、技能） */
+  listCommands(tabId: string): Promise<CommandOption[]>
+  /** 列某个扩展命令的参数候选 */
+  completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]>
+  /** 当前模型支持的思考等级 */
+  thinkingLevels(tabId: string): ThinkingLevel[]
+  /** 设置思考等级（只影响当前会话） */
+  setThinkingLevel(tabId: string, level: ThinkingLevel): void
+  /** 压缩某个标签的上下文 */
+  compactTab(tabId: string): Promise<void>
   /** 往某个标签发一条用户消息 */
-  prompt(tabId: string, text: string): Promise<void>
+  prompt(tabId: string, text: string, images?: PromptImage[]): Promise<void>
   /**
    * 中止某个标签正在跑的那一轮（用户主动停，标签留着）。
    *
@@ -104,6 +126,34 @@ export class TabSessionMissingError extends Error {
   constructor(readonly path: string) {
     super(`会话文件不存在：${path}`)
     this.name = 'TabSessionMissingError'
+  }
+}
+
+/** 编译后的项目内扩展目录：out/main/index.mjs → out/ext */
+function defaultExtensionsDir(): string | null {
+  try {
+    const dir = fileURLToPath(new URL('../ext', import.meta.url))
+    return existsSync(dir) ? dir : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 列出扩展目录里的入口文件。
+ *
+ * Pi 的 `additionalExtensionPaths` 对目录的处理是「当成一个包」：要么有 package.json
+ * 的 pi.extensions，要么目录里有 index（Node 解析），不会把顶层每个 js 都当扩展。
+ * 所以这里自己枚举顶层 `.js`，逐个传文件路径；子目录留给辅助代码，不作为入口。
+ */
+function listExtensionFiles(dir: string): string[] {
+  try {
+    return readdirSync(dir)
+      .filter((name) => name.endsWith('.js') && !name.startsWith('.'))
+      .sort()
+      .map((name) => join(dir, name))
+  } catch {
+    return []
   }
 }
 
@@ -129,6 +179,10 @@ interface TabRecord {
 export class PiRuntime implements PiRuntimePort {
   private tabs = new Map<string, TabRecord>()
   private listeners = new Set<PiEventListener>()
+  /** 已经打过日志的扩展加载错误 —— 每个标签都会建 runtime，别重复刷屏 */
+  private readonly reportedExtensionErrors = new Set<string>()
+
+  constructor(private readonly extensionsDir: string | null = defaultExtensionsDir()) {}
 
   onEvent(listener: PiEventListener): () => void {
     this.listeners.add(listener)
@@ -143,6 +197,11 @@ export class PiRuntime implements PiRuntimePort {
         // 单个订阅者出错不能拖垮整条流
       }
     }
+  }
+
+  /** 把扩展错误作为一条宿主事件送出去；HostState 会把它收进快照 */
+  private emitExtensionError(tabId: string, error: Omit<ExtensionErrorInfo, 'tabId'>): void {
+    this.emit({ type: 'extension_error', data: error, tabId })
   }
 
   private record(tabId: string): TabRecord {
@@ -186,18 +245,82 @@ export class PiRuntime implements PiRuntimePort {
 
     // 工厂由这个标签持有，换会话时会被再次调用，所以事件订阅在这里重绑
     const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd, agentDir, sessionManager }) => {
+      // 这个标签自己的 EventBus。共享一个的话，N 个标签的扩展实例都注册在
+      // 同一个 emitter 上，一个标签发消息其他标签也收得到（D4 修订）。
+      const resourceLoaderOptions: {
+        eventBus: EventBus
+        additionalExtensionPaths?: string[]
+      } = { eventBus: record.bus }
+      // 项目内扩展（ext/ 编译到 out/ext）。逐个传文件，不传目录 —— 目录会被 Pi 当成一个包。
+      const extensionPaths = this.extensionsDir ? listExtensionFiles(this.extensionsDir) : []
+      if (extensionPaths.length > 0) {
+        resourceLoaderOptions.additionalExtensionPaths = extensionPaths
+      }
       const services = await createAgentSessionServices({
         cwd,
         agentDir,
-        // 这个标签自己的 EventBus。共享一个的话，N 个标签的扩展实例都注册在
-        // 同一个 emitter 上，一个标签发消息其他标签也收得到（D4 修订）。
-        resourceLoaderOptions: { eventBus: record.bus }
+        resourceLoaderOptions
       })
+      // 加载失败：日志留一条，同时作为宿主事件送到界面；同一个错误只报一次
+      for (const error of services.resourceLoader.getExtensions().errors) {
+        const key = `load|${error.path}\u0000${error.error}`
+        if (this.reportedExtensionErrors.has(key)) continue
+        this.reportedExtensionErrors.add(key)
+        console.error(`扩展加载失败（${error.path}）：${error.error}`)
+        this.emitExtensionError(record.tabId, {
+          kind: 'load',
+          path: error.path,
+          message: error.error,
+          at: Date.now()
+        })
+      }
       const { session, extensionsResult, modelFallbackMessage } = await createAgentSessionFromServices({
         services,
         sessionManager
       })
       record.unbind = this.bind(record.tabId, session)
+
+      /*
+       * 绑定扩展的命令上下文和错误监听。
+       *
+       * 不调 bindExtensions 的话：扩展的 session_start 不触发、ctx.waitForIdle 是空操作、
+       * ctx.reload 不生效、handler 的错误也没有出口。模式（TUI/RPC/print）都调这一步。
+       */
+      try {
+        await session.bindExtensions({
+          // Codelet 没有扩展 UI；print 模式让 hasUI 为 false
+          mode: 'print',
+          commandContextActions: {
+            waitForIdle: () => session.waitForIdle(),
+            // 换会话目前走标签/运行时，不由扩展命令发起
+            newSession: async () => ({ cancelled: true }),
+            fork: async () => ({ cancelled: true }),
+            navigateTree: async () => ({ cancelled: true }),
+            switchSession: async () => ({ cancelled: true }),
+            reload: async () => {
+              await session.reload()
+            }
+          },
+          onError: (error) => {
+            this.emitExtensionError(record.tabId, {
+              kind: 'runtime',
+              path: error.extensionPath,
+              event: error.event,
+              message: error.error,
+              at: Date.now()
+            })
+          }
+        })
+      } catch (error) {
+        this.emitExtensionError(record.tabId, {
+          kind: 'runtime',
+          path: '<session_start>',
+          event: 'session_start',
+          message: error instanceof Error ? error.message : String(error),
+          at: Date.now()
+        })
+      }
+
       return { session, extensionsResult, modelFallbackMessage, services, diagnostics: services.diagnostics }
     }
 
@@ -274,7 +397,15 @@ export class PiRuntime implements PiRuntimePort {
     const record = this.tabs.get(tabId)
     const runtime = record?.runtime
     if (!record || !runtime) {
-      return { ready: false, sessionId: null, sessionFile: null, streaming: false, model: null, modelFallback: null }
+      return {
+        ready: false,
+        sessionId: null,
+        sessionFile: null,
+        streaming: false,
+        model: null,
+        thinkingLevel: null,
+        modelFallback: null
+      }
     }
     return {
       ready: true,
@@ -282,6 +413,7 @@ export class PiRuntime implements PiRuntimePort {
       sessionFile: runtime.session.sessionFile ?? null,
       streaming: runtime.session.isStreaming,
       model: runtime.session.model ? toOption(runtime.session.model) : null,
+      thinkingLevel: runtime.session.thinkingLevel ?? null,
       modelFallback: runtime.modelFallbackMessage ?? null
     }
   }
@@ -343,6 +475,88 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /**
+   * 列某个标签可用的 `/` 命令。
+   *
+   * 三类来源：Pi 的 prompt 模板、扩展命令、技能命令。同名时按 Pi 的实际分发顺序
+   * 覆盖：扩展 > 技能 > 模板（`prompt()` 先试扩展命令，再展开技能，最后展开模板）。
+   */
+  async listCommands(tabId: string): Promise<CommandOption[]> {
+    const session = this.tabs.get(tabId)?.runtime?.session
+    if (!session) return []
+    const byName = new Map<string, CommandOption>()
+
+    for (const template of session.promptTemplates) {
+      byName.set(template.name, {
+        name: template.name,
+        description: template.description,
+        argumentHint: template.argumentHint,
+        source: 'template'
+      })
+    }
+
+    if (session.settingsManager.getEnableSkillCommands()) {
+      for (const skill of session.resourceLoader.getSkills().skills) {
+        const name = `skill:${skill.name}`
+        byName.set(name, { name, description: skill.description, source: 'skill' })
+      }
+    }
+
+    for (const command of session.extensionRunner.getRegisteredCommands()) {
+      byName.set(command.invocationName, {
+        name: command.invocationName,
+        description: command.description,
+        source: 'extension',
+        hasArgumentCompletions: typeof command.getArgumentCompletions === 'function'
+      })
+    }
+
+    return [...byName.values()]
+  }
+
+  /** 列某个扩展命令的参数候选 */
+  async completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]> {
+    const command = this.tabs.get(tabId)?.runtime?.session.extensionRunner.getCommand(name)
+    if (!command?.getArgumentCompletions) return []
+    try {
+      const items = await command.getArgumentCompletions(prefix)
+      return (items ?? []).map((item) => ({
+        value: item.value,
+        label: item.label,
+        ...(item.description ? { description: item.description } : {})
+      }))
+    } catch {
+      // 参数候选取不到不影响正常输入，静默回落
+      return []
+    }
+  }
+
+  /** 当前模型支持的思考等级 */
+  thinkingLevels(tabId: string): ThinkingLevel[] {
+    const session = this.tabs.get(tabId)?.runtime?.session
+    if (!session) return []
+    try {
+      return [...session.getAvailableThinkingLevels()]
+    } catch {
+      // 取不到可用等级时按没有处理，界面会提示当前模型不支持
+      return []
+    }
+  }
+
+  /** 设置思考等级（只影响当前会话） */
+  setThinkingLevel(tabId: string, level: ThinkingLevel): void {
+    const session = this.tabs.get(tabId)?.runtime?.session
+    if (!session) throw new Error('runtime 尚未启动')
+    session.setThinkingLevel(level)
+  }
+
+  /** 压缩某个标签的上下文 */
+  async compactTab(tabId: string): Promise<void> {
+    const session = this.tabs.get(tabId)?.runtime?.session
+    if (!session) throw new Error('runtime 尚未启动')
+    await session.compact()
+  }
+
+  /**
    * 给某个会话改名。
    *
    * 优先走已经活着的 runtime：`AgentSession.setSessionName()` 会同时把新名字写进
@@ -363,10 +577,10 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /** 往某个标签发一条用户消息 */
-  async prompt(tabId: string, text: string): Promise<void> {
+  async prompt(tabId: string, text: string, images?: PromptImage[]): Promise<void> {
     const session = this.tabs.get(tabId)?.runtime?.session
     if (!session) throw new Error('runtime 尚未启动')
-    await session.prompt(text)
+    await session.prompt(text, images && images.length > 0 ? { images } : undefined)
   }
 
   /**

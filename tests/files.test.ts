@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { PathOutsideCwdError, formatSize, listDirectory, readFileContent, resolveInsideCwd } from '../host/main/files'
+import {
+  PathOutsideCwdError,
+  formatSize,
+  listDirectory,
+  readFileContent,
+  resolveInsideCwd,
+  searchFiles
+} from '../host/main/files'
 
 /**
  * 文件系统层 —— 重点是**路径越界校验**（PLAN.md D20 / R26）。
@@ -148,5 +155,55 @@ describe('formatSize', () => {
     expect(formatSize(512)).toBe('512 B')
     expect(formatSize(2048)).toBe('2.0 KB')
     expect(formatSize(3 * 1024 * 1024)).toBe('3.0 MB')
+  })
+})
+
+describe('搜索文件（@ 引用）', () => {
+  it('空 query 只列根目录一层，文件夹在前', async () => {
+    const root = setup()
+    const results = await searchFiles(root, '', 50)
+    expect(results[0].kind).toBe('dir')
+    expect(results.some((item) => item.path === '.env')).toBe(true)
+    expect(results.some((item) => item.path === 'src/index.ts')).toBe(false)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('按名字和路径匹配，隐藏文件也能搜到', async () => {
+    const root = setup()
+    expect((await searchFiles(root, 'index.ts', 50)).map((item) => item.path)).toContain('src/index.ts')
+    expect((await searchFiles(root, '.env', 50)).map((item) => item.path)).toContain('.env')
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('不进入 .gitignore 忽略的目录，但目录本身能命中', async () => {
+    const root = setup()
+    writeFileSync(join(root, '.gitignore'), 'node_modules/\n')
+    mkdirSync(join(root, 'node_modules', 'pkg'), { recursive: true })
+    writeFileSync(join(root, 'node_modules', 'pkg', 'index.js'), 'x\n')
+
+    expect((await searchFiles(root, 'index.js', 50)).map((item) => item.path)).not.toContain(
+      'node_modules/pkg/index.js'
+    )
+    const dirs = await searchFiles(root, 'node_modules', 50)
+    expect(dirs.map((item) => item.path)).toContain('node_modules')
+    expect(dirs.find((item) => item.path === 'node_modules')?.ignored).toBe(true)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('忽略的文件命中时仍然返回，并标记 ignored', async () => {
+    const root = setup()
+    writeFileSync(join(root, '.gitignore'), 'secret.txt\n')
+    writeFileSync(join(root, 'secret.txt'), 'x\n')
+
+    const results = await searchFiles(root, 'secret', 50)
+    expect(results).toEqual([{ path: 'secret.txt', kind: 'file', ignored: true }])
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('结果数量受 limit 限制', async () => {
+    const root = setup()
+    const results = await searchFiles(root, '', 2)
+    expect(results).toHaveLength(2)
+    rmSync(root, { recursive: true, force: true })
   })
 })

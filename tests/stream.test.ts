@@ -445,3 +445,54 @@ describe('错过了 message_start 时的增量（刷新页面后正在流的那�
     expect(items[0]).toMatchObject({ kind: 'message', role: 'assistant', text: '只有一段' })
   })
 })
+
+describe('扩展自定义消息', () => {
+  it('历史：display=true 的 custom_message 变成 custom 项', () => {
+    const items = entriesToItems([
+      {
+        type: 'custom_message',
+        customType: 'checkpoint',
+        display: true,
+        content: [{ type: 'text', text: '已创建快照' }]
+      }
+    ])
+    expect(items).toEqual([{ kind: 'custom', customType: 'checkpoint', text: '已创建快照' }])
+  })
+
+  it('display=false 的 custom_message、custom 状态 entry 都不显示', () => {
+    expect(
+      entriesToItems([
+        { type: 'custom_message', customType: 'hidden', display: false, content: '看不到' },
+        { type: 'custom', customType: 'state', data: { count: 1 } }
+      ])
+    ).toEqual([])
+  })
+
+  it('实时：message_start + message_end 只产生一项，正文以 end 为准', () => {
+    let items = applyEvent([], {
+      type: 'message_start',
+      data: { message: { role: 'custom', customType: 'note', display: true, content: '先' } }
+    })
+    items = applyEvent(items, {
+      type: 'message_end',
+      data: { message: { role: 'custom', customType: 'note', display: true, content: '先说一句' } }
+    })
+    expect(items).toEqual([{ kind: 'custom', customType: 'note', text: '先说一句' }])
+  })
+
+  it('实时：错过 message_start 时，message_end 也补一项', () => {
+    const items = applyEvent([], {
+      type: 'message_end',
+      data: { message: { role: 'custom', customType: 'note', display: true, content: '只有结束' } }
+    })
+    expect(items).toEqual([{ kind: 'custom', customType: 'note', text: '只有结束' }])
+  })
+
+  it('display=false 的实时 custom 消息不显示', () => {
+    const items = applyEvent([], {
+      type: 'message_start',
+      data: { message: { role: 'custom', customType: 'hidden', display: false, content: '看不到' } }
+    })
+    expect(items).toEqual([])
+  })
+})

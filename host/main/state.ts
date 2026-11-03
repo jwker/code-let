@@ -2,21 +2,27 @@ import { EventEmitter } from 'node:events'
 import { existsSync, statSync } from 'node:fs'
 import { basename, normalize, relative } from 'node:path'
 import type {
+  CommandArgumentOption,
+  CommandOption,
   ConversationInfo,
   DeleteConversationsResult,
+  ExtensionErrorInfo,
   FileContent,
   FileEntry,
+  FileSearchResult,
   FileTab,
   HostSnapshot,
   ModelOption,
   SessionState,
+  ThinkingLevel,
   StreamItem,
   TabInfo
 } from '@contract/index'
+import { prepareAttachments } from './attachments'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
 import { shell } from 'electron'
-import { listDirectory, readFileContent, resolveInsideCwd } from './files'
+import { listDirectory, readFileContent, resolveInsideCwd, searchFiles as searchProjectFiles } from './files'
 import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
 import { moveSessionFilesToTrash } from './sessionFiles'
@@ -78,11 +84,14 @@ export class HostState extends EventEmitter {
   private tabs: HostTab[] = []
   private activeTabId: string | null = null
   private conversations: ConversationInfo[] = []
+  /** 扩展加载 / 执行错误 —— 最多留 20 条，界面顶部提示 */
+  private extensionErrors: ExtensionErrorInfo[] = []
   private session: SessionState = {
     ready: false,
     cwd: null,
     sessionId: null,
     model: null,
+    thinkingLevel: null,
     modelFallback: null,
     error: null
   }
@@ -160,6 +169,7 @@ export class HostState extends EventEmitter {
       // stale 是派生状态，不存在 FileTab 里，推快照时合进去
       files: this.files.map((f) => (this.fileStale.has(f.id) ? { ...f, stale: true } : f)),
       activeFileId: this.activeFileId,
+      extensionErrors: this.extensionErrors,
       session: this.session
     }
   }
@@ -195,6 +205,11 @@ export class HostState extends EventEmitter {
   async init(): Promise<void> {
     // 会话流事件：转发给渲染进程（带 tabId）
     this.pi.onEvent((event) => {
+      // 扩展错误走快照，不混进会话事件流
+      if (event.type === 'extension_error') {
+        this.recordExtensionError(event.tabId, event.data as Omit<ExtensionErrorInfo, 'tabId'>)
+        return
+      }
       this.emit('session-event', event)
       // 模型被换了（比如扩展调的 setModel）—— 快照跟着变
       if (event.type === 'model_select') {
@@ -834,6 +849,7 @@ export class HostState extends EventEmitter {
         cwd: null,
         sessionId: null,
         model: null,
+        thinkingLevel: null,
         modelFallback: null,
         error: null
       }
@@ -846,6 +862,7 @@ export class HostState extends EventEmitter {
       cwd: tab?.cwd ?? null,
       sessionId: state.sessionId,
       model: state.model,
+      thinkingLevel: state.thinkingLevel,
       modelFallback: state.modelFallback,
       error: tab?.error ?? null
     }
@@ -863,6 +880,41 @@ export class HostState extends EventEmitter {
   /** 已配置凭据的模型清单（选择器用） */
   listModels(tabId: string): Promise<ModelOption[]> {
     return this.pi.listModels(tabId)
+  }
+
+  /** 某个标签可用的 `/` 命令（Pi 模板、扩展、技能） */
+  listCommands(tabId: string): Promise<CommandOption[]> {
+    return this.pi.listCommands(tabId)
+  }
+
+  /** 某个扩展命令的参数候选 */
+  completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]> {
+    return this.pi.completeCommand(tabId, name, prefix)
+  }
+
+  /** 当前模型可用的思考等级 */
+  listThinkingLevels(tabId: string): Promise<ThinkingLevel[]> {
+    return Promise.resolve(this.pi.thinkingLevels(tabId))
+  }
+
+  /** 切换某个标签的思考等级（只影响当前会话） */
+  async selectThinkingLevel(tabId: string, level: ThinkingLevel): Promise<void> {
+    if (!this.pi.thinkingLevels(tabId).includes(level)) {
+      throw new Error(`当前模型不支持思考等级 ${level}`)
+    }
+    this.pi.setThinkingLevel(tabId, level)
+    this.readSession()
+    this.push()
+  }
+
+  /** `@` 引用用的文件搜索 */
+  searchFiles(cwd: string, query: string, limit: number): Promise<FileSearchResult[]> {
+    return searchProjectFiles(cwd, query, limit)
+  }
+
+  /** 压缩某个标签的上下文 */
+  async compactTab(tabId: string): Promise<void> {
+    await this.pi.compactTab(tabId)
   }
 
   /** 切某个标签的模型 */
@@ -891,9 +943,17 @@ export class HostState extends EventEmitter {
     this.push()
   }
 
-  /** 往某个标签发一条用户消息 */
-  async prompt(tabId: string, text: string): Promise<void> {
-    await this.pi.prompt(tabId, text)
+  /** 往某个标签发一条用户消息；attachments 是项目内的相对路径，发送时读取 */
+  async prompt(tabId: string, text: string, attachments?: string[]): Promise<void> {
+    const tab = this.tabs.find((item) => item.id === tabId)
+    if (!tab) throw new Error(`标签不存在：${tabId}`)
+    if (!attachments || attachments.length === 0) {
+      await this.pi.prompt(tabId, text)
+      return
+    }
+    const prepared = await prepareAttachments(tab.cwd, attachments)
+    const merged = prepared.text ? `${text}\n\n${prepared.text}` : text
+    await this.pi.prompt(tabId, merged, prepared.images)
   }
 
   /**
@@ -914,6 +974,31 @@ export class HostState extends EventEmitter {
       this.aborting.delete(tabId)
       this.emit('snapshot', this.snapshot())
     }
+  }
+
+  /**
+   * 记一条扩展错误。同一个错误（同标签、同类型、同路径、同事件、同正文）只保留一条，
+   * 重复发生时把它挪到末尾；最多留 20 条，避免刷屏。
+   */
+  private recordExtensionError(tabId: string, error: Omit<ExtensionErrorInfo, 'tabId'>): void {
+    const entry: ExtensionErrorInfo = { ...error, tabId }
+    const keyOf = (item: ExtensionErrorInfo): string =>
+      `${item.tabId}|${item.kind}|${item.path}|${item.event ?? ''}|${item.message}`
+    const key = keyOf(entry)
+    const index = this.extensionErrors.findIndex((item) => keyOf(item) === key)
+    if (index >= 0) this.extensionErrors.splice(index, 1)
+    this.extensionErrors.push(entry)
+    if (this.extensionErrors.length > 20) {
+      this.extensionErrors.splice(0, this.extensionErrors.length - 20)
+    }
+    this.push()
+  }
+
+  /** 清掉已经显示的扩展错误 */
+  dismissExtensionErrors(): void {
+    if (this.extensionErrors.length === 0) return
+    this.extensionErrors = []
+    this.push()
   }
 
   async dispose(): Promise<void> {

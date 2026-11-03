@@ -23,11 +23,13 @@ const EMPTY_SNAPSHOT: HostSnapshot = {
   aborting: [],
   files: [],
   activeFileId: null,
+  extensionErrors: [],
   session: {
     ready: false,
     cwd: null,
     sessionId: null,
     model: null,
+    thinkingLevel: null,
     modelFallback: null,
     error: null
   }
@@ -173,6 +175,8 @@ interface RendererStore {
   inspectorOpen: boolean
   /** 左侧栏是否展开 */
   sidebarOpen: boolean
+  /** 从输入框发起的改名请求 —— 侧栏看到后进入行内编辑 */
+  renameRequest: { path: string; nonce: number } | null
   /** 模型选择器的锚点（null = 关着）。position: fixed 用，贴着触发它的控件上方 */
   modelPickerAnchor: { left: number; bottom: number } | null
   /** 已配置凭据的模型清单（打开选择器时拉一次） */
@@ -206,6 +210,10 @@ interface RendererStore {
   toggleInspector: () => void
   /** 展开 / 收起左侧栏 */
   toggleSidebar: () => void
+  /** 请求侧栏对某条对话进入行内改名 */
+  requestRename: (path: string) => void
+  /** 侧栏已经处理掉改名请求 */
+  consumeRenameRequest: () => void
   bumpEvents: (count: number) => void
   /** 换会话时整体替换内容流（R5）—— 按标签存 */
   setItems: (tabId: string, items: StreamItem[]) => void
@@ -255,6 +263,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   expandedTools: {},
   inspectorOpen: loadInspectorOpen(),
   sidebarOpen: loadSidebarOpen(),
+  renameRequest: null,
   modelPickerAnchor: null,
   models: [],
   modelsLoading: false,
@@ -359,6 +368,14 @@ export const useStore = create<RendererStore>((set, get) => ({
     saveSidebarOpen(next)
     set({ sidebarOpen: next })
   },
+
+  requestRename: (path) => {
+    set((state) => ({
+      renameRequest: { path, nonce: (state.renameRequest?.nonce ?? 0) + 1 }
+    }))
+  },
+
+  consumeRenameRequest: () => set({ renameRequest: null }),
 
   openModelPicker: (anchor) => {
     set({ modelPickerAnchor: anchor })
