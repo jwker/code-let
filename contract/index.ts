@@ -104,8 +104,8 @@ export const EVENT_COALESCE_MS = 16
  * `@` 内容附件的上限。
  *
  * 文本按字节限：单文件 256KB、总量 1MB —— 再多会把模型上下文吃光。
- * 图片沿用文件预览的 2MB 单文件上限；总量 8MB。
- * 数量最多 20 个。
+ * 图片沿用文件预览的 2MB 单文件上限；总量 8MB。发送前 PNG/JPEG 会按最长边
+ * 1568 缩放，缩放后的数据才进入模型上下文。数量最多 20 个。
  */
 export const ATTACHMENT_LIMITS = {
   maxCount: 20,

@@ -15,13 +15,17 @@ import {
   filterCommands,
   findArgumentQuery,
   findAtQuery,
+  findMentions,
   findSlashQuery,
+  formatBytes,
+  formatTokenEstimate,
   insertArgument,
   insertCommand,
   insertMention,
   isCodeletCommandName,
   mergeCommands,
   parseCodeletCommand,
+  removeMentions,
   COMMAND_SOURCE_LABEL,
   type ComposerAttachment
 } from './composerCommands'
@@ -398,7 +402,21 @@ export function ConversationArea() {
     }
   }
 
+  /** 正文里删掉 `@path` 时，同步去掉对应的 chip；程序化清空草稿不走这里 */
+  function syncAttachmentsWithDraft(text: string): void {
+    if (attachmentsRef.current.length === 0) return
+    const mentioned = new Set(findMentions(text).map((mention) => mention.path))
+    const next = attachmentsRef.current.filter((item) => mentioned.has(item.path))
+    if (next.length !== attachmentsRef.current.length) updateAttachments(next)
+  }
+
   function removeAttachment(path: string): void {
+    // 反过来：点 chip 的 × 时，把正文里的引用也删掉
+    const result = removeMentions(draft, path, textareaRef.current?.selectionStart ?? draft.length)
+    if (result) {
+      caretAfterInsert.current = result.caret
+      setDraft(result.text)
+    }
     updateAttachments(attachmentsRef.current.filter((item) => item.path !== path))
   }
 
@@ -967,8 +985,17 @@ export function ConversationArea() {
                     className="flex min-w-0 items-center gap-1 rounded-full border border-hairline bg-sunken py-0.5 pl-2 pr-1 text-[10.5px] text-fg-2"
                   >
                     <span className="flex-none text-fg-3">{item.kind === 'image' ? '▧' : '▤'}</span>
-                    <span className="min-w-0 max-w-[220px] truncate" title={item.path}>
+                    <span
+                      className="min-w-0 max-w-[220px] truncate"
+                      title={`${item.path} · ${formatBytes(item.size)} · 约 ${item.tokens} tokens（估算）`}
+                    >
                       {item.path}
+                    </span>
+                    <span className="flex-none font-mono text-[9px] text-fg-3">
+                      {formatBytes(item.size)}
+                    </span>
+                    <span className="flex-none font-mono text-[9px] text-fg-3">
+                      {formatTokenEstimate(item.tokens)}
                     </span>
                     <button
                       type="button"
@@ -981,6 +1008,13 @@ export function ConversationArea() {
                     </button>
                   </span>
                 ))}
+                <span
+                  className="ml-auto flex-none px-1 text-[9.5px] text-fg-3"
+                  title="token 是估算值，实际以模型的 tokenizer 为准"
+                >
+                  共 {attachments.length} 个 · {formatBytes(attachments.reduce((sum, item) => sum + item.size, 0))} ·{' '}
+                  {formatTokenEstimate(attachments.reduce((sum, item) => sum + item.tokens, 0))}
+                </span>
               </div>
             )}
 
@@ -990,6 +1024,7 @@ export function ConversationArea() {
               onChange={(event) => {
                 const value = event.target.value
                 setDraft(value)
+                syncAttachmentsWithDraft(value)
                 refreshMenu(value, event.target.selectionStart ?? value.length)
               }}
               onSelect={() => refreshMenu()}

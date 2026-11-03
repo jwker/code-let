@@ -310,6 +310,26 @@ export function insertArgument(
   return { text: before + inserted + after, caret: before.length + inserted.length }
 }
 
+/** 文本附件的粗略 token 估算：4 字符一个 token，再加 `<file>` 包装的开销 */
+export function estimateTextTokens(text: string): number {
+  return Math.ceil(text.length / 4) + 8
+}
+
+/** 图片附件的固定估算 —— 跟 Pi 压缩估算里的 4800 字符/图片一致 */
+export const IMAGE_TOKEN_ESTIMATE = 1200
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes}B`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
+/** 只用于界面提示，明确标成约数 */
+export function formatTokenEstimate(tokens: number): string {
+  if (tokens >= 1000) return `≈${(tokens / 1000).toFixed(1)}k tok`
+  return `≈${tokens} tok`
+}
+
 /** `@` 引用的显示形式；路径有空格时加引号 */
 export function formatMention(path: string, kind: 'dir' | 'file'): string {
   const raw = kind === 'dir' ? `${path}/` : path
@@ -365,6 +385,8 @@ export interface ComposerAttachment {
   kind: 'text' | 'image'
   /** 字节数，用于总量限制 */
   size: number
+  /** 估算 token，仅用于界面提示 */
+  tokens: number
 }
 
 export type AttachmentCheck = { attachment: ComposerAttachment } | { error: string }
@@ -380,14 +402,23 @@ export function attachmentOf(path: string, content: FileContent): AttachmentChec
     if (content.size > ATTACHMENT_LIMITS.maxImageFileBytes) {
       return { error: `超过图片单文件上限 ${formatKb(ATTACHMENT_LIMITS.maxImageFileBytes)}` }
     }
-    return { attachment: { path, kind: 'image', size: content.size } }
+    return {
+      attachment: { path, kind: 'image', size: content.size, tokens: IMAGE_TOKEN_ESTIMATE }
+    }
   }
   if (content.binary) return { error: '是二进制文件，不能作为附件' }
   if (content.tooLarge) return { error: '文件太大，不能作为附件' }
   if (content.size > ATTACHMENT_LIMITS.maxTextFileBytes) {
     return { error: `超过文本单文件上限 ${formatKb(ATTACHMENT_LIMITS.maxTextFileBytes)}` }
   }
-  return { attachment: { path, kind: 'text', size: content.size } }
+  return {
+    attachment: {
+      path,
+      kind: 'text',
+      size: content.size,
+      tokens: estimateTextTokens(content.text)
+    }
+  }
 }
 
 /** 再加一个附件会不会超总量；重复路径不算错（已经在了） */
@@ -408,6 +439,52 @@ export function attachmentTotalError(
   return next.kind === 'text'
     ? `文本附件总量超过 ${formatKb(limit)}`
     : `图片附件总量超过 ${formatKb(limit)}`
+}
+
+export interface MentionToken {
+  path: string
+  /** `@` 在文本里的位置 */
+  tokenStart: number
+  /** 整个引用 token 的结束位置（含引号） */
+  tokenEnd: number
+}
+
+/**
+ * 扫出正文里所有 `@path` / `@"path with space"`。
+ *
+ * 只认行首或空白后的 `@`，跟输入时的触发规则一致；邮箱和正文中间的 `@` 不算。
+ */
+export function findMentions(text: string): MentionToken[] {
+  const mentions: MentionToken[] = []
+  const pattern = /(^|\s)@(?:"([^"]*)"|([^\s]+))/g
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) !== null) {
+    const path = match[2] ?? match[3] ?? ''
+    if (!path) continue
+    const tokenStart = match.index + (match[1]?.length ?? 0)
+    mentions.push({ path, tokenStart, tokenEnd: match.index + match[0].length })
+  }
+  return mentions
+}
+
+/** 删掉正文里某个路径的所有引用；没有命中时返回 null */
+export function removeMentions(text: string, path: string, caret: number): InsertResult | null {
+  const matches = findMentions(text).filter((mention) => mention.path === path)
+  if (matches.length === 0) return null
+
+  let next = text
+  let nextCaret = caret
+  // 从后往前删，前面的下标才不会变
+  for (let index = matches.length - 1; index >= 0; index -= 1) {
+    const mention = matches[index]
+    let end = mention.tokenEnd
+    if (next[end] === ' ') end += 1
+    const removed = end - mention.tokenStart
+    next = next.slice(0, mention.tokenStart) + next.slice(end)
+    if (nextCaret >= end) nextCaret -= removed
+    else if (nextCaret > mention.tokenStart) nextCaret = mention.tokenStart
+  }
+  return { text: next, caret: Math.max(0, nextCaret) }
 }
 
 /** 取 `/name args` 里的命令名（不含斜杠）；不是命令就返回 null */

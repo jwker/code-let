@@ -5,16 +5,22 @@ import {
   attachmentTotalError,
   codeletCommands,
   commandNameOf,
+  estimateTextTokens,
   filterCommands,
   findArgumentQuery,
   findAtQuery,
+  findMentions,
   findSlashQuery,
+  formatBytes,
   formatMention,
+  formatTokenEstimate,
+  IMAGE_TOKEN_ESTIMATE,
   insertArgument,
   insertCommand,
   insertMention,
   mergeCommands,
   parseCodeletCommand,
+  removeMentions,
   type ComposerCommand
 } from '../host/renderer/src/conversation/composerCommands'
 
@@ -271,6 +277,42 @@ describe('Codelet 动作的可用性', () => {
   })
 })
 
+describe('附件估算与正文引用', () => {
+  it('文本按字符数估算，图片用固定估算；大小格式化', () => {
+    expect(estimateTextTokens('abcd')).toBe(9)
+    expect(estimateTextTokens('a'.repeat(400))).toBe(108)
+    expect(formatBytes(512)).toBe('512B')
+    expect(formatBytes(2048)).toBe('2KB')
+    expect(formatBytes(1024 * 1024 * 1.5)).toBe('1.5MB')
+    expect(formatTokenEstimate(999)).toBe('≈999 tok')
+    expect(formatTokenEstimate(1200)).toBe('≈1.2k tok')
+  })
+
+  it('扫出正文里的引用，忽略邮箱和正文中间的 @', () => {
+    expect(findMentions('看 @src/a.ts 和 @"my file.ts"')).toEqual([
+      { path: 'src/a.ts', tokenStart: 2, tokenEnd: 11 },
+      { path: 'my file.ts', tokenStart: 14, tokenEnd: 27 }
+    ])
+    expect(findMentions('foo@bar.com')).toEqual([])
+    expect(findMentions('@a @b')).toEqual([
+      { path: 'a', tokenStart: 0, tokenEnd: 2 },
+      { path: 'b', tokenStart: 3, tokenEnd: 5 }
+    ])
+  })
+
+  it('删 chip 时把正文里的同名引用一起删掉', () => {
+    expect(removeMentions('看 @src/a.ts 这里', 'src/a.ts', 6)).toEqual({
+      text: '看 这里',
+      caret: 2
+    })
+    expect(removeMentions('@"my file.ts" 跟着', 'my file.ts', 13)).toEqual({
+      text: '跟着',
+      caret: 0
+    })
+    expect(removeMentions('没有引用', 'a.ts', 3)).toBeNull()
+  })
+})
+
 describe('附件判定与总量', () => {
   const text = (size: number, overrides: Partial<Extract<FileContent, { kind: 'text' }>> = {}) =>
     ({ kind: 'text', text: 'x', lines: 1, binary: false, tooLarge: false, size, ...overrides }) as FileContent
@@ -279,10 +321,15 @@ describe('附件判定与总量', () => {
 
   it('文本与图片可以附件；二进制、太大、不支持的不行', () => {
     expect(attachmentOf('a.ts', text(10))).toEqual({
-      attachment: { path: 'a.ts', kind: 'text', size: 10 }
+      attachment: { path: 'a.ts', kind: 'text', size: 10, tokens: estimateTextTokens('x') }
     })
     expect(attachmentOf('pic.png', image(10))).toEqual({
-      attachment: { path: 'pic.png', kind: 'image', size: 10 }
+      attachment: {
+        path: 'pic.png',
+        kind: 'image',
+        size: 10,
+        tokens: IMAGE_TOKEN_ESTIMATE
+      }
     })
     expect(attachmentOf('a.bin', text(10, { binary: true }))).toMatchObject({ error: /二进制/ })
     expect(attachmentOf('a.txt', text(10, { tooLarge: true }))).toMatchObject({ error: /太大/ })
@@ -296,21 +343,27 @@ describe('附件判定与总量', () => {
   })
 
   it('重复路径不算错；数量与总量超限报错', () => {
-    const existing = [{ path: 'a.ts', kind: 'text' as const, size: 10 }]
-    expect(attachmentTotalError(existing, { path: 'a.ts', kind: 'text', size: 10 })).toBeNull()
+    const existing = [{ path: 'a.ts', kind: 'text' as const, size: 10, tokens: 9 }]
+    expect(
+      attachmentTotalError(existing, { path: 'a.ts', kind: 'text', size: 10, tokens: 9 })
+    ).toBeNull()
     expect(
       attachmentTotalError(existing, {
         path: 'b.ts',
         kind: 'text',
-        size: ATTACHMENT_LIMITS.maxTextTotalBytes
+        size: ATTACHMENT_LIMITS.maxTextTotalBytes,
+        tokens: 9
       })
     ).toMatch(/文本附件总量/)
     const many = Array.from({ length: ATTACHMENT_LIMITS.maxCount }, (_, index) => ({
       path: `f${index}.ts`,
       kind: 'text' as const,
-      size: 1
+      size: 1,
+      tokens: 9
     }))
-    expect(attachmentTotalError(many, { path: 'extra.ts', kind: 'text', size: 1 })).toMatch(/最多/)
+    expect(
+      attachmentTotalError(many, { path: 'extra.ts', kind: 'text', size: 1, tokens: 9 })
+    ).toMatch(/最多/)
   })
 })
 

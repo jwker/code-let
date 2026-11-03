@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path'
 import { ATTACHMENT_LIMITS, type FileContent } from '@contract/index'
 import { readFileContent } from './files'
+import { resizeImageForPrompt } from './imageResize'
 
 /**
  * 把 `@` 选中的文件准备成一次 prompt 的附件。
@@ -78,9 +79,16 @@ export async function prepareAttachments(
       if (imageBytes > ATTACHMENT_LIMITS.maxImageTotalBytes) {
         throw new Error(`图片附件总量超过 ${kb(ATTACHMENT_LIMITS.maxImageTotalBytes)}`)
       }
-      const match = DATA_URL.exec(content.dataUrl)
-      if (!match) throw fail(path, '图片数据格式不对')
-      images.push({ type: 'image', mimeType: match[1], data: match[2] })
+
+      const original = DATA_URL.exec(content.dataUrl)
+      if (!original) throw fail(path, '图片数据格式不对')
+
+      // 大图先缩到模型能用的最长边；缩放失败就保留原图
+      const resized = await resizeImageForPrompt(content.dataUrl, original[1])
+      const payload = DATA_URL.exec(resized?.dataUrl ?? content.dataUrl)
+      if (!payload) throw fail(path, '图片数据格式不对')
+
+      images.push({ type: 'image', mimeType: payload[1], data: payload[2] })
       blocks.push(`<file name="${escapeName(path)}"></file>`)
       continue
     }
