@@ -759,8 +759,8 @@ body.is-pane-resizing * {
   position: absolute;
   z-index: 20;
   left: 14px;
-  top: 44px;
-  bottom: 44px;
+  top: 64px;
+  bottom: 80px;
   width: 34px;
   display: flex;
   flex-direction: column;
