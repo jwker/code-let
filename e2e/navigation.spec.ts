@@ -36,7 +36,7 @@ test.describe.serial('对话导航', () => {
     process.env.PI_CODING_AGENT_DIR = agentDir
     try {
       const manager = SessionManager.create(projectDir)
-      for (let index = 1; index <= 20; index += 1) {
+      for (let index = 1; index <= 60; index += 1) {
         manager.appendMessage({
           role: 'user',
           content: [{ type: 'text', text: `第 ${index} 轮用户输入：检查导航定位 ${index}` }],
@@ -73,7 +73,7 @@ test.describe.serial('对话导航', () => {
       timeout: 30_000
     })
     page = await app.firstWindow()
-    await expect(page.locator('.conv-nav-hit')).toHaveCount(20, { timeout: 20_000 })
+    await expect(page.locator('.conv-nav-hit')).toHaveCount(60, { timeout: 20_000 })
   })
 
   test.afterAll(async () => {
@@ -82,6 +82,19 @@ test.describe.serial('对话导航', () => {
     for (const dir of [projectDir, userDataDir, agentDir]) {
       if (dir) rmSync(dir, { recursive: true, force: true })
     }
+  })
+
+  test('轮次多于轨道高度时只滚动圆点列表，当前圆点自动进入可视区', async () => {
+    const list = page.locator('.conv-nav-list')
+    const metrics = await list.evaluate((element) => ({
+      scrollHeight: element.scrollHeight,
+      clientHeight: element.clientHeight
+    }))
+    expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight)
+    await expect(list).toHaveClass(/is-overflowing/)
+    await expect
+      .poll(() => list.evaluate((element) => element.scrollTop), { timeout: 10_000 })
+      .toBeGreaterThan(0)
   })
 
   test('悬停圆点展开对应轮次的用户输入', async () => {

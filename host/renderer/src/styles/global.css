@@ -775,6 +775,10 @@ body.is-pane-resizing * {
 .conv-nav-list::-webkit-scrollbar {
   display: none;
 }
+.conv-nav-list.is-overflowing {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 8px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 8px, #000 calc(100% - 8px), transparent 100%);
+}
 
 .conv-nav-item {
   position: relative;

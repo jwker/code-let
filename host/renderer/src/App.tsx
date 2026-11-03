@@ -30,6 +30,7 @@ export function App() {
   const setItems = useStore((s) => s.setItems)
   const theme = useStore((s) => s.theme)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
+  const sessionReady = useStore((s) => s.snapshot.session.ready)
   const nav = useStore((s) => s.nav)
   const inspectorOpen = useStore((s) => s.inspectorOpen)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
@@ -94,6 +95,12 @@ export function App() {
    */
   useEffect(() => {
     if (!activeTabId) return
+    /*
+     * runtime 还没建好时 readEntries() 会返回空数组。
+     * 等 session.ready 再读，否则空数组会被当成「这个对话没说过话」缓存下来，
+     * 之后再也不会重读。
+     */
+    if (!sessionReady) return
     if (useStore.getState().items[activeTabId]) return
     let cancelled = false
     void host.getTabEntries(activeTabId).then((items) => {
@@ -102,7 +109,7 @@ export function App() {
     return () => {
       cancelled = true
     }
-  }, [activeTabId, setItems])
+  }, [activeTabId, sessionReady, setItems])
 
   // 宽度写在 shell 的 CSS 变量上，标题栏和下方三列共用同一份（见 .shell）
   useLayoutEffect(() => {

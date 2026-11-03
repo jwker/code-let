@@ -22,7 +22,9 @@ export function ConversationNav({
   const turnsKey = turns.map((turn) => `${turn.index}:${turn.text}:${turn.files.join(',')}`).join('\u0000')
   const [active, setActive] = useState<number | null>(null)
   const [hovered, setHovered] = useState<{ index: number; y: number } | null>(null)
+  const [overflowing, setOverflowing] = useState(false)
   const navRef = useRef<HTMLElement>(null)
+  const listRef = useRef<HTMLDivElement>(null)
   const dotRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   // 滚动时找「已经进入视口上部的最后一条用户消息」
@@ -53,6 +55,33 @@ export function ConversationNav({
       observer.disconnect()
     }
   }, [mode, scrollRef, turnsKey])
+
+  // 轮次多到轨道放不下时，让当前圆点自动滚进轨道可视区
+  useEffect(() => {
+    if (active === null) return
+    const list = listRef.current
+    const ordinal = turns.findIndex((turn) => turn.index === active)
+    const button = dotRefs.current[ordinal]
+    if (!list || !button) return
+
+    const listRect = list.getBoundingClientRect()
+    const buttonRect = button.getBoundingClientRect()
+    const buttonTop = buttonRect.top - listRect.top + list.scrollTop
+    const buttonBottom = buttonTop + buttonRect.height
+    const viewTop = list.scrollTop
+    const viewBottom = viewTop + list.clientHeight
+    if (buttonTop < viewTop + 2) {
+      list.scrollTop = Math.max(0, buttonTop - 2)
+    } else if (buttonBottom > viewBottom - 2) {
+      list.scrollTop = buttonBottom - list.clientHeight + 2
+    }
+  }, [active, turnsKey])
+
+  // 溢出时给上下边缘一点渐隐，提示还可以滚动（滚动条本身隐藏）
+  useEffect(() => {
+    const list = listRef.current
+    setOverflowing(Boolean(list && list.scrollHeight > list.clientHeight + 1))
+  }, [turnsKey])
 
   if (mode === 'html' || turns.length < 2) return null
 
@@ -103,13 +132,13 @@ export function ConversationNav({
     <nav
       ref={navRef}
       className="conv-nav"
-      aria-label="对话导航"
+      aria-label={`对话导航，共 ${turns.length} 轮`}
       onMouseLeave={() => setHovered(null)}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHovered(null)
       }}
     >
-      <div className="conv-nav-list">
+      <div ref={listRef} className={`conv-nav-list${overflowing ? ' is-overflowing' : ''}`}>
         {turns.map((turn, ordinal) => (
           <div className="conv-nav-item" key={turn.index}>
             <button
