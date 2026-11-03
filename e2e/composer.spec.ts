@@ -26,9 +26,25 @@ test.describe.serial('输入框', () => {
     agentDir = mkdtempSync(join(tmpdir(), 'codelet-e2e-agent-'))
 
     mkdirSync(join(projectDir, 'src'))
+    mkdirSync(join(projectDir, '.pi', 'extensions'), { recursive: true })
     writeFileSync(join(projectDir, 'README.md'), '# E2E\n\n测试项目。\n')
-    writeFileSync(join(projectDir, 'package.json'), '{"name":"e2e-fixture"}\n')
+    writeFileSync(join(projectDir, 'package.json'), '{"name":"e2e-fixture","type":"module"}\n')
     writeFileSync(join(projectDir, 'src', 'index.ts'), 'export const answer = 42\n')
+    // 项目内扩展：只用来验证命令菜单和参数补全，不执行任何真实操作
+    writeFileSync(
+      join(projectDir, '.pi', 'extensions', 'e2e.js'),
+      `export default function e2e(pi) {
+  pi.registerCommand('e2e-args', {
+    description: 'E2E 参数补全',
+    getArgumentCompletions: (prefix) =>
+      ['alpha', 'beta']
+        .filter((value) => value.startsWith(prefix))
+        .map((value) => ({ value, label: value })),
+    handler: async () => {}
+  })
+}
+`
+    )
     writeFileSync(
       join(userDataDir, 'projects.json'),
       JSON.stringify({ projects: [projectDir] }, null, 2)
@@ -74,6 +90,25 @@ test.describe.serial('输入框', () => {
     await expect(menu).toBeVisible()
     await expect(menu.getByRole('option').filter({ hasText: 'src/index.ts' })).toBeVisible()
 
+    await composer.fill('')
+  })
+
+  test('扩展命令选中后弹出参数候选，选中候选写回正文', async () => {
+    const composer = page.locator('textarea')
+    await composer.fill('/')
+
+    const menu = page.getByRole('listbox', { name: '命令' })
+    const command = menu.getByRole('option').filter({ hasText: '/e2e-args' })
+    await expect(command).toBeVisible()
+    await command.click()
+
+    await expect(composer).toHaveValue('/e2e-args ')
+    const args = page.getByRole('listbox', { name: '命令参数' })
+    const alpha = args.getByRole('option').filter({ hasText: 'alpha' })
+    await expect(alpha).toBeVisible()
+    await alpha.click()
+
+    await expect(composer).toHaveValue('/e2e-args alpha ')
     await composer.fill('')
   })
 
