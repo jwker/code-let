@@ -112,6 +112,23 @@ test.describe.serial('输入框', () => {
     await composer.fill('')
   })
 
+  test('/reload 重建 runtime 后命令菜单仍然可用', async () => {
+    const composer = page.locator('textarea')
+    await composer.fill('/reload')
+
+    const menu = page.getByRole('listbox', { name: '命令' })
+    const reload = menu.getByRole('option').filter({ hasText: '/reload' })
+    await expect(reload).toBeVisible()
+    await reload.click()
+
+    await expect(page.getByText('已重新加载扩展和会话')).toBeVisible({ timeout: 15_000 })
+    await composer.fill('/')
+    await expect(
+      page.getByRole('listbox', { name: '命令' }).getByRole('option').filter({ hasText: '/e2e-args' })
+    ).toBeVisible()
+    await composer.fill('')
+  })
+
   test('@ 选中文件后出现 chip，删掉正文引用后 chip 消失', async () => {
     const composer = page.locator('textarea')
     await composer.fill('@')
