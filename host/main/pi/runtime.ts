@@ -78,7 +78,10 @@ export interface PiRuntimePort {
    * lazy = true 时先不建 runtime（恢复出来的标签用），点了再 `activateTab`。
    * 给了 path 但文件不在 → 抛 `TabSessionMissingError`。
    */
-  openTab(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void>
+  openTab(
+    tabId: string,
+    options: { cwd: string; path?: string; lazy?: boolean; inMemory?: boolean }
+  ): Promise<void>
   /** 关掉一个标签：先 abort 等那一轮结算，再 dispose */
   closeTab(tabId: string): Promise<void>
   /** 激活一个标签：runtime 还没建就建 */
@@ -110,8 +113,13 @@ export interface PiRuntimePort {
   setThinkingLevel(tabId: string, level: ThinkingLevel): void
   /** 压缩某个标签的上下文 */
   compactTab(tabId: string): Promise<void>
-  /** 往某个标签发一条用户消息 */
-  prompt(tabId: string, text: string, images?: PromptImage[]): Promise<void>
+  /** 往某个标签发一条用户消息；expandPromptTemplates=false 时把 / 当普通文字 */
+  prompt(
+    tabId: string,
+    text: string,
+    images?: PromptImage[],
+    options?: { expandPromptTemplates?: boolean }
+  ): Promise<void>
   /**
    * 中止某个标签正在跑的那一轮（用户主动停，标签留着）。
    *
@@ -164,6 +172,8 @@ interface TabRecord {
   cwd: string
   /** 会话文件路径（新会话在第一条用户消息之前还没有文件） */
   path: string | null
+  /** 临时对话：用内存 SessionManager，不落盘 */
+  inMemory: boolean
   /** 这个标签自己的 EventBus —— 共享一个会串台 */
   bus: EventBus
   runtime: AgentSessionRuntime | null
@@ -217,7 +227,10 @@ export class PiRuntime implements PiRuntimePort {
    * lazy = true 时**不建 runtime** —— 恢复出来的标签用它：
    * 标签栏立刻能显示，runtime 等用户点它的时候再建（起一个约 15–25ms）。
    */
-  async openTab(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void> {
+  async openTab(
+    tabId: string,
+    options: { cwd: string; path?: string; lazy?: boolean; inMemory?: boolean }
+  ): Promise<void> {
     const path = options.path ?? null
     // 文件不在就别登记了 —— 恢复时靠这个把没落盘的标签挑出去
     if (path && !existsSync(path)) throw new TabSessionMissingError(path)
@@ -226,6 +239,7 @@ export class PiRuntime implements PiRuntimePort {
       tabId,
       cwd: options.cwd,
       path,
+      inMemory: options.inMemory === true,
       bus: createEventBus(),
       runtime: null,
       unbind: null,
@@ -325,9 +339,11 @@ export class PiRuntime implements PiRuntimePort {
       return { session, extensionsResult, modelFallbackMessage, services, diagnostics: services.diagnostics }
     }
 
-    const sessionManager = record.path
-      ? SessionManager.open(record.path, undefined, record.cwd)
-      : SessionManager.create(record.cwd)
+    const sessionManager = record.inMemory
+      ? SessionManager.inMemory(record.cwd)
+      : record.path
+        ? SessionManager.open(record.path, undefined, record.cwd)
+        : SessionManager.create(record.cwd)
     record.sessionManager = sessionManager
     record.runtime = await createAgentSessionRuntime(createRuntime, {
       cwd: record.cwd,

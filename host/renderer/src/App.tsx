@@ -4,6 +4,7 @@ import { Inspector } from './shell/Inspector'
 import { StatusBar } from './shell/StatusBar'
 import { MainArea } from './shell/MainArea'
 import { ModelPicker } from './shell/ModelPicker'
+import { TemporaryChat } from './shell/TemporaryChat'
 import { PaneResizer } from './shell/PaneResizer'
 import { Sidebar } from './shell/Sidebar'
 import { TitleBar } from './shell/TitleBar'
@@ -243,6 +244,8 @@ export function App() {
           />
         </div>
       )}
+
+      <TemporaryChat />
     </div>
   )
 }

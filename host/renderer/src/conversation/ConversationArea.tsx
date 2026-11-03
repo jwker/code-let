@@ -686,6 +686,17 @@ export function ConversationArea() {
         stop()
         return
       }
+      case 'ask': {
+        try {
+          const snapshot = await host.openTemporaryChat()
+          const store = useStore.getState()
+          store.setSnapshot(snapshot)
+          store.setTempMinimized(false)
+        } catch (error) {
+          showNotice('error', error instanceof Error ? error.message : String(error))
+        }
+        return
+      }
       case 'thinking': {
         if (streaming || stopping) {
           showNotice('error', '等这一轮结束再改思考等级')

@@ -72,6 +72,18 @@ export const IPC = {
   commandsComplete: 'host:commands:complete',
   /** 打开系统文件选择器，选择要上传的附件 */
   attachmentsPick: 'host:attachments:pick',
+  /** 临时对话：打开/恢复 */
+  temporaryOpen: 'host:temporary:open',
+  /** 临时对话：彻底关闭 */
+  temporaryClose: 'host:temporary:close',
+  /** 临时对话：发送 */
+  temporaryPrompt: 'host:temporary:prompt',
+  /** 临时对话：中止当前轮 */
+  temporaryAbort: 'host:temporary:abort',
+  /** 临时对话：模型列表 */
+  temporaryModels: 'host:temporary:models',
+  /** 临时对话：切换模型 */
+  temporaryModelSelect: 'host:temporary:model-select',
   /** 列当前模型可用的思考等级 */
   thinkingLevels: 'host:thinking:levels',
   /** 设置某个标签的思考等级 */
@@ -367,6 +379,14 @@ export interface PickAttachmentsResult {
   errors: string[]
 }
 
+/** 弹窗式临时对话；不写 session 文件，不进标签/侧栏 */
+export interface TemporaryChatState {
+  id: string
+  cwd: string
+  model: ModelOption | null
+  error: string | null
+}
+
 /** 当前 Pi 会话的状态 */
 export interface SessionState {
   /** runtime 是否就绪 */
@@ -422,6 +442,8 @@ export interface HostSnapshot {
   activeFileId: string | null
   /** 扩展加载 / 执行错误 —— 侧栏主区顶部会提示；清掉后为空 */
   extensionErrors: ExtensionErrorInfo[]
+  /** 当前临时对话；null 表示没有打开过，或已经彻底关闭 */
+  temporaryChat: TemporaryChatState | null
   /**
    * **活动标签**的会话状态。
    *
@@ -607,6 +629,18 @@ export interface CodeletApi {
   listCommands(tabId: string): Promise<CommandOption[]>
   /** 打开系统文件选择器，选择文本或图片附件 */
   pickAttachments(): Promise<PickAttachmentsResult>
+  /** 打开或恢复临时对话；已存在时返回当前会话 */
+  openTemporaryChat(): Promise<HostSnapshot>
+  /** 彻底关闭临时对话并清除内存会话 */
+  closeTemporaryChat(): Promise<HostSnapshot>
+  /** 临时对话发消息；只接受系统选择器上传的附件 id */
+  promptTemporary(id: string, text: string, uploads?: string[]): Promise<void>
+  /** 中止临时对话当前轮 */
+  abortTemporary(id: string): Promise<void>
+  /** 临时对话可用模型 */
+  listTemporaryModels(id: string): Promise<ModelOption[]>
+  /** 临时对话切换模型；只影响这份内存会话 */
+  selectTemporaryModel(id: string, provider: string, modelId: string): Promise<HostSnapshot>
   /** 列某个扩展命令的参数候选 */
   completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]>
   /** 列当前模型可用的思考等级 */

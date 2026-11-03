@@ -96,6 +96,23 @@ export const thinkingSelectSchema = z.object({
   level: z.string().min(1)
 })
 
+/** 临时对话的内部 id */
+export const temporaryIdSchema = z.object({
+  id: z.string().min(1)
+})
+
+export const temporaryPromptSchema = z.object({
+  id: z.string().min(1),
+  text: z.string().min(1),
+  uploads: z.array(z.string().min(1)).max(ATTACHMENT_LIMITS.maxCount).optional()
+})
+
+export const temporaryModelSelectSchema = z.object({
+  id: z.string().min(1),
+  provider: z.string().min(1),
+  modelId: z.string().min(1)
+})
+
 export const clipboardWriteSchema = z.object({
   text: z.string()
 })

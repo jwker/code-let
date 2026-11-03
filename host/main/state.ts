@@ -17,7 +17,8 @@ import type {
   SessionState,
   ThinkingLevel,
   StreamItem,
-  TabInfo
+  TabInfo,
+  TemporaryChatState
 } from '@contract/index'
 import { ATTACHMENT_LIMITS } from '@contract/index'
 import {
@@ -100,6 +101,9 @@ export class HostState extends EventEmitter {
   /** 系统选择器上传的附件 —— id -> 批准的绝对路径 */
   private uploads = new Map<string, ExternalAttachment>()
   private uploadSeq = 0
+  /** 当前临时对话；null = 没有或已彻底关闭 */
+  private temporaryChat: TemporaryChatState | null = null
+  private temporarySeq = 0
   private session: SessionState = {
     ready: false,
     cwd: null,
@@ -186,6 +190,7 @@ export class HostState extends EventEmitter {
       files: this.files.map((f) => (this.fileStale.has(f.id) ? { ...f, stale: true } : f)),
       activeFileId: this.activeFileId,
       extensionErrors: this.extensionErrors,
+      temporaryChat: this.temporaryChat ? { ...this.temporaryChat } : null,
       session: this.session
     }
   }
@@ -230,6 +235,7 @@ export class HostState extends EventEmitter {
       // 模型被换了（比如扩展调的 setModel）—— 快照跟着变
       if (event.type === 'model_select') {
         this.readSession()
+        this.refreshTemporary()
         this.push()
       }
       // 会话文件变了，对话列表要跟着变
@@ -950,6 +956,91 @@ export class HostState extends EventEmitter {
     this.fileSearches.delete(requestId)
   }
 
+  /** 打开或恢复临时对话；已有会话时不新建 */
+  async openTemporaryChat(): Promise<HostSnapshot> {
+    if (this.temporaryChat) return this.snapshot()
+
+    const active = this.tabs.find((tab) => tab.id === this.activeTabId)
+    if (!active) throw new Error('先打开一个项目再使用临时对话')
+    const activeModel = this.activeTabId ? this.pi.tabState(this.activeTabId).model : null
+    const id = `temp-${++this.temporarySeq}`
+
+    await this.pi.openTab(id, { cwd: active.cwd, inMemory: true })
+    this.temporaryChat = { id, cwd: active.cwd, model: null, error: null }
+
+    if (activeModel) {
+      try {
+        await this.pi.selectModel(id, activeModel.provider, activeModel.id, false)
+      } catch (error) {
+        if (this.temporaryChat?.id === id) {
+          this.temporaryChat.error = error instanceof Error ? error.message : String(error)
+        }
+      }
+    }
+    this.refreshTemporary()
+    this.push()
+    return this.snapshot()
+  }
+
+  /** 彻底关闭临时对话；内存 session 随 runtime 释放 */
+  async closeTemporaryChat(): Promise<HostSnapshot> {
+    const temp = this.temporaryChat
+    if (!temp) return this.snapshot()
+    await this.pi.closeTab(temp.id)
+    this.temporaryChat = null
+    this.push()
+    return this.snapshot()
+  }
+
+  /** 临时对话发消息；只接受系统选择器上传的附件 id */
+  async promptTemporary(id: string, text: string, uploadIds?: string[]): Promise<void> {
+    const temp = this.temporaryChat
+    if (!temp || temp.id !== id) throw new Error('临时对话已经关闭')
+    const external = this.resolveUploads(uploadIds)
+    const prepared = await prepareAttachments(temp.cwd, [], external)
+    const merged = prepared.text ? `${text}\n\n${prepared.text}` : text
+    await this.pi.prompt(id, merged, prepared.images, { expandPromptTemplates: false })
+    for (const upload of external) this.uploads.delete(upload.id)
+  }
+
+  /** 中止临时对话当前轮 */
+  async abortTemporary(id: string): Promise<void> {
+    if (!this.temporaryChat || this.temporaryChat.id !== id) return
+    await this.pi.abortTab(id)
+  }
+
+  /** 临时对话可用模型 */
+  listTemporaryModels(id: string): Promise<ModelOption[]> {
+    if (!this.temporaryChat || this.temporaryChat.id !== id) return Promise.resolve([])
+    return this.pi.listModels(id)
+  }
+
+  /** 临时对话切换模型；persist 固定为 false */
+  async selectTemporaryModel(id: string, provider: string, modelId: string): Promise<HostSnapshot> {
+    if (!this.temporaryChat || this.temporaryChat.id !== id) throw new Error('临时对话已经关闭')
+    await this.pi.selectModel(id, provider, modelId, false)
+    this.refreshTemporary()
+    this.push()
+    return this.snapshot()
+  }
+
+  private refreshTemporary(): void {
+    if (!this.temporaryChat) return
+    const state = this.pi.tabState(this.temporaryChat.id)
+    this.temporaryChat.model = state.model
+    if (state.modelFallback) this.temporaryChat.error = state.modelFallback
+  }
+
+  private resolveUploads(uploadIds?: string[]): ExternalAttachment[] {
+    const external: ExternalAttachment[] = []
+    for (const id of uploadIds ?? []) {
+      const upload = this.uploads.get(id)
+      if (!upload) throw new Error('上传的附件已失效，请重新选择')
+      external.push(upload)
+    }
+    return external
+  }
+
   /** 压缩某个标签的上下文 */
   async compactTab(tabId: string): Promise<void> {
     await this.pi.compactTab(tabId)
@@ -996,12 +1087,7 @@ export class HostState extends EventEmitter {
     const tab = this.tabs.find((item) => item.id === tabId)
     if (!tab) throw new Error(`标签不存在：${tabId}`)
 
-    const external: ExternalAttachment[] = []
-    for (const id of uploadIds ?? []) {
-      const upload = this.uploads.get(id)
-      if (!upload) throw new Error('上传的附件已失效，请重新选择')
-      external.push(upload)
-    }
+    const external = this.resolveUploads(uploadIds)
 
     if ((!attachments || attachments.length === 0) && external.length === 0) {
       await this.pi.prompt(tabId, text)
@@ -1095,6 +1181,7 @@ export class HostState extends EventEmitter {
     for (const controller of this.fileSearches.values()) controller.abort()
     this.fileSearches.clear()
     this.uploads.clear()
+    this.temporaryChat = null
     await this.pi.stop()
   }
 }

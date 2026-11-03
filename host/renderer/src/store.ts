@@ -24,6 +24,7 @@ const EMPTY_SNAPSHOT: HostSnapshot = {
   files: [],
   activeFileId: null,
   extensionErrors: [],
+  temporaryChat: null,
   session: {
     ready: false,
     cwd: null,
@@ -179,6 +180,8 @@ interface RendererStore {
   renameRequest: { path: string; nonce: number } | null
   /** 模型选择器的锚点（null = 关着）。position: fixed 用，贴着触发它的控件上方 */
   modelPickerAnchor: { left: number; bottom: number } | null
+  /** 临时对话是否收起成右下角胶囊 */
+  tempMinimized: boolean
   /** 已配置凭据的模型清单（打开选择器时拉一次） */
   models: ModelOption[]
   /** 模型清单拉取中的提示 */
@@ -217,6 +220,10 @@ interface RendererStore {
   bumpEvents: (count: number) => void
   /** 换会话时整体替换内容流（R5）—— 按标签存 */
   setItems: (tabId: string, items: StreamItem[]) => void
+  /** 丢弃某个临时/标签的内容流（关闭临时对话时用） */
+  clearTabItems: (tabId: string) => void
+  /** 临时对话是否收起成右下角胶囊 */
+  setTempMinimized: (value: boolean) => void
   /**
    * 重新加载某个标签：重建 runtime 并把内容流也重读一遍。
    *
@@ -265,6 +272,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   sidebarOpen: loadSidebarOpen(),
   renameRequest: null,
   modelPickerAnchor: null,
+  tempMinimized: false,
   models: [],
   modelsLoading: false,
   modelsError: null,
@@ -275,18 +283,34 @@ export const useStore = create<RendererStore>((set, get) => ({
   setSnapshot: (snapshot) => {
     const previousSessionId = get().snapshot.session.sessionId
     const nextSessionId = snapshot.session.sessionId
+    const previousTempId = get().snapshot.temporaryChat?.id
+    const nextTempId = snapshot.temporaryChat?.id
+    const tempChanged = previousTempId !== nextTempId
     if (previousSessionId === nextSessionId) {
-      set({ snapshot })
+      set({ snapshot, ...(tempChanged ? { tempMinimized: false } : {}) })
       return
     }
     // 换会话：把该会话上次的排版模式取回来（模式记在会话状态里）
     const modes = loadModes()
     const mode = (nextSessionId && modes[nextSessionId]) || 'normal'
-    set({ snapshot, mode })
+    set({ snapshot, mode, ...(tempChanged ? { tempMinimized: false } : {}) })
   },
 
 
   setNav: (nav) => set({ nav }),
+
+  setTempMinimized: (value) => set({ tempMinimized: value }),
+
+  clearTabItems: (tabId) =>
+    set((state) => {
+      const items = { ...state.items }
+      const streaming = { ...state.streaming }
+      const expandedTools = { ...state.expandedTools }
+      delete items[tabId]
+      delete streaming[tabId]
+      delete expandedTools[tabId]
+      return { items, streaming, expandedTools }
+    }),
 
   reloadTab: async (tabId) => {
     await host.reloadTab(tabId)

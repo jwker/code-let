@@ -25,6 +25,9 @@ import {
   tabIdSchema,
   tabNewSchema,
   tabOpenSchema,
+  temporaryIdSchema,
+  temporaryModelSelectSchema,
+  temporaryPromptSchema,
   thinkingSelectSchema
 } from '@contract/schemas'
 import { compactSessionEvent, trimMessageUpdate } from '@contract/stream'
@@ -236,6 +239,25 @@ export function registerIpc(state: HostState): () => void {
 
   ipcMain.handle(IPC.attachmentsPick, () => state.pickAttachments())
 
+  ipcMain.handle(IPC.temporaryOpen, () => state.openTemporaryChat())
+  ipcMain.handle(IPC.temporaryClose, () => state.closeTemporaryChat())
+  ipcMain.handle(IPC.temporaryPrompt, async (_event, payload: unknown) => {
+    const { id, text, uploads } = temporaryPromptSchema.parse(payload)
+    await state.promptTemporary(id, text, uploads)
+  })
+  ipcMain.handle(IPC.temporaryAbort, async (_event, payload: unknown) => {
+    const { id } = temporaryIdSchema.parse(payload)
+    await state.abortTemporary(id)
+  })
+  ipcMain.handle(IPC.temporaryModels, async (_event, payload: unknown) => {
+    const { id } = temporaryIdSchema.parse(payload)
+    return state.listTemporaryModels(id)
+  })
+  ipcMain.handle(IPC.temporaryModelSelect, async (_event, payload: unknown) => {
+    const { id, provider, modelId } = temporaryModelSelectSchema.parse(payload)
+    return state.selectTemporaryModel(id, provider, modelId)
+  })
+
   ipcMain.handle(IPC.commandsList, async (_event, payload: unknown) => {
     const { tabId } = tabIdSchema.parse(payload)
     return state.listCommands(tabId)
@@ -295,6 +317,12 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.filesReload)
     ipcMain.removeHandler(IPC.modelsList)
     ipcMain.removeHandler(IPC.attachmentsPick)
+    ipcMain.removeHandler(IPC.temporaryOpen)
+    ipcMain.removeHandler(IPC.temporaryClose)
+    ipcMain.removeHandler(IPC.temporaryPrompt)
+    ipcMain.removeHandler(IPC.temporaryAbort)
+    ipcMain.removeHandler(IPC.temporaryModels)
+    ipcMain.removeHandler(IPC.temporaryModelSelect)
     ipcMain.removeHandler(IPC.commandsList)
     ipcMain.removeHandler(IPC.commandsComplete)
     ipcMain.removeHandler(IPC.thinkingLevels)

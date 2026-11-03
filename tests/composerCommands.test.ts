@@ -151,6 +151,7 @@ describe('手打 Codelet 命令', () => {
     expect(parseCodeletCommand('/new 带参数')).toEqual({ name: 'new', args: '带参数' })
     expect(parseCodeletCommand('/thinking high')).toEqual({ name: 'thinking', args: 'high' })
     expect(parseCodeletCommand('/reload')).toEqual({ name: 'reload', args: '' })
+    expect(parseCodeletCommand('/ask')).toEqual({ name: 'ask', args: '' })
   })
 
   it('不认识的命令和正文里的斜杠不拦截', () => {
@@ -226,6 +227,7 @@ describe('Codelet 动作的可用性', () => {
       new: false,
       model: true,
       rename: false,
+      ask: false,
       compact: true,
       reload: true,
       stop: false,
@@ -247,6 +249,7 @@ describe('Codelet 动作的可用性', () => {
     expect(disabled.rename).toBe(true)
     expect(disabled.model).toBe(false)
     expect(disabled.thinking).toBe(false)
+    expect(disabled.ask).toBe(false)
     expect(disabled.reload).toBe(false)
   })
 

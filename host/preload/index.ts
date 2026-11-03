@@ -43,6 +43,14 @@ const api: CodeletApi = {
   compactTab: (tabId) => ipcRenderer.invoke(IPC.promptCompact, { tabId }) as Promise<void>,
   pickAttachments: () =>
     ipcRenderer.invoke(IPC.attachmentsPick) as Promise<PickAttachmentsResult>,
+  openTemporaryChat: () => ipcRenderer.invoke(IPC.temporaryOpen) as Promise<HostSnapshot>,
+  closeTemporaryChat: () => ipcRenderer.invoke(IPC.temporaryClose) as Promise<HostSnapshot>,
+  promptTemporary: (id, text, uploads) =>
+    ipcRenderer.invoke(IPC.temporaryPrompt, { id, text, uploads }) as Promise<void>,
+  abortTemporary: (id) => ipcRenderer.invoke(IPC.temporaryAbort, { id }) as Promise<void>,
+  listTemporaryModels: (id) => ipcRenderer.invoke(IPC.temporaryModels, { id }) as Promise<ModelOption[]>,
+  selectTemporaryModel: (id, provider, modelId) =>
+    ipcRenderer.invoke(IPC.temporaryModelSelect, { id, provider, modelId }) as Promise<HostSnapshot>,
   listCommands: (tabId) => ipcRenderer.invoke(IPC.commandsList, { tabId }) as Promise<CommandOption[]>,
   completeCommand: (tabId, name, prefix) =>
     ipcRenderer.invoke(IPC.commandsComplete, { tabId, name, prefix }) as Promise<CommandArgumentOption[]>,

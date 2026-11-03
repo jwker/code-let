@@ -13,12 +13,15 @@ export function ModelPicker({
   models,
   current,
   onPick,
-  onClose
+  onClose,
+  allowPersist = true
 }: {
   models: ModelOption[]
   current: ModelOption | null
   onPick: (model: ModelOption, persist: boolean) => Promise<void>
   onClose: () => void
+  /** 临时对话不提供“设为新会话默认” */
+  allowPersist?: boolean
 }) {
   const [query, setQuery] = useState('')
   const [persist, setPersist] = useState(false)
@@ -68,7 +71,7 @@ export function ModelPicker({
     setBusy(true)
     setFailed(null)
     try {
-      await onPick(model, persist)
+      await onPick(model, allowPersist ? persist : false)
       onClose()
     } catch (error) {
       setFailed(error instanceof Error ? error.message : String(error))
@@ -169,6 +172,7 @@ export function ModelPicker({
 
       <div className="flex items-center gap-3 border-t border-hairline bg-panel px-3 py-2 text-[10.5px] text-fg-3">
         {/* 不用原生 checkbox：它的渲染跟系统主题走，暗色下会变成一个亮方块，看不出勾没勾 */}
+        {allowPersist && (
         <label className="flex cursor-pointer items-center gap-1.5">
           <input
             type="checkbox"
@@ -186,6 +190,7 @@ export function ModelPicker({
           </span>
           设为新会话默认
         </label>
+        )}
         <span className="ml-auto">{busy ? '切换中…' : '↑↓ 选择 ↵ 确认'}</span>
       </div>
     </div>

@@ -250,6 +250,9 @@ export function createMockApi(): CodeletApi {
 
   const tabs: FakeTab[] = []
   let activeTabId: string | null = null
+  /** 浏览器预览里的临时对话 */
+  let temporary: { id: string; cwd: string; model: ModelOption | null; streaming: boolean } | null = null
+  let temporarySeq = 0
   let conversations: ConversationInfo[] = []
   /** 假数据里被删掉的会话 —— FAKE_CONVERSATIONS 是静态的，删完要记住 */
   const removedConversations = new Set<string>()
@@ -313,6 +316,7 @@ export function createMockApi(): CodeletApi {
       files: files,
       activeFileId: activeFileId,
       extensionErrors: [],
+      temporaryChat: temporary ? { ...temporary, error: null } : null,
       session: {
         ready: Boolean(active),
         cwd: active?.cwd ?? null,
@@ -574,6 +578,67 @@ export function createMockApi(): CodeletApi {
         }),
         errors: []
       }
+    },
+
+    openTemporaryChat: async () => {
+      if (!temporary) {
+        const active = tabs.find((tab) => tab.id === activeTabId)
+        temporary = {
+          id: `temp-preview-${++temporarySeq}`,
+          cwd: active?.cwd ?? FAKE_PROJECTS[0].path,
+          model: active?.model ?? FAKE_MODELS[0] ?? null,
+          streaming: false
+        }
+      }
+      return publish()
+    },
+
+    closeTemporaryChat: async () => {
+      temporary = null
+      return publish()
+    },
+
+    promptTemporary: async (id, text) => {
+      if (!temporary || temporary.id !== id) return
+      temporary.streaming = true
+      publish()
+      publishEvent(id, 'agent_start', {})
+      publishEvent(id, 'message_start', { message: { role: 'user', content: text } })
+      publishEvent(id, 'message_end', { message: { role: 'user', content: text } })
+      window.setTimeout(() => {
+        if (!temporary || temporary.id !== id) return
+        publishEvent(id, 'message_start', { message: { role: 'assistant', content: [] } })
+        publishEvent(id, 'message_update', {
+          type: 'text_delta',
+          contentIndex: 0,
+          delta: '这是浏览器预览里的临时对话回复。'
+        })
+        publishEvent(id, 'message_end', {
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: '这是浏览器预览里的临时对话回复。' }]
+          }
+        })
+        temporary.streaming = false
+        publishEvent(id, 'agent_settled', {})
+        publish()
+      }, 500)
+    },
+
+    abortTemporary: async (id) => {
+      if (!temporary || temporary.id !== id) return
+      temporary.streaming = false
+      publishEvent(id, 'agent_settled', { aborted: true })
+      publish()
+    },
+
+    listTemporaryModels: async () => FAKE_MODELS,
+
+    selectTemporaryModel: async (id, provider, modelId) => {
+      if (!temporary || temporary.id !== id) return publish()
+      const found = FAKE_MODELS.find((model) => model.provider === provider && model.id === modelId)
+      if (found) temporary.model = found
+      return publish()
     },
 
     searchFiles: async (_cwd, query, limit) => {
