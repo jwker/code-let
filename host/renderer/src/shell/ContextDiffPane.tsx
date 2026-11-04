@@ -187,7 +187,7 @@ export function ContextDiffPane() {
   if (!activeTabId) {
     return (
       <div className="insp-body">
-        <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-hairline bg-raised p-5 text-[12px] text-fg-3">
+        <section className="flex min-h-0 flex-1 flex-col p-5 text-[12px] text-fg-3">
           打开一个对话后才能查看上下文变化。
         </section>
       </div>
@@ -205,7 +205,7 @@ export function ContextDiffPane() {
 
   return (
     <div className="insp-body">
-      <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-hairline bg-raised shadow-[var(--sh-sm)]">
+      <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <header className="flex h-10 flex-none items-center gap-2 border-b border-hairline px-3">
           <h2 className="text-[13px] font-medium text-fg-1">上下文变化</h2>
           <span className="rounded border border-hairline px-1.5 text-[9px] text-fg-3">Diff</span>
