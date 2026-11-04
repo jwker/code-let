@@ -42,11 +42,13 @@ interface RawMessage {
   durationMs?: number
   /** 请求发出的时刻（Unix 毫秒） */
   timestamp?: number
+  /** 失败时的 provider 原始错误；额度不足、鉴权失败都在这里 */
+  errorMessage?: string
   /**
    * 这条助手消息是怎么结束的（Pi 的 StopReason）。
    *
-   * 只关心 'aborted' —— 用户中途停掉的那一轮，UI 要标出来。
-   * 别的值（stop / toolUse / error / length）现在不影响渲染。
+   * 'aborted' 用来标出用户中途停掉的那一轮；'error' 配合 errorMessage
+   * 让界面显示失败原因。stop / toolUse / length 不影响渲染。
    */
   stopReason?: string
 }
@@ -263,6 +265,10 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
       const blocks = Array.isArray(message.content) ? (message.content as RawBlock[]) : []
       const stats = statsOf(message)
       const aborted = message.stopReason === 'aborted'
+      const errorMessage =
+        typeof message.errorMessage === 'string' && message.errorMessage.trim()
+          ? message.errorMessage
+          : undefined
       // 一条助手消息可能拆成好几项（正文与工具交替）——
       // 计量挂在它产生的**第一项**正文上（后面由渲染层按轮聚合）
       const start = items.length
@@ -287,13 +293,30 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
       flush()
       // 这一条消息产生的第一项正文 —— 计量和中止标记挂上去。
       // 挂第一项就行：中止后面不会再有内容，渲染层按轮聚合时从头找得到。
-      if (stats || aborted) {
+      if (stats || aborted || errorMessage) {
+        let marked = false
         for (let i = start; i < items.length; i += 1) {
           const item = items[i]
           if (item.kind === 'message' && item.role === 'assistant') {
-            items[i] = { ...item, ...(stats ? { stats } : {}), ...(aborted ? { aborted } : {}) }
+            items[i] = {
+              ...item,
+              ...(stats ? { stats } : {}),
+              ...(aborted ? { aborted } : {}),
+              ...(errorMessage ? { errorMessage } : {})
+            }
+            marked = true
             break
           }
+        }
+        // 报错的那条助手消息通常没有正文 —— 也要留一项，否则错误会消失
+        if (!marked && errorMessage) {
+          items.push({
+            kind: 'message',
+            role: 'assistant',
+            text: '',
+            ...(stats ? { stats } : {}),
+            ...(errorMessage ? { errorMessage } : {})
+          })
         }
       }
       continue
@@ -552,9 +575,17 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
         const text = assistantText(message)
         const calls = toolCallsOf(message)
         const stats = statsOf(message)
-        // 中止的标记跟计量一样挂在这条消息的正文项上
+        // 中止和失败都挂在这条消息的正文项上；失败还要保留 provider 原始错误
         const aborted = message.stopReason === 'aborted'
-        const marks = { ...(stats ? { stats } : {}), ...(aborted ? { aborted } : {}) }
+        const errorMessage =
+          typeof message.errorMessage === 'string' && message.errorMessage.trim()
+            ? message.errorMessage
+            : undefined
+        const marks = {
+          ...(stats ? { stats } : {}),
+          ...(aborted ? { aborted } : {}),
+          ...(errorMessage ? { errorMessage } : {})
+        }
         // 工具调用在这里落地成独立的 tool 项 —— 跟历史那条路同一个来源（R3）
         const toolItems: StreamItem[] = calls.map((call) =>
           toolItem(call.id ?? '', call.name ?? 'tool', 'running', call.arguments)
@@ -566,8 +597,10 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
             ? items.length - 1
             : findLastAssistantIndex(items)
         if (index < 0) {
-          // 没有对应的助手消息项（没走到 message_start）—— 工具项照建
-          const created: StreamItem[] = text ? [{ kind: 'message', role, text, ...marks }] : []
+          // 没有对应的助手消息项（没走到 message_start）—— 工具项照建。
+          // 失败时即使没有正文也要建一项，界面才有地方显示错误。
+          const created: StreamItem[] =
+            text || errorMessage ? [{ kind: 'message', role, text, ...marks }] : []
           return [...items, ...created, ...toolItems]
         }
         const current = items[index]
@@ -575,6 +608,10 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
         const next = items.slice()
         if (text) {
           next[index] = { ...current, text, ...marks }
+          next.splice(index + 1, 0, ...toolItems)
+        } else if (errorMessage) {
+          // 失败的那条通常没有正文：保留这一项，错误才有地方显示
+          next[index] = { ...current, text: '', ...marks }
           next.splice(index + 1, 0, ...toolItems)
         } else {
           // 只有工具调用、没有文本的助手消息不留空气泡

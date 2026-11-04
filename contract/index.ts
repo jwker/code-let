@@ -722,6 +722,13 @@ export type StreamItem =
        * 所以重启之后历史记录里那次中止还标着。
        */
       aborted?: boolean
+      /**
+       * 模型请求失败时的原始错误（Pi 的 `errorMessage`）。
+       *
+       * 额度不足、鉴权失败、provider 报错都会落在这里；界面要把它显示出来，
+       * 不能只留一个空回复让用户猜。
+       */
+      errorMessage?: string
     }
   | {
       kind: 'tool'

@@ -609,3 +609,65 @@ describe('扩展自定义消息', () => {
     expect(items).toEqual([])
   })
 })
+
+describe('模型请求失败', () => {
+  it('实时 message_end 的 errorMessage 落在空助手项上，不会消失', () => {
+    const started = applyEvent([], {
+      type: 'message_start',
+      data: { message: { role: 'assistant', content: [] } }
+    })
+    const ended = applyEvent(started, {
+      type: 'message_end',
+      data: {
+        message: {
+          role: 'assistant',
+          content: [],
+          stopReason: 'error',
+          errorMessage: '402 insufficient quota: balance is 0'
+        }
+      }
+    })
+    expect(ended).toHaveLength(1)
+    expect(ended[0]).toMatchObject({
+      kind: 'message',
+      role: 'assistant',
+      text: '',
+      errorMessage: '402 insufficient quota: balance is 0'
+    })
+  })
+
+  it('历史里的失败消息也能恢复错误文案', () => {
+    const items = entriesToItems([
+      {
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: '说到一半' }],
+          stopReason: 'error',
+          errorMessage: '429 rate limit exceeded'
+        }
+      }
+    ])
+    expect(items[0]).toMatchObject({
+      kind: 'message',
+      text: '说到一半',
+      errorMessage: '429 rate limit exceeded'
+    })
+  })
+
+  it('失败时没有正文，也要留一条可渲染的助手项', () => {
+    const items = entriesToItems([
+      {
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [],
+          stopReason: 'error',
+          errorMessage: 'authentication failed: invalid api key'
+        }
+      }
+    ])
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'message', role: 'assistant', text: '' })
+  })
+})

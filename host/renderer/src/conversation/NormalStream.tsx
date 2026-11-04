@@ -30,6 +30,23 @@ import { IconCaret } from '../shell/icons'
 type MessageItem = Extract<StreamItem, { kind: 'message' }>
 type ToolItem = Extract<StreamItem, { kind: 'tool' }>
 type CustomItem = Extract<StreamItem, { kind: 'custom' }>
+type ErrorItem = MessageItem & { errorMessage: string }
+
+function isErrorItem(item: StreamItem): item is ErrorItem {
+  return item.kind === 'message' && typeof item.errorMessage === 'string' && item.errorMessage.trim().length > 0
+}
+
+/** provider 的原始错误太长时，标题要能一眼看出是哪类问题 */
+function errorTitle(message: string): string {
+  const text = message.toLowerCase()
+  if (/quota|insufficient|balance|credit|余额|额度|usage limit|exceeded.*limit/.test(text)) {
+    return '模型额度不足'
+  }
+  if (/rate limit|too many requests|429/.test(text)) return '请求过于频繁'
+  if (/401|403|unauthorized|forbidden|api key|authentication/.test(text)) return '模型鉴权失败'
+  if (/timeout|timed out|econn|network|socket/.test(text)) return '模型连接失败'
+  return '模型请求失败'
+}
 
 const TOOL_LOOK: Record<ToolItem['status'], { icon: string; color: string }> = {
   running: { icon: '◐', color: 'var(--fg-3)' },
@@ -129,6 +146,10 @@ function TurnRow({
 }) {
   const summary = useMemo(() => summarizeTurn(turn.body), [turn.body])
   const turnStartedAt = useRef(Date.now()).current
+  const errors = useMemo(
+    () => [...new Set(turn.body.filter(isErrorItem).map((item) => item.errorMessage))],
+    [turn.body]
+  )
 
   // 流式过程中：最后一段后面没有工具的助手正文可以边流边显示；
   // 它如果只是下一轮工具前的叙述，后续工具出现后会重新并回过程。
@@ -138,7 +159,7 @@ function TurnRow({
     const answerItem = liveAnswerIndex >= 0 ? turn.body[liveAnswerIndex] : null
     const afterAnswer = liveAnswerIndex >= 0 ? turn.body.slice(liveAnswerIndex + 1) : []
     const processSummary = summarizeProcess(processBody)
-    const processItems = processBody.filter((item) => item.kind !== 'custom')
+    const processItems = processBody.filter((item) => item.kind !== 'custom' && !isErrorItem(item))
     const customBefore = processBody.filter((item): item is CustomItem => item.kind === 'custom')
     const customAfter = afterAnswer.filter((item): item is CustomItem => item.kind === 'custom')
     return (
@@ -175,6 +196,7 @@ function TurnRow({
           </div>
         )}
         <ReplyMeta summary={processSummary} streaming startedAt={turnStartedAt} />
+        {errors.length > 0 && <TurnError errors={errors} />}
       </div>
     )
   }
@@ -182,7 +204,7 @@ function TurnRow({
   // 认不出答案（这一轮没有助手正文）—— 原样铺开，不做主次分层
   if (!summary) {
     const processSummary = summarizeProcess(turn.body)
-    const processItems = turn.body.filter((item) => item.kind !== 'custom')
+    const processItems = turn.body.filter((item) => item.kind !== 'custom' && !isErrorItem(item))
     const customItems = turn.body.filter((item): item is CustomItem => item.kind === 'custom')
     return (
       <div className="flex flex-col gap-2">
@@ -205,16 +227,17 @@ function TurnRow({
             ))}
           </div>
         )}
+        {errors.length > 0 && <TurnError errors={errors} />}
       </div>
     )
   }
 
   const beforeAnswer = turn.body.slice(0, summary.answerIndex)
   // 扩展消息不放进「过程」折叠块 —— 过程一收起来它们就看不见了
-  const processItems = beforeAnswer.filter((item) => item.kind !== 'custom')
+  const processItems = beforeAnswer.filter((item) => item.kind !== 'custom' && !isErrorItem(item))
   const customBefore = beforeAnswer.filter((item): item is CustomItem => item.kind === 'custom')
   const answerItem = turn.body[summary.answerIndex]
-  const restItems = turn.body.slice(summary.answerIndex + 1)
+  const restItems = turn.body.slice(summary.answerIndex + 1).filter((item) => !isErrorItem(item))
 
   return (
     <div className="flex flex-col gap-2">
@@ -259,6 +282,30 @@ function TurnRow({
         )}
 
         <ReplyMeta summary={summary} streaming={streaming} startedAt={turnStartedAt} />
+        {errors.length > 0 && <TurnError errors={errors} />}
+      </div>
+    </div>
+  )
+}
+
+/** 模型请求失败：把 provider 的原始错误显式摆出来，别留一个空回复 */
+function TurnError({ errors }: { errors: string[] }) {
+  return (
+    <div
+      role="alert"
+      className="rounded-lg border border-danger/35 bg-danger-wash px-3 py-2.5 text-[10.5px] leading-6 text-danger"
+    >
+      <div className="flex items-center gap-1.5 text-[11px] font-medium">
+        <span aria-hidden="true">!</span>
+        {errorTitle(errors[0])}
+      </div>
+      {errors.map((message, index) => (
+        <div key={index} className="mt-1 whitespace-pre-wrap break-words font-mono text-[10px] opacity-90">
+          {message}
+        </div>
+      ))}
+      <div className="mt-1.5 text-[10px] text-fg-3">
+        检查模型额度或凭据后重试；也可以换一个模型再发。
       </div>
     </div>
   )

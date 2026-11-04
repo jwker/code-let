@@ -149,6 +149,10 @@ test.describe.serial('浏览器面板', () => {
     })) as { ok: boolean }
     expect(waited.ok).toBe(true)
 
+    // 面板上要能看到 agent 刚才做了什么
+    await expect(page.getByText('Agent 正在操作')).toBeVisible()
+    await expect(page.getByText('Agent 正在操作 · 等待 #go')).toBeVisible()
+
     const shot = (await app!.evaluate(async () => {
       const manager = (globalThis as never as { __codeletBrowser: { tool: (name: string, args: Record<string, unknown>) => Promise<unknown> } }).__codeletBrowser
       return manager.tool('screenshot', {})
@@ -156,10 +160,6 @@ test.describe.serial('浏览器面板', () => {
     expect(shot.ok).toBe(true)
     expect(shot.mimeType).toBe('image/jpeg')
     expect((shot.data ?? '').length).toBeGreaterThan(1000)
-
-    // 面板上要能看到 agent 刚才做了什么
-    await expect(page.getByText('Agent 正在操作')).toBeVisible()
-    await expect(page.getByText('Agent 正在操作 · 等待 #go')).toBeVisible()
   })
 
   test('可以新建和关闭标签', async () => {
