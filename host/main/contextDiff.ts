@@ -71,6 +71,54 @@ function refOf(snapshot: Snapshot): ContextSnapshotRef {
   }
 }
 
+/** 和 ext/context-diff.ts 的 textOf 保持一致，才能按同一 hash 回源 */
+function contentText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  let out = ''
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue
+    const item = block as { type?: string; text?: string; name?: string }
+    if (item.type === 'text' && typeof item.text === 'string') out += item.text
+    else if (item.type === 'image') out += '[image]'
+    else if (item.type === 'toolCall' && typeof item.name === 'string') out += `[tool: ${item.name}]`
+  }
+  return out
+}
+
+/** 最长公共子序列，返回同一消息在 baseline/current 里的下标对 */
+function commonMessages(
+  baseline: readonly StoredMessage[],
+  current: readonly StoredMessage[]
+): Array<[number, number]> {
+  const n = baseline.length
+  const m = current.length
+  const dp = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1))
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let j = m - 1; j >= 0; j -= 1) {
+      dp[i][j] =
+        baseline[i].hash === current[j].hash
+          ? dp[i + 1][j + 1] + 1
+          : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+  const pairs: Array<[number, number]> = []
+  let i = 0
+  let j = 0
+  while (i < n && j < m) {
+    if (baseline[i].hash === current[j].hash) {
+      pairs.push([i, j])
+      i += 1
+      j += 1
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      i += 1
+    } else {
+      j += 1
+    }
+  }
+  return pairs
+}
+
 function summaryOf(message: StoredMessage): ContextMessageSummary {
   return {
     key: message.key,
@@ -87,6 +135,8 @@ export class ContextDiffStore {
   /** 由会话历史重建的近似快照；只存在于当前进程 */
   private readonly approximateTabs = new Map<string, Snapshot[]>()
   private readonly content = new Map<string, string>()
+  /** 会话文件里按 hash 找全文的缓存；详情回源用 */
+  private readonly sessionText = new Map<string, Map<string, string>>()
   private contentBytes = 0
 
   constructor(private readonly dir: string | null) {}
@@ -291,7 +341,11 @@ export class ContextDiffStore {
     if (!snapshot) return null
     const message = snapshot.messages.find((item) => item.key === key)
     if (!message) return null
-    const text = this.content.get(message.hash)
+    let text = this.content.get(message.hash)
+    if (!text) {
+      text = this.readFromSession(snapshot.sessionPath, message.hash) ?? undefined
+      if (text) this.remember(message.hash, text)
+    }
     if (!text) return null
     const limit = 256 * 1024
     return text.length > limit
@@ -333,27 +387,68 @@ export class ContextDiffStore {
     const currentMessages = normalize(current)
     const baselineMessages = normalize(baseline)
 
-    const baselineCounts = new Map<string, number>()
-    for (const message of baselineMessages) {
-      baselineCounts.set(message.hash, (baselineCounts.get(message.hash) ?? 0) + 1)
-    }
-
     const added: StoredMessage[] = []
+    const removed: StoredMessage[] = []
+    const modified: StoredMessage[] = []
     const shared: StoredMessage[] = []
-    for (const message of currentMessages) {
-      const left = baselineCounts.get(message.hash) ?? 0
-      if (left > 0) {
-        baselineCounts.set(message.hash, left - 1)
-        shared.push(message)
-      } else {
-        added.push(message)
+
+    const alignable =
+      sameSession &&
+      !current.id.startsWith('approx:') &&
+      !baseline?.id.startsWith('approx:')
+    if (alignable) {
+      // 同一会话先对齐未变化的消息，剩下的同位置、同角色内容对视为修改。
+      const pairs = commonMessages(baselineMessages, currentMessages)
+      let baseIndex = 0
+      let currentIndex = 0
+      for (const [baseMatch, currentMatch] of [...pairs, [baselineMessages.length, currentMessages.length] as [number, number]]) {
+        const baseGap = baselineMessages.slice(baseIndex, baseMatch)
+        const currentGap = currentMessages.slice(currentIndex, currentMatch)
+        if (
+          baseGap.length > 0 &&
+          baseGap.length === currentGap.length &&
+          baseGap.every((message, index) => message.role === currentGap[index].role)
+        ) {
+          modified.push(...currentGap)
+        } else {
+          removed.push(...baseGap)
+          added.push(...currentGap)
+        }
+        if (baseMatch < baselineMessages.length) shared.push(currentMessages[currentMatch])
+        baseIndex = baseMatch + 1
+        currentIndex = currentMatch + 1
       }
+    } else {
+      // 跨会话没有稳定的消息位置，只按 hash 统计共享、新增和删除。
+      const baselineCounts = new Map<string, number>()
+      for (const message of baselineMessages) {
+        baselineCounts.set(message.hash, (baselineCounts.get(message.hash) ?? 0) + 1)
+      }
+      for (const message of currentMessages) {
+        const left = baselineCounts.get(message.hash) ?? 0
+        if (left > 0) {
+          baselineCounts.set(message.hash, left - 1)
+          shared.push(message)
+        } else {
+          added.push(message)
+        }
+      }
+      removed.push(
+        ...baselineMessages.filter((message) => (baselineCounts.get(message.hash) ?? 0) > 0)
+      )
     }
-    const removed = baselineMessages.filter((message) => (baselineCounts.get(message.hash) ?? 0) > 0)
 
     const groups: ContextDiffGroup[] = []
     if (system === 'changed' || system === 'only-current' || system === 'only-baseline') {
       groups.push({ kind: 'system', label: 'System 与工具', messages: [] })
+    }
+    if (modified.length > 0) {
+      groups.push({
+        kind: 'modified',
+        label: '修改',
+        messages: modified.map(summaryOf),
+        tokens: modified.reduce((sum, message) => sum + message.tokens, 0)
+      })
     }
     if (added.length > 0) {
       groups.push({
@@ -390,11 +485,39 @@ export class ContextDiffStore {
       counts: {
         added: added.length,
         removed: removed.length,
-        modified: 0,
+        modified: modified.length,
         shared: shared.length
       },
       groups
     }
+  }
+
+  /** 重启后缓存没了：从会话文件里按同样的 hash 找一条消息 */
+  private readFromSession(sessionPath: string | null, targetHash: string): string | null {
+    if (!sessionPath || !existsSync(sessionPath)) return null
+    let messages = this.sessionText.get(sessionPath)
+    if (!messages || !messages.has(targetHash)) {
+      messages = new Map()
+      try {
+        for (const line of readFileSync(sessionPath, 'utf8').split('\n')) {
+          if (!line.trim()) continue
+          const entry = JSON.parse(line) as {
+            type?: string
+            message?: { role?: string; content?: unknown; text?: string }
+          }
+          if (entry.type !== 'message' || !entry.message) continue
+          const role = typeof entry.message.role === 'string' ? entry.message.role : 'unknown'
+          const text = contentText(entry.message.content) || entry.message.text || ''
+          if (!text) continue
+          const digest = createHash('sha256').update(`${role}\u0000${text}`).digest('hex').slice(0, 24)
+          messages.set(digest, text)
+        }
+      } catch {
+        return null
+      }
+      this.sessionText.set(sessionPath, messages)
+    }
+    return messages.get(targetHash) ?? null
   }
 
   private findSnapshot(id: string): Snapshot | null {

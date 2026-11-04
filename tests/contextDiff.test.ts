@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ContextDiffStore, type RawContextSnapshot } from '../host/main/contextDiff'
@@ -44,7 +45,7 @@ afterEach(() => {
 })
 
 describe('上下文快照 diff', () => {
-  it('同会话默认对比上一次请求，只把新消息算成新增', () => {
+  it('同会话默认对比上一次请求', () => {
     const s = store()
     s.capture('tab-1', snapshot('s1', 'a1'))
     s.capture('tab-1', snapshot('s1', 'a2', ['second']))
@@ -56,6 +57,20 @@ describe('上下文快照 diff', () => {
     expect(view?.counts.removed).toBe(1) // a1
     expect(view?.system).toBe('same')
     expect(view?.tokens.after).toBeGreaterThan(view?.tokens.before ?? 0)
+  })
+
+  it('同会话同位置、同角色的内容变化算修改', () => {
+    const s = store()
+    s.capture('tab-1', snapshot('s1', 'a1'))
+    s.capture('tab-1', snapshot('s1', 'a2'))
+
+    const view = s.getView('tab-1')
+    expect(view?.counts.added).toBe(0)
+    expect(view?.counts.removed).toBe(0)
+    expect(view?.counts.modified).toBe(1)
+    expect(view?.counts.shared).toBe(1)
+    expect(view?.groups.find((group) => group.kind === 'modified')?.label).toBe('修改')
+    expect(view?.groups.find((group) => group.kind === 'modified')?.messages[0].preview).toBe('a2')
   })
 
   it('跨会话按 hash 分共享/仅基线/仅当前', () => {
@@ -73,7 +88,35 @@ describe('上下文快照 diff', () => {
     expect(view?.groups.find((group) => group.kind === 'removed')?.label).toBe('仅基线')
   })
 
-  it('缩略图内容可按 key 取全文；持久化后只留 preview', () => {
+  it('重启后从会话文件回源全文', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'codelet-context-diff-'))
+    dirs.push(dir)
+    const sessionFile = join(dir, 'session.jsonl')
+    const text = '重启后仍能读到的回答'
+    const hash = createHash('sha256').update(`assistant\u0000${text}`).digest('hex').slice(0, 24)
+    const raw = snapshot('s1', 'placeholder', [], sessionFile)
+    raw.messages[raw.messages.length - 1] = {
+      key: 'a',
+      role: 'assistant',
+      text,
+      hash,
+      tokens: 2,
+      preview: text
+    }
+    writeFileSync(
+      sessionFile,
+      `${JSON.stringify({
+        type: 'message',
+        message: { role: 'assistant', content: [{ type: 'text', text }] }
+      })}\n`
+    )
+
+    store(dir).capture('tab-1', raw)
+    const second = store(dir)
+    expect(second.detail('tab-1', 's1:1', 'a')).toEqual({ text, truncated: false })
+  })
+
+  it('没有会话文件时持久化后只留 preview', () => {
     const dir = mkdtempSync(join(tmpdir(), 'codelet-context-diff-'))
     dirs.push(dir)
     const first = store(dir)

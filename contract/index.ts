@@ -412,7 +412,7 @@ export interface ContextSnapshotRef {
 
 /** 上下文 diff 的分组 */
 export interface ContextDiffGroup {
-  kind: 'system' | 'tools' | 'added' | 'removed' | 'shared' | 'compacted'
+  kind: 'system' | 'tools' | 'added' | 'removed' | 'modified' | 'shared' | 'compacted'
   label: string
   messages: ContextMessageSummary[]
   tokens?: number

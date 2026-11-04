@@ -181,6 +181,7 @@ export function ContextDiffPane() {
   const afterPct = Math.round(((view?.tokens.after ?? 0) / maxTokens) * 100)
   const added = view?.groups.find((group) => group.kind === 'added')
   const removed = view?.groups.find((group) => group.kind === 'removed')
+  const modified = view?.groups.find((group) => group.kind === 'modified')
   const compacted = view?.groups.find((group) => group.kind === 'compacted')
 
   return (
@@ -250,6 +251,7 @@ export function ContextDiffPane() {
               view={view}
               added={added}
               removed={removed}
+              modified={modified}
               compacted={compacted}
               beforePct={beforePct}
               afterPct={afterPct}
@@ -261,7 +263,7 @@ export function ContextDiffPane() {
 
         {view && (
           <div className="flex flex-none items-center gap-2 border-t border-hairline px-3 py-1.5 text-[9px] text-fg-3">
-            <span>{view.counts.shared} 条共享 · {view.counts.added + view.counts.removed} 条变化</span>
+            <span>{view.counts.shared} 条共享 · {view.counts.added + view.counts.removed + view.counts.modified} 条变化</span>
             <span className="ml-auto">详情按需读取</span>
           </div>
         )}
@@ -428,6 +430,7 @@ function SummaryView({
   view,
   added,
   removed,
+  modified,
   compacted,
   beforePct,
   afterPct,
@@ -437,6 +440,7 @@ function SummaryView({
   view: ContextDiffView
   added?: ContextDiffGroup
   removed?: ContextDiffGroup
+  modified?: ContextDiffGroup
   compacted?: ContextDiffGroup
   beforePct: number
   afterPct: number
@@ -493,6 +497,15 @@ function SummaryView({
         </div>
       )}
 
+      {modified && modified.messages.length > 0 && (
+        <MessageGroup
+          title={modified.label}
+          messages={modified.messages}
+          snapshotId={currentId}
+          onDetail={onDetail}
+          modified
+        />
+      )}
       {added && added.messages.length > 0 && (
         <MessageGroup
           title={added.label}
@@ -511,7 +524,7 @@ function SummaryView({
         />
       )}
 
-      {view.counts.added === 0 && view.counts.removed === 0 && !compacted && (
+      {view.counts.added === 0 && view.counts.removed === 0 && view.counts.modified === 0 && !compacted && (
         <div className="rounded-lg border border-hairline px-2.5 py-3 text-center text-[10px] text-fg-3">
           这两次请求的上下文消息没有变化。
         </div>
@@ -583,13 +596,15 @@ function MessageGroup({
   messages,
   snapshotId,
   onDetail,
-  removed
+  removed,
+  modified
 }: {
   title: string
   messages: ContextMessageSummary[]
   snapshotId: string
   onDetail: (snapshotId: string, message: ContextMessageSummary) => void
   removed?: boolean
+  modified?: boolean
 }) {
   const visible = messages.slice(0, 12)
   return (
@@ -603,10 +618,10 @@ function MessageGroup({
           key={message.key}
           type="button"
           onClick={() => onDetail(snapshotId, message)}
-          className={`flex w-full items-start gap-1.5 border-t border-hairline px-2.5 py-1.5 text-left text-[9.5px] transition-colors hover:bg-sunken ${removed ? 'bg-danger-wash/30' : 'bg-ok-wash/25'}`}
+          className={`flex w-full items-start gap-1.5 border-t border-hairline px-2.5 py-1.5 text-left text-[9.5px] transition-colors hover:bg-sunken ${removed ? 'bg-danger-wash/30' : modified ? 'bg-warn-wash/30' : 'bg-ok-wash/25'}`}
           title="查看全文"
         >
-          <span className={`w-12 flex-none pt-0.5 font-mono text-[8px] ${removed ? 'text-danger' : 'text-ok'}`}>{roleLabel(message.role)}</span>
+          <span className={`w-12 flex-none pt-0.5 font-mono text-[8px] ${removed ? 'text-danger' : modified ? 'text-warn' : 'text-ok'}`}>{roleLabel(message.role)}</span>
           <span className="min-w-0 flex-1 overflow-hidden text-fg-2" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
             {message.preview}
           </span>

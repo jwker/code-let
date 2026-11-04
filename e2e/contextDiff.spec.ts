@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
 import { SessionManager } from '@earendil-works/pi-coding-agent'
+import { createHash } from 'node:crypto'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -32,8 +33,13 @@ test.describe.serial('上下文 Diff', () => {
       const manager = SessionManager.create(projectDir)
       manager.appendMessage({
         role: 'user',
-        content: [{ type: 'text', text: '测试上下文 diff' }],
+        content: [{ type: 'text', text: '上一次请求' }],
         timestamp: Date.now()
+      })
+      manager.appendMessage({
+        role: 'user',
+        content: [{ type: 'text', text: '这次新增的用户消息' }],
+        timestamp: Date.now() + 1
       })
       const sessionFile = manager.getSessionFile()
       if (!sessionFile) throw new Error('会话文件没有创建出来')
@@ -54,6 +60,8 @@ test.describe.serial('上下文 Diff', () => {
       const indexDir = join(userDataDir, 'context-diff')
       mkdirSync(indexDir, { recursive: true })
       const indexFile = join(indexDir, `${encodeURIComponent(sessionId)}.jsonl`)
+      const digest = (role: string, text: string): string =>
+        createHash('sha256').update(`${role}\u0000${text}`).digest('hex').slice(0, 24)
       const base = {
         sessionId,
         sessionPath: sessionFile,
@@ -62,8 +70,20 @@ test.describe.serial('上下文 Diff', () => {
         capturedAt: Date.now(),
         messages: [
           { key: 's', role: 'system', hash: 'sys', tokens: 2, preview: 'system prompt' },
-          { key: 'u1', role: 'user', hash: 'u1', tokens: 3, preview: '上一次请求' },
-          { key: 'a1', role: 'assistant', hash: 'a1', tokens: 4, preview: '上一次回答' }
+          {
+            key: 'u1',
+            role: 'user',
+            hash: digest('user', '上一次请求'),
+            tokens: 3,
+            preview: '上一次请求'
+          },
+          {
+            key: 'a1',
+            role: 'assistant',
+            hash: digest('assistant', '上一次回答'),
+            tokens: 4,
+            preview: '上一次回答'
+          }
         ]
       }
       const current = {
@@ -75,7 +95,13 @@ test.describe.serial('上下文 Diff', () => {
         capturedAt: Date.now() + 1,
         messages: [
           ...base.messages,
-          { key: 'u2', role: 'user', hash: 'u2', tokens: 3, preview: '这次新增的用户消息' }
+          {
+            key: 'u2',
+            role: 'user',
+            hash: digest('user', '这次新增的用户消息'),
+            tokens: 3,
+            preview: '新增消息预览'
+          }
         ]
       }
       writeFileSync(
@@ -114,7 +140,7 @@ test.describe.serial('上下文 Diff', () => {
     await page.getByRole('button', { name: '上下文', exact: true }).click()
     const pane = page.locator('.insp-body')
     await expect(pane.getByText('上下文变化')).toBeVisible()
-    await expect(pane.getByText('这次新增的用户消息')).toBeVisible()
+    await expect(pane.getByText('新增消息预览')).toBeVisible()
     await expect(pane.getByText('最近两次请求')).toBeVisible()
 
     await pane.getByRole('button', { name: /USER/ }).first().click()
