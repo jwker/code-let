@@ -109,10 +109,21 @@ function parse(source: string): Block[] {
     const numbered = /^\s*\d+[.)]\s+(.*)$/.exec(line)
     if (bullet || numbered) {
       const ordered = !bullet
+      const itemPattern = ordered ? /^\s*\d+[.)]\s+(.*)$/ : /^\s*[-*+]\s+(.*)$/
       const items: string[] = []
       while (index < lines.length) {
-        const item = ordered ? /^\s*\d+[.)]\s+(.*)$/.exec(lines[index]) : /^\s*[-*+]\s+(.*)$/.exec(lines[index])
-        if (!item) break
+        const item = itemPattern.exec(lines[index])
+        if (!item) {
+          // 列表项之间允许空行（松散列表）；空行后还是同一种列表项就继续，
+          // 否则才结束这个列表。否则两个有序项会被拆成两个 <ol>，各从 1 开始。
+          let next = index
+          while (next < lines.length && !lines[next].trim()) next += 1
+          if (next < lines.length && itemPattern.test(lines[next])) {
+            index = next
+            continue
+          }
+          break
+        }
         items.push(item[1])
         index += 1
       }
