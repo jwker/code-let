@@ -86,6 +86,8 @@ export const IPC = {
   temporaryModelSelect: 'host:temporary:model-select',
   /** 上下文 Diff：取当前对比摘要 */
   contextDiffGet: 'host:context-diff:get',
+  /** 上下文 Diff：取截至某一轮的最后两次请求 */
+  contextDiffTurn: 'host:context-diff:turn',
   /** 上下文 Diff：列出可比较的会话快照 */
   contextDiffSessions: 'host:context-diff:sessions',
   /** 上下文 Diff：列出某个标签的请求快照 */
@@ -711,6 +713,12 @@ export interface CodeletApi {
   selectTemporaryModel(id: string, provider: string, modelId: string): Promise<HostSnapshot>
   /** 取活动标签的上下文对比；baselineId 为空时用上一次请求 */
   getContextDiff(tabId: string, baselineId?: string): Promise<ContextDiffView | null>
+  /** 取截至某一用户轮次的最后两次请求对比 */
+  getContextDiffForTurn(
+    tabId: string,
+    turn: number,
+    baselineId?: string
+  ): Promise<ContextDiffView | null>
   /** 没有请求级快照时，从会话历史重建一份近似对比 */
   getApproximateContextDiff(tabId: string): Promise<ContextDiffView | null>
   /** 列出有快照可比较的会话 */

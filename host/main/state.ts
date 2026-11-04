@@ -987,6 +987,15 @@ export class HostState extends EventEmitter {
     return this.contextDiff.getView(tabId, baselineId)
   }
 
+  /** 截至某一轮的最后两次请求；对话导航圆点用 */
+  async getContextDiffForTurn(
+    tabId: string,
+    turn: number,
+    baselineId?: string
+  ): Promise<ContextDiffView | null> {
+    return this.contextDiff.getViewForTurn(tabId, turn, baselineId)
+  }
+
   /** 有快照可比较的会话（跨会话基线选择器） */
   listContextDiffSessions(): Promise<ContextDiffSession[]> {
     return Promise.resolve(this.contextDiff.listSessions())

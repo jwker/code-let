@@ -11,11 +11,14 @@ import { navTurnSummary, userTurnsOf } from './conversationTurns'
 export function ConversationNav({
   items,
   mode,
-  scrollRef
+  scrollRef,
+  onSelectTurn
 }: {
   items: StreamItem[]
   mode: 'normal' | 'terminal' | 'html'
   scrollRef: RefObject<HTMLDivElement | null>
+  /** 点击圆点：轮次从 1 开始；用来让右侧上下文看这一轮最后两次请求 */
+  onSelectTurn?: (turn: number) => void
 }) {
   const turns = useMemo(() => userTurnsOf(items), [items])
   // assistant 的增量会不停改变 items；轮次没变时别反复重挂滚动监听
@@ -177,7 +180,10 @@ export function ConversationNav({
               className="conv-nav-hit"
               aria-label={navTurnSummary(turn, ordinal + 1)}
               aria-current={active === turn.index ? 'true' : undefined}
-              onClick={() => jump(turn.index)}
+              onClick={() => {
+                jump(turn.index)
+                onSelectTurn?.(ordinal + 1)
+              }}
               onMouseEnter={(event) => showCard(turn.index, event.currentTarget)}
               onFocus={(event) => showCard(turn.index, event.currentTarget)}
               onKeyDown={(event) => onDotKeyDown(event, ordinal)}

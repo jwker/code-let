@@ -796,6 +796,13 @@ export function ConversationArea() {
     void host.abortPrompt(activeTabId)
   }
 
+  function showTurnContext(turn: number): void {
+    const state = useStore.getState()
+    state.setContextTurn(turn)
+    state.setNav('context')
+    if (!state.inspectorOpen) state.toggleInspector()
+  }
+
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-surface">
       {/*
@@ -804,7 +811,12 @@ export function ConversationArea() {
         滚动容器自己给的 padding 做不到（跟着内容一起滚走）。
       */}
       <div className={`relative min-h-0 flex-1 pt-3 ${hasNav ? 'conv-has-nav' : ''}`}>
-        <ConversationNav items={items} mode={mode} scrollRef={scrollRef} />
+        <ConversationNav
+          items={items}
+          mode={mode}
+          scrollRef={scrollRef}
+          onSelectTurn={showTurnContext}
+        />
         {mode === 'normal' &&
           (items.length > 0 ? (
             <div className="conv-normal" ref={setRef}>

@@ -175,6 +175,8 @@ interface RendererStore {
   expandedTools: Record<string, Record<string, boolean>>
   /** 右侧检视器是否展开 */
   inspectorOpen: boolean
+  /** 当前选中的对话轮次（null = 看最新两次请求） */
+  contextTurn: number | null
   /** 左侧栏是否展开 */
   sidebarOpen: boolean
   /** 从输入框发起的改名请求 —— 侧栏看到后进入行内编辑 */
@@ -207,6 +209,8 @@ interface RendererStore {
 
   setSnapshot: (snapshot: HostSnapshot) => void
   setNav: (nav: NavEntry) => void
+  /** 选中某一轮，右侧上下文看截至这一轮的最后两次请求 */
+  setContextTurn: (turn: number | null) => void
   setMode: (mode: ConversationMode) => void
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
@@ -270,6 +274,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   streaming: {},
   expandedTools: {},
   inspectorOpen: loadInspectorOpen(),
+  contextTurn: null,
   sidebarOpen: loadSidebarOpen(),
   renameRequest: null,
   modelPickerAnchor: null,
@@ -282,23 +287,36 @@ export const useStore = create<RendererStore>((set, get) => ({
   treeEntries: {},
 
   setSnapshot: (snapshot) => {
+    const previousTabId = get().snapshot.activeTabId
     const previousSessionId = get().snapshot.session.sessionId
     const nextSessionId = snapshot.session.sessionId
+    const tabChanged = previousTabId !== snapshot.activeTabId
     const previousTempId = get().snapshot.temporaryChat?.id
     const nextTempId = snapshot.temporaryChat?.id
     const tempChanged = previousTempId !== nextTempId
     if (previousSessionId === nextSessionId) {
-      set({ snapshot, ...(tempChanged ? { tempMinimized: false } : {}) })
+      set({
+        snapshot,
+        ...(tabChanged ? { contextTurn: null } : {}),
+        ...(tempChanged ? { tempMinimized: false } : {})
+      })
       return
     }
     // 换会话：把该会话上次的排版模式取回来（模式记在会话状态里）
     const modes = loadModes()
     const mode = (nextSessionId && modes[nextSessionId]) || 'normal'
-    set({ snapshot, mode, ...(tempChanged ? { tempMinimized: false } : {}) })
+    set({
+      snapshot,
+      mode,
+      contextTurn: null,
+      ...(tempChanged ? { tempMinimized: false } : {})
+    })
   },
 
 
   setNav: (nav) => set({ nav }),
+
+  setContextTurn: (turn) => set({ contextTurn: turn }),
 
   setTempMinimized: (value) => set({ tempMinimized: value }),
 

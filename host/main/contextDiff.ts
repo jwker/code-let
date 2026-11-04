@@ -360,6 +360,31 @@ export class ContextDiffStore {
     return { ...view, approximate: true }
   }
 
+  /** 截至某一用户轮次的最后两次请求；用于点对话导航圆点看那一轮的 diff */
+  getViewForTurn(
+    tabId: string,
+    turn: number,
+    baselineId?: string
+  ): ContextDiffView | null {
+    const exact = this.tabs.get(tabId)
+    const history = exact && exact.length > 0
+      ? exact
+      : this.approximateTabs.get(tabId)
+    if (!history || history.length === 0) return null
+
+    const upTo = history.filter((snapshot) => snapshot.turn <= turn)
+    const current = upTo.at(-1)
+    if (!current) return null
+    const baseline = baselineId
+      ? (this.findSnapshot(baselineId) ?? null)
+      : upTo.length >= 2
+        ? upTo[upTo.length - 2]
+        : null
+
+    const view = this.buildView(current, baseline)
+    return exact && exact.length > 0 ? view : { ...view, approximate: true }
+  }
+
   /** 当前请求对比默认上一次请求，或指定的快照 */
   getView(tabId: string, baselineId?: string): ContextDiffView | null {
     const exact = this.tabs.get(tabId)

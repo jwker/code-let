@@ -188,4 +188,11 @@ test.describe.serial('上下文 Diff', () => {
     await expect(pane.getByText('自定义基线')).toBeVisible()
     await expect(pane.getByText('最近两次请求')).toHaveCount(0)
   })
+
+  test('点击对话导航圆点后显示对应轮次的最后两次请求', async () => {
+    await page.locator('.conv-nav-hit').nth(1).click()
+    const pane = page.locator('.insp-body')
+    await expect(pane.getByText('第 2 轮 · 最后两次请求')).toBeVisible()
+    await expect(pane.getByText('上下文变化')).toBeVisible()
+  })
 })

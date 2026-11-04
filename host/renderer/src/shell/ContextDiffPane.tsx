@@ -46,6 +46,8 @@ function toolsLabel(value: ContextDiffView['tools'], approximate: boolean): stri
 export function ContextDiffPane() {
   const diff = useStore((s) => s.snapshot.contextDiff)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
+  const contextTurn = useStore((s) => s.contextTurn)
+  const setContextTurn = useStore((s) => s.setContextTurn)
   const [view, setView] = useState<ContextDiffView | null>(diff)
   const [baselineId, setBaselineId] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -72,30 +74,42 @@ export function ContextDiffPane() {
   }, [activeTabId])
 
   useEffect(() => {
-    if (!baselineId) {
+    setBaselineId(null)
+    setPickerOpen(false)
+  }, [contextTurn])
+
+  useEffect(() => {
+    if (!activeTabId) return
+    if (contextTurn === null && !baselineId) {
       setView(diff)
       return
     }
-    if (!activeTabId) return
+
     let cancelled = false
-    host
-      .getContextDiff(activeTabId, baselineId)
+    const request = contextTurn === null
+      ? host.getContextDiff(activeTabId, baselineId ?? undefined)
+      : host.getContextDiffForTurn(activeTabId, contextTurn, baselineId ?? undefined)
+    setLoading(true)
+    request
       .then((next) => {
         if (cancelled) return
         if (next) {
           setView(next)
         } else {
           setBaselineId(null)
-          setView(diff)
+          setView(contextTurn === null ? diff : null)
         }
       })
       .catch((caught) => {
         if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught))
       })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
     return () => {
       cancelled = true
     }
-  }, [activeTabId, baselineId, diff?.current.id])
+  }, [activeTabId, baselineId, contextTurn, diff?.current.id])
 
 
 
@@ -127,7 +141,9 @@ export function ContextDiffPane() {
   function resetBaseline(): void {
     setBaselineId(null)
     setPickerOpen(false)
-    if (view?.approximate && activeTabId) {
+    if (contextTurn !== null && activeTabId) {
+      void host.getContextDiffForTurn(activeTabId, contextTurn).then(setView)
+    } else if (view?.approximate && activeTabId) {
       void host.getApproximateContextDiff(activeTabId).then(setView)
     } else {
       setView(diff)
@@ -141,6 +157,7 @@ export function ContextDiffPane() {
     try {
       const next = await host.getApproximateContextDiff(activeTabId)
       setBaselineId(null)
+      setContextTurn(null)
       setView(next)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -211,7 +228,11 @@ export function ContextDiffPane() {
           <h2 className="text-[13px] font-medium text-fg-1">上下文变化</h2>
           <span className="rounded border border-hairline px-1.5 text-[9px] text-fg-3">Diff</span>
           <span className="ml-auto text-[9px] text-fg-3">
-            {baselineId ? '自定义基线' : '最近两次请求'}
+            {baselineId
+              ? '自定义基线'
+              : contextTurn !== null
+                ? `第 ${contextTurn} 轮 · 最后两次请求`
+                : '最近两次请求'}
           </span>
           {view && (
             <button

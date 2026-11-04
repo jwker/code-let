@@ -48,6 +48,8 @@ const api: CodeletApi = {
     ipcRenderer.invoke(IPC.attachmentsPick) as Promise<PickAttachmentsResult>,
   getContextDiff: (tabId, baselineId) =>
     ipcRenderer.invoke(IPC.contextDiffGet, { tabId, baselineId }) as Promise<ContextDiffView | null>,
+  getContextDiffForTurn: (tabId, turn, baselineId) =>
+    ipcRenderer.invoke(IPC.contextDiffTurn, { tabId, turn, baselineId }) as Promise<ContextDiffView | null>,
   getApproximateContextDiff: (tabId) =>
     ipcRenderer.invoke(IPC.contextDiffApproximate, { tabId }) as Promise<ContextDiffView | null>,
   listContextDiffSessions: () =>

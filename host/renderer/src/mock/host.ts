@@ -639,6 +639,7 @@ export function createMockApi(): CodeletApi {
     },
 
     getContextDiff: async () => FAKE_CONTEXT_DIFF,
+    getContextDiffForTurn: async () => FAKE_CONTEXT_DIFF,
     getApproximateContextDiff: async () => ({ ...FAKE_CONTEXT_DIFF, approximate: true }),
     listContextDiffSessions: async () => FAKE_CONTEXT_SESSIONS,
     listContextDiffSnapshots: async () => [FAKE_CONTEXT_BASELINE, FAKE_CONTEXT_CURRENT],

@@ -66,6 +66,25 @@ describe('上下文快照 diff', () => {
     expect(view?.tokens.after).toBeGreaterThan(view?.tokens.before ?? 0)
   })
 
+  it('按轮次取截至该轮的最后两次请求', () => {
+    const s = store()
+    s.capture('tab-1', snapshot('s1', 'a1'))
+    s.capture('tab-1', snapshot('s1', 'a2', ['second']))
+    s.capture('tab-1', snapshot('s1', 'a3', ['second', 'third']))
+
+    const first = s.getViewForTurn('tab-1', 1)
+    expect(first?.current.request).toBe(1)
+    expect(first?.baseline).toBeNull()
+
+    const second = s.getViewForTurn('tab-1', 2)
+    expect(second?.current.request).toBe(2)
+    expect(second?.baseline?.request).toBe(1)
+
+    const latest = s.getViewForTurn('tab-1', 99)
+    expect(latest?.current.request).toBe(3)
+    expect(latest?.baseline?.request).toBe(2)
+  })
+
   it('同会话同位置、同角色的内容变化算修改', () => {
     const s = store()
     s.capture('tab-1', snapshot('s1', 'a1'))

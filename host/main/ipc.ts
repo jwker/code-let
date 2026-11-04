@@ -12,6 +12,7 @@ import {
   commandCompleteSchema,
   contextDiffDetailSchema,
   contextDiffGetSchema,
+  contextDiffTurnSchema,
   conversationRenameSchema,
   conversationsDeleteSchema,
   fileIdSchema,
@@ -246,6 +247,11 @@ export function registerIpc(state: HostState): () => void {
     return state.getContextDiff(tabId, baselineId)
   })
 
+  ipcMain.handle(IPC.contextDiffTurn, async (_event, payload: unknown) => {
+    const { tabId, turn, baselineId } = contextDiffTurnSchema.parse(payload)
+    return state.getContextDiffForTurn(tabId, turn, baselineId)
+  })
+
   ipcMain.handle(IPC.contextDiffApproximate, async (_event, payload: unknown) => {
     const { tabId } = tabIdSchema.parse(payload)
     return state.getApproximateContextDiff(tabId)
@@ -342,6 +348,7 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.modelsList)
     ipcMain.removeHandler(IPC.attachmentsPick)
     ipcMain.removeHandler(IPC.contextDiffGet)
+    ipcMain.removeHandler(IPC.contextDiffTurn)
     ipcMain.removeHandler(IPC.contextDiffApproximate)
     ipcMain.removeHandler(IPC.contextDiffSessions)
     ipcMain.removeHandler(IPC.contextDiffSnapshots)
