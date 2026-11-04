@@ -187,9 +187,12 @@ describe('上下文快照 diff', () => {
     expect(view?.system).toBe('only-current')
     expect(view?.counts.removed).toBe(2)
     expect(view?.groups.find((group) => group.kind === 'compacted')?.label).toBe('上下文已压缩（近似）')
-    const added = view?.groups.find((group) => group.kind === 'added')?.messages ?? []
-    const summary = added.find((message) => message.role === 'compactionSummary')
+    const compacted = view?.groups.find((group) => group.kind === 'compacted')
+    const summary = compacted?.messages.find((message) => message.role === 'compactionSummary')
     expect(summary?.preview).toBe('压缩摘要正文')
+    expect(view?.groups.find((group) => group.kind === 'added')?.messages.some(
+      (message) => message.role === 'compactionSummary'
+    )).toBe(false)
     expect(s.detail('tab-1', view!.current.id, summary!.key)).toEqual({
       text: '压缩摘要正文',
       truncated: false

@@ -530,6 +530,12 @@ export class ContextDiffStore {
       )
     }
 
+    // 压缩摘要单独成组，不再混在“新增”里；用户要能直接找到它。
+    const summaryMessages = currentMessages.filter(
+      (message) => message.role === 'compactionSummary'
+    )
+    const visibleAdded = added.filter((message) => !summaryMessages.includes(message))
+
     const groups: ContextDiffGroup[] = []
     if (system === 'changed' || system === 'only-current' || system === 'only-baseline') {
       groups.push({ kind: 'system', label: 'System 与工具', messages: [] })
@@ -546,11 +552,11 @@ export class ContextDiffStore {
         tokens: modified.reduce((sum, item) => sum + item.message.tokens, 0)
       })
     }
-    if (added.length > 0) {
+    if (visibleAdded.length > 0) {
       groups.push({
         kind: 'added',
         label: sameSession ? '新增' : '仅当前',
-        messages: added.map(summaryOf)
+        messages: visibleAdded.map(summaryOf)
       })
     }
     if (removed.length > 0) {
@@ -561,15 +567,12 @@ export class ContextDiffStore {
         tokens: removed.reduce((sum, message) => sum + message.tokens, 0)
       })
     }
-    const approximateCompaction =
-      current.id.startsWith('approx:') &&
-      currentMessages.some((message) => message.role === 'compactionSummary')
-    if (approximateCompaction) {
+    if (summaryMessages.length > 0) {
       groups.push({
         kind: 'compacted',
-        label: '上下文已压缩（近似）',
-        messages: [],
-        tokens: after
+        label: current.id.startsWith('approx:') ? '上下文已压缩（近似）' : '上下文被压缩',
+        messages: summaryMessages.map(summaryOf),
+        tokens: summaryMessages.reduce((sum, message) => sum + message.tokens, 0)
       })
     } else if (baseline && before > after * 1.3 && after < before - 1000) {
       groups.push({
@@ -589,7 +592,7 @@ export class ContextDiffStore {
       tools,
       toolsApproximate: true,
       counts: {
-        added: added.length,
+        added: visibleAdded.length,
         removed: removed.length,
         modified: modified.length,
         shared: shared.length
@@ -609,7 +612,16 @@ export class ContextDiffStore {
           if (!line.trim()) continue
           const entry = JSON.parse(line) as {
             type?: string
+            summary?: string
             message?: { role?: string; content?: unknown; text?: string }
+          }
+          if (entry.type === 'compaction' && typeof entry.summary === 'string') {
+            const digest = createHash('sha256')
+              .update(`compactionSummary\u0000${entry.summary}`)
+              .digest('hex')
+              .slice(0, 24)
+            messages.set(digest, entry.summary)
+            continue
           }
           if (entry.type !== 'message' || !entry.message) continue
           const role = typeof entry.message.role === 'string' ? entry.message.role : 'unknown'

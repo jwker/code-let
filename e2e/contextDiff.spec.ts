@@ -113,7 +113,14 @@ test.describe.serial('上下文 Diff', () => {
             hash: digest('user', '这次新增的用户消息'),
             tokens: 3,
             preview: '新增消息预览'
-          }
+          },
+          ...Array.from({ length: 13 }, (_, index) => ({
+            key: `extra-${index}`,
+            role: 'user',
+            hash: digest('user', `额外消息 ${index}`),
+            tokens: 2,
+            preview: `额外消息 ${index}`
+          }))
         ]
       }
       writeFileSync(
@@ -168,6 +175,9 @@ test.describe.serial('上下文 Diff', () => {
     await pane.getByRole('button', { name: /USER 新增消息预览/ }).click()
     await expect(detail).toContainText('这次新增的用户消息')
     await page.getByRole('button', { name: '关闭详情' }).click()
+
+    await pane.getByRole('button', { name: '展开全部 14 条' }).click()
+    await expect(pane.getByRole('button', { name: /USER 额外消息 12/ })).toBeVisible()
   })
 
   test('基线可以切换，选中后回到摘要', async () => {

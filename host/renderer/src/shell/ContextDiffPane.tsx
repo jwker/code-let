@@ -527,10 +527,19 @@ function SummaryView({
         </div>
       </div>
 
-      {compacted && (
-        <div className="rounded-lg border border-warn/40 bg-warn-wash px-2.5 py-2 text-[10px] text-warn">
-          {compacted.label}
-        </div>
+      {compacted && compacted.messages.length > 0 ? (
+        <MessageGroup
+          title={compacted.label}
+          messages={compacted.messages}
+          snapshotId={currentId}
+          onDetail={onDetail}
+        />
+      ) : (
+        compacted && (
+          <div className="rounded-lg border border-warn/40 bg-warn-wash px-2.5 py-2 text-[10px] text-warn">
+            {compacted.label}
+          </div>
+        )
       )}
 
       {modified && modified.messages.length > 0 && (
@@ -669,7 +678,8 @@ function MessageGroup({
   removed?: boolean
   modified?: boolean
 }) {
-  const visible = messages.slice(0, 12)
+  const [expanded, setExpanded] = useState(false)
+  const visible = expanded ? messages : messages.slice(0, 12)
   return (
     <div className="overflow-hidden rounded-lg border border-hairline">
       <div className="flex items-center gap-2 border-b border-hairline bg-panel px-2.5 py-1.5 text-[9.5px] text-fg-3">
@@ -691,10 +701,15 @@ function MessageGroup({
           <span className="flex-none pt-0.5 font-mono text-[8px] text-fg-3">{tokenLabel(message.tokens)}</span>
         </button>
       ))}
-      {messages.length > visible.length && (
-        <div className="border-t border-hairline px-2.5 py-1.5 text-[9px] text-fg-3">
-          还有 {messages.length - visible.length} 条，已折叠。
-        </div>
+      {messages.length > 12 && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+          className="w-full border-t border-hairline px-2.5 py-1.5 text-left text-[9px] text-fg-3 hover:bg-sunken hover:text-fg-1"
+        >
+          {expanded ? '收起' : `展开全部 ${messages.length} 条`}
+        </button>
       )}
     </div>
   )
