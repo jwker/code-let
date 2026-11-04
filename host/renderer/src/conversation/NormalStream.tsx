@@ -7,7 +7,6 @@ import { Markdown } from './Markdown'
 import { ReplyMeta } from './ReplyMeta'
 import { summarizeProcess, summarizeTurn, type TurnSummary } from './turnMeta'
 import { CustomMessage } from './CustomMessage'
-import { Thinking } from './Thinking'
 import { useToolOutputs } from './useToolOutputs'
 import { formatDuration } from './usageFormat'
 import { IconCaret } from '../shell/icons'
@@ -139,7 +138,6 @@ function TurnRow({
     return (
       <div className="flex flex-col gap-2">
         <UserBubble item={turn.user} userIndex={turn.userIndex} />
-        {streaming && <Thinking />}
         {processItems.length > 0 && (
           <ProcessBlock
             summary={processSummary}
@@ -158,6 +156,9 @@ function TurnRow({
             ))}
           </div>
         )}
+        {streaming && (
+          <ReplyMeta summary={processSummary} streaming startedAt={turnStartedAt} />
+        )}
       </div>
     )
   }
@@ -172,7 +173,6 @@ function TurnRow({
   return (
     <div className="flex flex-col gap-2">
       <UserBubble item={turn.user} userIndex={turn.userIndex} />
-      {streaming && <Thinking />}
 
       {processItems.length > 0 && (
         <ProcessBlock

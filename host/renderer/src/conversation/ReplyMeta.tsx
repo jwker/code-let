@@ -3,6 +3,7 @@ import { host } from '../host'
 import { IconCheck, IconCopy } from '../shell/icons'
 import type { TurnSummary } from './turnMeta'
 import { formatDuration, formatTokens } from './usageFormat'
+import { Thinking } from './Thinking'
 
 /** 复制成功后回到「复制」的间隔 */
 const COPIED_MS = 1500
@@ -33,11 +34,11 @@ export function ReplyMeta({
 
   // 还在跑循环：只显示走过的秒数，不显示复制和 token。
   if (streaming) {
-    const stats = summary.stats
-    if (!stats && startedAt === undefined) return null
     return (
-      <div className="mt-3 flex w-fit items-center rounded-full border border-hairline bg-panel px-3 py-1.5">
-        <Elapsed stats={stats} startedAt={startedAt} />
+      <div className="mt-3 flex w-fit items-center gap-2 rounded-full border border-hairline bg-panel py-1.5 pl-3 pr-3">
+        <Thinking />
+        <span className="h-3 w-px flex-none bg-hairline-strong" />
+        <Elapsed stats={summary.stats} startedAt={startedAt} showDot={false} />
       </div>
     )
   }
@@ -119,10 +120,12 @@ function Stats({ summary, streaming }: { summary: TurnSummary; streaming: boolea
 /** 生成中的耗时：按秒走，不按毫秒跳 */
 function Elapsed({
   stats,
-  startedAt
+  startedAt,
+  showDot = true
 }: {
   stats?: NonNullable<TurnSummary['stats']>
   startedAt?: number
+  showDot?: boolean
 }) {
   const [now, setNow] = useState(() => Date.now())
 
@@ -135,7 +138,7 @@ function Elapsed({
   const elapsed = start === undefined ? 0 : Math.max(0, now - start)
   return (
     <span className="flex flex-none items-center gap-1.5">
-      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-info" />
+      {showDot && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-info" />}
       <span className="font-mono text-[11.5px] text-fg-3">{formatDuration(elapsed)}</span>
     </span>
   )
