@@ -113,6 +113,17 @@ export const temporaryModelSelectSchema = z.object({
   modelId: z.string().min(1)
 })
 
+export const contextDiffGetSchema = z.object({
+  tabId: z.string().min(1),
+  baselineId: z.string().min(1).optional()
+})
+
+export const contextDiffDetailSchema = z.object({
+  tabId: z.string().min(1),
+  snapshotId: z.string().min(1),
+  key: z.string().min(1)
+})
+
 export const clipboardWriteSchema = z.object({
   text: z.string()
 })

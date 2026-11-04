@@ -10,6 +10,8 @@ import {
 import {
   clipboardWriteSchema,
   commandCompleteSchema,
+  contextDiffDetailSchema,
+  contextDiffGetSchema,
   conversationRenameSchema,
   conversationsDeleteSchema,
   fileIdSchema,
@@ -239,6 +241,23 @@ export function registerIpc(state: HostState): () => void {
 
   ipcMain.handle(IPC.attachmentsPick, () => state.pickAttachments())
 
+  ipcMain.handle(IPC.contextDiffGet, async (_event, payload: unknown) => {
+    const { tabId, baselineId } = contextDiffGetSchema.parse(payload)
+    return state.getContextDiff(tabId, baselineId)
+  })
+
+  ipcMain.handle(IPC.contextDiffSessions, () => state.listContextDiffSessions())
+
+  ipcMain.handle(IPC.contextDiffSnapshots, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    return state.listContextDiffSnapshots(tabId)
+  })
+
+  ipcMain.handle(IPC.contextDiffDetail, async (_event, payload: unknown) => {
+    const { tabId, snapshotId, key } = contextDiffDetailSchema.parse(payload)
+    return state.getContextDiffDetail(tabId, snapshotId, key)
+  })
+
   ipcMain.handle(IPC.temporaryOpen, () => state.openTemporaryChat())
   ipcMain.handle(IPC.temporaryClose, () => state.closeTemporaryChat())
   ipcMain.handle(IPC.temporaryPrompt, async (_event, payload: unknown) => {
@@ -317,6 +336,10 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.filesReload)
     ipcMain.removeHandler(IPC.modelsList)
     ipcMain.removeHandler(IPC.attachmentsPick)
+    ipcMain.removeHandler(IPC.contextDiffGet)
+    ipcMain.removeHandler(IPC.contextDiffSessions)
+    ipcMain.removeHandler(IPC.contextDiffSnapshots)
+    ipcMain.removeHandler(IPC.contextDiffDetail)
     ipcMain.removeHandler(IPC.temporaryOpen)
     ipcMain.removeHandler(IPC.temporaryClose)
     ipcMain.removeHandler(IPC.temporaryPrompt)

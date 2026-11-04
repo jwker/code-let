@@ -62,4 +62,8 @@ pi.registerCommand('deploy', {
 结果包在 `text` 代码块里，用 `pi.sendMessage()` 发成 custom 消息。
 它验证了「编译 → 加载 → `/` 菜单 → 执行 → custom 消息」整条链路，也验证了扩展命令在流式期间执行。
 
+`context-diff.ts` 是 Codelet 的内置观察扩展：监听 `context_with_system`，把请求前的 transcript
+压成索引通过 EventBus 交给主进程。它不注册命令，也不修改模型请求；完整文本留在主进程的有限缓存里，
+不是用户扩展，不需要手动调用。
+
 改完 `ext/` 后先跑 `npm run build:ext`，再在输入框执行 `/reload`；它重载的是 `out/ext` 里编译后的 `.js`，不会替你编译源码。现在没有 `tsc --watch`，也不会热重载扩展产物。

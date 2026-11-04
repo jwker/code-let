@@ -4,6 +4,9 @@ import { basename, normalize, relative } from 'node:path'
 import type {
   CommandArgumentOption,
   CommandOption,
+  ContextDiffSession,
+  ContextDiffView,
+  ContextSnapshotRef,
   ConversationInfo,
   DeleteConversationsResult,
   ExtensionErrorInfo,
@@ -27,6 +30,7 @@ import {
   prepareAttachments,
   type ExternalAttachment
 } from './attachments'
+import { ContextDiffStore, type RawContextSnapshot } from './contextDiff'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
 import { pickFiles } from './filePicker'
@@ -104,6 +108,10 @@ export class HostState extends EventEmitter {
   /** 当前临时对话；null = 没有或已彻底关闭 */
   private temporaryChat: TemporaryChatState | null = null
   private temporarySeq = 0
+  /** 请求级上下文 diff 的索引和内容缓存 */
+  private readonly contextDiff: ContextDiffStore
+  /** 活动标签的默认上下文对比 */
+  private contextDiffView: ContextDiffView | null = null
   private session: SessionState = {
     ready: false,
     cwd: null,
@@ -162,6 +170,7 @@ export class HostState extends EventEmitter {
     projects?: ProjectStore
     pickDirectory?: () => Promise<string | null>
     pickFiles?: () => Promise<string[] | null>
+    contextDiffDir?: string
     trashFile?: (path: string) => Promise<void>
   }) {
     super()
@@ -170,6 +179,7 @@ export class HostState extends EventEmitter {
     this.tabStore = options?.tabStore ?? new TabStore()
     this.pickDirectory = options?.pickDirectory ?? pickDirectory
     this.pickFiles = options?.pickFiles ?? pickFiles
+    this.contextDiff = new ContextDiffStore(options?.contextDiffDir ?? null)
     this.trashFile = options?.trashFile ?? ((path) => shell.trashItem(path))
     this.conversationsRefresh = new DebouncedRefresh(() => this.refreshConversations())
   }
@@ -191,6 +201,7 @@ export class HostState extends EventEmitter {
       activeFileId: this.activeFileId,
       extensionErrors: this.extensionErrors,
       temporaryChat: this.temporaryChat ? { ...this.temporaryChat } : null,
+      contextDiff: this.contextDiffView,
       session: this.session
     }
   }
@@ -226,6 +237,17 @@ export class HostState extends EventEmitter {
   async init(): Promise<void> {
     // 会话流事件：转发给渲染进程（带 tabId）
     this.pi.onEvent((event) => {
+      // 请求级上下文快照：进 context diff，不进会话事件流
+      if (event.type === 'context_diff_snapshot') {
+        if (this.temporaryChat?.id !== event.tabId) {
+          this.contextDiff.capture(event.tabId, event.data as RawContextSnapshot)
+          if (this.activeTabId === event.tabId) {
+            this.contextDiffView = this.contextDiff.getView(event.tabId)
+            this.push()
+          }
+        }
+        return
+      }
       // 扩展错误走快照，不混进会话事件流
       if (event.type === 'extension_error') {
         this.recordExtensionError(event.tabId, event.data as Omit<ExtensionErrorInfo, 'tabId'>)
@@ -516,6 +538,7 @@ export class HostState extends EventEmitter {
       }
 
       const outcome = await moveSessionFilesToTrash(targets, this.trashFile)
+      for (const path of outcome.deleted) this.contextDiff.deleteBySessionPath(path)
       await this.refreshConversations()
       this.readSession()
       this.push()
@@ -875,6 +898,7 @@ export class HostState extends EventEmitter {
         modelFallback: null,
         error: null
       }
+      this.contextDiffView = null
       return
     }
     const tab = this.tabs.find((t) => t.id === tabId)
@@ -888,6 +912,8 @@ export class HostState extends EventEmitter {
       modelFallback: state.modelFallback,
       error: tab?.error ?? null
     }
+    if (state.sessionId) this.contextDiff.attachTab(tabId, state.sessionId)
+    this.contextDiffView = this.contextDiff.getView(tabId)
   }
 
   // ---------------------------------------------------------------------
@@ -954,6 +980,30 @@ export class HostState extends EventEmitter {
   cancelFileSearch(requestId: string): void {
     this.fileSearches.get(requestId)?.abort()
     this.fileSearches.delete(requestId)
+  }
+
+  /** 取活动标签的上下文对比；baselineId 为空时用上一次请求 */
+  async getContextDiff(tabId: string, baselineId?: string): Promise<ContextDiffView | null> {
+    return this.contextDiff.getView(tabId, baselineId)
+  }
+
+  /** 有快照可比较的会话（跨会话基线选择器） */
+  listContextDiffSessions(): Promise<ContextDiffSession[]> {
+    return Promise.resolve(this.contextDiff.listSessions())
+  }
+
+  /** 某个标签当前会话的请求快照 */
+  listContextDiffSnapshots(tabId: string): Promise<ContextSnapshotRef[]> {
+    return Promise.resolve(this.contextDiff.listSnapshots(tabId))
+  }
+
+  /** 取某条消息全文；只用于当前/已加载的会话快照 */
+  async getContextDiffDetail(
+    tabId: string,
+    snapshotId: string,
+    key: string
+  ): Promise<{ text: string; truncated: boolean } | null> {
+    return this.contextDiff.detail(tabId, snapshotId, key)
   }
 
   /** 打开或恢复临时对话；已有会话时不新建 */

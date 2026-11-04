@@ -22,7 +22,7 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
 const isDev = Boolean(rendererDevUrl)
 
-const state = new HostState()
+const state = new HostState({ contextDiffDir: join(app.getPath('userData'), 'context-diff') })
 let disposeIpc: (() => void) | null = null
 
 function createWindow(): BrowserWindow {

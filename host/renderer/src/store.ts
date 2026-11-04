@@ -25,6 +25,7 @@ const EMPTY_SNAPSHOT: HostSnapshot = {
   activeFileId: null,
   extensionErrors: [],
   temporaryChat: null,
+  contextDiff: null,
   session: {
     ready: false,
     cwd: null,

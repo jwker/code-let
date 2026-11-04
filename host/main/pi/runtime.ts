@@ -178,6 +178,8 @@ interface TabRecord {
   bus: EventBus
   runtime: AgentSessionRuntime | null
   unbind: (() => void) | null
+  /** 内置 context-diff 扩展通过 EventBus 发来的快照 */
+  contextDiffUnsub: (() => void) | null
   sessionManager: SessionManager | null
 }
 
@@ -243,8 +245,12 @@ export class PiRuntime implements PiRuntimePort {
       bus: createEventBus(),
       runtime: null,
       unbind: null,
+      contextDiffUnsub: null,
       sessionManager: null
     }
+    record.contextDiffUnsub = record.bus.on('context-diff:snapshot', (data) => {
+      this.emit({ type: 'context_diff_snapshot', data, tabId })
+    })
     this.tabs.set(tabId, record)
     if (options.lazy) return
     await this.buildRuntime(record)
@@ -430,6 +436,8 @@ export class PiRuntime implements PiRuntimePort {
     this.tabs.delete(tabId)
     record.unbind?.()
     record.unbind = null
+    record.contextDiffUnsub?.()
+    record.contextDiffUnsub = null
     const runtime = record.runtime
     record.runtime = null
     if (!runtime) return

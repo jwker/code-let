@@ -5,6 +5,9 @@ import {
   type CodeletApi,
   type CommandArgumentOption,
   type CommandOption,
+  type ContextDiffSession,
+  type ContextDiffView,
+  type ContextSnapshotRef,
   type DeleteConversationsResult,
   type FileContent,
   type FileEntry,
@@ -43,6 +46,16 @@ const api: CodeletApi = {
   compactTab: (tabId) => ipcRenderer.invoke(IPC.promptCompact, { tabId }) as Promise<void>,
   pickAttachments: () =>
     ipcRenderer.invoke(IPC.attachmentsPick) as Promise<PickAttachmentsResult>,
+  getContextDiff: (tabId, baselineId) =>
+    ipcRenderer.invoke(IPC.contextDiffGet, { tabId, baselineId }) as Promise<ContextDiffView | null>,
+  listContextDiffSessions: () =>
+    ipcRenderer.invoke(IPC.contextDiffSessions) as Promise<ContextDiffSession[]>,
+  listContextDiffSnapshots: (tabId) =>
+    ipcRenderer.invoke(IPC.contextDiffSnapshots, { tabId }) as Promise<ContextSnapshotRef[]>,
+  getContextDiffDetail: (tabId, snapshotId, key) =>
+    ipcRenderer.invoke(IPC.contextDiffDetail, { tabId, snapshotId, key }) as Promise<
+      { text: string; truncated: boolean } | null
+    >,
   openTemporaryChat: () => ipcRenderer.invoke(IPC.temporaryOpen) as Promise<HostSnapshot>,
   closeTemporaryChat: () => ipcRenderer.invoke(IPC.temporaryClose) as Promise<HostSnapshot>,
   promptTemporary: (id, text, uploads) =>
