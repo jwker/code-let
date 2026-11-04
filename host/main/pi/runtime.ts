@@ -8,10 +8,11 @@ import {
   type AgentSession,
   type AgentSessionRuntime,
   type CreateAgentSessionRuntimeFactory,
-  type EventBus
+  type EventBus,
+  type ToolInfo
 } from '@earendil-works/pi-coding-agent'
 import { existsSync, readdirSync } from 'node:fs'
-import { join, normalize } from 'node:path'
+import { join, normalize, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type {
   CommandArgumentOption,
@@ -166,6 +167,26 @@ function listExtensionFiles(dir: string): string[] {
   } catch {
     return []
   }
+}
+
+/**
+ * 找出「本项目扩展已注册、但没被激活」的工具。
+ *
+ * 只认 `sourceInfo.path` 落在扩展目录里的工具，别把 tool_search、codemode
+ * 之类自己收起来的工具一起拉回来；不可声明的（codemode/deferred/hidden）也不碰。
+ */
+export function missingExtensionTools(
+  tools: readonly ToolInfo[],
+  active: readonly string[],
+  extensionsDir: string
+): string[] {
+  const activeNames = new Set(active)
+  const prefix = extensionsDir.endsWith(sep) ? extensionsDir : `${extensionsDir}${sep}`
+  return tools
+    .filter((tool) => !activeNames.has(tool.name))
+    .filter((tool) => tool.sourceInfo.path.startsWith(prefix))
+    .filter((tool) => tool.exposure === 'direct' || tool.exposure === 'model-only')
+    .map((tool) => tool.name)
 }
 
 /** 一个标签背后的一套运行时 */
@@ -368,6 +389,9 @@ export class PiRuntime implements PiRuntimePort {
         })
       }
 
+      // 扩展加载完了才补 —— 名字不在 registry 里的话 setActiveToolsByName 会直接忽略
+      this.reactivateExtensionTools(session)
+
       return { session, extensionsResult, modelFallbackMessage, services, diagnostics: services.diagnostics }
     }
 
@@ -382,6 +406,29 @@ export class PiRuntime implements PiRuntimePort {
       agentDir,
       sessionManager
     })
+  }
+
+  /**
+   * 把掉队的扩展工具补回 active 集合。
+   *
+   * `out/ext` 是易变目录：构建期间或编译失败时重建 runtime 会读不到扩展，
+   * Pi 在下一轮请求前把差集写成 `toolsRemoved` 落进会话文件；而
+   * `_restoreToolsFromTranscript()` 只把「从未被提过」的扩展工具当新工具激活，
+   * 于是这些工具在这个分支上就永久不可用了。
+   *
+   * `setActiveToolsByName()` 只改内存，下一轮请求前 `declareToolChanges()` 会
+   * 写出 `toolsAdded`，会话因此自愈 —— 不用改写会话文件，也不用重开标签。
+   */
+  private reactivateExtensionTools(session: AgentSession): void {
+    if (!this.extensionsDir) return
+    const missing = missingExtensionTools(
+      session.getAllTools(),
+      session.getActiveToolNames(),
+      this.extensionsDir
+    )
+    if (missing.length === 0) return
+    // 传并集：这是「设置」不是「添加」，只传差集会把内置工具踢掉
+    session.setActiveToolsByName([...session.getActiveToolNames(), ...missing])
   }
 
   private bind(tabId: string, session: AgentSession): () => void {

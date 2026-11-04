@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "dev": "npm run build:ext && electron-vite dev",
-    "build:ext": "node scripts/clean-ext.mjs && tsc -p tsconfig.ext.json",
+    "build:ext": "node scripts/build-ext.mjs",
     "build": "npm run build:ext && electron-vite build",
     "icon": "electron scripts/gen-icon.cjs",
     "start": "electron-vite preview",
