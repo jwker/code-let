@@ -11,14 +11,6 @@ function store(dir: string | null = null): ContextDiffStore {
   return new ContextDiffStore(dir)
 }
 
-function messageEntry(id: string, role: string, text: string) {
-  return {
-    type: 'message',
-    id,
-    message: { role, content: [{ type: 'text', text }] }
-  }
-}
-
 function snapshot(
   sessionId: string,
   requestText: string,
@@ -83,25 +75,6 @@ describe('上下文快照 diff', () => {
     const latest = s.getViewForTurn('tab-1', 99)
     expect(latest?.current.request).toBe(3)
     expect(latest?.baseline?.request).toBe(2)
-  })
-
-  it('精确快照和近似快照混合时按轮次合并', () => {
-    const s = store()
-    s.capture('tab-1', snapshot('s1', 'a1'))
-    s.approximate('tab-1', 's1', '/tmp/session.jsonl', '测试会话', [
-      messageEntry('u1', 'user', '第一轮'),
-      messageEntry('a1', 'assistant', '第一轮回答'),
-      messageEntry('u2', 'user', '第二轮'),
-      messageEntry('a2', 'assistant', '第二轮回答'),
-      messageEntry('u3', 'user', '第三轮'),
-      messageEntry('a3', 'assistant', '第三轮回答')
-    ])
-
-    expect(s.listSnapshots('tab-1')).toHaveLength(3)
-    const view = s.getViewForTurn('tab-1', 3)
-    expect(view?.current.id).toBe('approx:s1:3')
-    expect(view?.baseline?.id).toBe('approx:s1:2')
-    expect(view?.approximate).toBe(true)
   })
 
   it('同会话同位置、同角色的内容变化算修改', () => {
@@ -178,60 +151,30 @@ describe('上下文快照 diff', () => {
     expect(second.detail('tab-1', 's1:1', 'a')).toBeNull()
   })
 
-  it('近似快照累计历史，不会把上一轮算成删除', () => {
+  it('压缩摘要单独成组，不混在新增里', () => {
     const s = store()
-    const entries = [
-      messageEntry('u1', 'user', '第一轮'),
-      messageEntry('a1', 'assistant', '第一轮回答'),
-      messageEntry('u2', 'user', '第二轮'),
-      messageEntry('a2', 'assistant', '第二轮回答')
-    ]
-    const view = s.approximate('tab-1', 's1', '/tmp/session.jsonl', '测试会话', entries)
-    expect(view?.approximate).toBe(true)
-    expect(view?.baseline).not.toBeNull()
-    expect(view?.counts.removed).toBe(0)
-    expect(view?.counts.added).toBe(2)
-    expect(view?.groups.find((group) => group.kind === 'added')?.messages[0].preview).toBe('第二轮')
-    expect(view?.system).toBe('unknown')
-    expect(view?.tools).toBe('unknown')
-    expect(s.listSnapshots('tab-1')).toHaveLength(2)
-    const selected = s.getView('tab-1', 'approx:s1:1')
-    expect(selected?.approximate).toBe(true)
-    expect(selected?.baseline?.id).toBe('approx:s1:1')
-    expect(selected?.counts.added).toBeGreaterThan(0)
-  })
+    s.capture('tab-1', snapshot('s1', 'a1'))
+    const current = snapshot('s1', 'a2', ['second'])
+    current.messages.push({
+      key: 'summary',
+      role: 'compactionSummary',
+      text: '压缩摘要正文',
+      hash: 'summary',
+      tokens: 3,
+      preview: '压缩摘要正文'
+    })
+    s.capture('tab-1', current)
 
-  it('近似重放读到压缩摘要、保留边界和 system checkpoint', () => {
-    const s = store()
-    const entries = [
-      messageEntry('u1', 'user', '压缩前的问题'),
-      messageEntry('a1', 'assistant', '压缩前的回答'),
-      {
-        type: 'compaction',
-        id: 'c1',
-        firstKeptEntryId: 'u2',
-        summary: '压缩摘要正文',
-        tokensBefore: 999,
-        systemMessage: {
-          role: 'system',
-          content: [{ type: 'text', text: 'SYSTEM CHECKPOINT' }]
-        }
-      },
-      messageEntry('u2', 'user', '压缩后的问题'),
-      messageEntry('a2', 'assistant', '压缩后的回答')
-    ]
-    const view = s.approximate('tab-1', 's1', '/tmp/session.jsonl', '测试会话', entries)
-    expect(view?.approximate).toBe(true)
-    expect(view?.system).toBe('only-current')
-    expect(view?.counts.removed).toBe(2)
-    expect(view?.groups.find((group) => group.kind === 'compacted')?.label).toBe('上下文已压缩（近似）')
+    const view = s.getView('tab-1')
     const compacted = view?.groups.find((group) => group.kind === 'compacted')
-    const summary = compacted?.messages.find((message) => message.role === 'compactionSummary')
-    expect(summary?.preview).toBe('压缩摘要正文')
-    expect(view?.groups.find((group) => group.kind === 'added')?.messages.some(
-      (message) => message.role === 'compactionSummary'
-    )).toBe(false)
-    expect(s.detail('tab-1', view!.current.id, summary!.key)).toEqual({
+    expect(compacted?.label).toBe('上下文被压缩')
+    expect(compacted?.messages[0].role).toBe('compactionSummary')
+    expect(
+      view?.groups.find((group) => group.kind === 'added')?.messages.some(
+        (message) => message.role === 'compactionSummary'
+      )
+    ).toBe(false)
+    expect(s.detail('tab-1', view!.current.id, 'summary')).toEqual({
       text: '压缩摘要正文',
       truncated: false
     })

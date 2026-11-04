@@ -10,7 +10,6 @@ import {
 import {
   clipboardWriteSchema,
   commandCompleteSchema,
-  contextDiffApproximateSchema,
   contextDiffDetailSchema,
   contextDiffGetSchema,
   contextDiffTurnSchema,
@@ -253,11 +252,6 @@ export function registerIpc(state: HostState): () => void {
     return state.getContextDiffForTurn(tabId, turn, baselineId)
   })
 
-  ipcMain.handle(IPC.contextDiffApproximate, async (_event, payload: unknown) => {
-    const { tabId, turn } = contextDiffApproximateSchema.parse(payload)
-    return state.getApproximateContextDiff(tabId, turn)
-  })
-
   ipcMain.handle(IPC.contextDiffSessions, () => state.listContextDiffSessions())
 
   ipcMain.handle(IPC.contextDiffSnapshots, async (_event, payload: unknown) => {
@@ -350,7 +344,6 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.attachmentsPick)
     ipcMain.removeHandler(IPC.contextDiffGet)
     ipcMain.removeHandler(IPC.contextDiffTurn)
-    ipcMain.removeHandler(IPC.contextDiffApproximate)
     ipcMain.removeHandler(IPC.contextDiffSessions)
     ipcMain.removeHandler(IPC.contextDiffSnapshots)
     ipcMain.removeHandler(IPC.contextDiffDetail)

@@ -1001,26 +1001,6 @@ export class HostState extends EventEmitter {
     return Promise.resolve(this.contextDiff.listSessions())
   }
 
-  /** 没有请求级快照时，从会话历史重建近似对比 */
-  async getApproximateContextDiff(
-    tabId: string,
-    turn?: number
-  ): Promise<ContextDiffView | null> {
-    const tab = this.tabs.find((item) => item.id === tabId)
-    if (!tab) return null
-    const state = this.pi.tabState(tabId)
-    if (!state.sessionId) return null
-    const view = this.contextDiff.approximate(
-      tabId,
-      state.sessionId,
-      tab.path,
-      tab.title,
-      this.pi.readBranchEntries(tabId)
-    )
-    if (!view) return null
-    return turn === undefined ? view : this.contextDiff.getViewForTurn(tabId, turn)
-  }
-
   /** 某个标签当前会话的请求快照 */
   listContextDiffSnapshots(tabId: string): Promise<ContextSnapshotRef[]> {
     return Promise.resolve(this.contextDiff.listSnapshots(tabId))

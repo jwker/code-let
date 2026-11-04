@@ -28,11 +28,11 @@ function refLabel(ref: ContextSnapshotRef | null): string {
   return `${name} · 第 ${ref.turn} 轮 · 第 ${ref.request} 次`
 }
 
-function systemLabel(value: ContextDiffView['system'], approximate: boolean): string {
-  if (value === 'same') return approximate ? '相同（近似）' : '相同'
-  if (value === 'changed') return approximate ? '已修改（近似）' : '已修改'
-  if (value === 'only-current') return approximate ? '仅当前有（近似）' : '仅当前有'
-  if (value === 'only-baseline') return approximate ? '仅基线有（近似）' : '仅基线有'
+function systemLabel(value: ContextDiffView['system']): string {
+  if (value === 'same') return '相同'
+  if (value === 'changed') return '已修改'
+  if (value === 'only-current') return '仅当前有'
+  if (value === 'only-baseline') return '仅基线有'
   return '未知'
 }
 
@@ -142,25 +142,8 @@ export function ContextDiffPane() {
     setPickerOpen(false)
     if (contextTurn !== null && activeTabId) {
       void host.getContextDiffForTurn(activeTabId, contextTurn).then(setView)
-    } else if (view?.approximate && activeTabId) {
-      void host.getApproximateContextDiff(activeTabId).then(setView)
     } else {
       setView(diff)
-    }
-  }
-
-  async function loadApproximate(): Promise<void> {
-    if (!activeTabId) return
-    setLoading(true)
-    setError(null)
-    try {
-      const next = await host.getApproximateContextDiff(activeTabId, contextTurn ?? undefined)
-      setBaselineId(null)
-      setView(next)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -246,13 +229,6 @@ export function ContextDiffPane() {
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {loading && <div className="mb-2 text-[10px] text-fg-3">正在读取上下文…</div>}
           {error && <div className="mb-2 text-[10px] text-danger">{error}</div>}
-          {view?.approximate && (
-            <div className="mb-2 rounded-lg border border-warn/40 bg-warn-wash px-2.5 py-2 text-[9.5px] leading-5 text-warn">
-              近似视图：按会话历史重放累计上下文。压缩前 system 未知，压缩后读取 checkpoint；
-              不含工具声明和请求级转换。这个会话没有请求级快照，可能是在终端里产生的对话。
-            </div>
-          )}
-
           {pickerOpen && (
             <BaselinePicker
               snapshots={snapshots}
@@ -269,21 +245,14 @@ export function ContextDiffPane() {
           {!view || !current ? (
             <div className="px-2 py-10 text-center text-[11.5px] leading-7 text-fg-3">
               <div className="mb-2 text-[18px] text-fg-2">≋</div>
-              还没有请求级上下文快照。<br />
-              下一次模型请求后，这里会显示这一轮和上一轮的变化。
-              <div className="mt-3 border-t border-hairline pt-3 text-left">
-                <p className="text-[10px] leading-6 text-fg-3">
-                  如果在终端里聊过这个会话，终端进程不会加载 Codelet 的请求级采集器，
-                  所以这里没有精确快照。可以只用会话历史重建一份近似对比。
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void loadApproximate()}
-                  className="mt-2 rounded-md border border-hairline-strong bg-surface px-2.5 py-1 text-[10px] text-fg-2 hover:bg-sunken"
-                >
-                  从会话历史重建近似对比
-                </button>
-              </div>
+              {contextTurn !== null ? (
+                <>第 {contextTurn} 轮还没有请求级上下文快照。</>
+              ) : (
+                <>
+                  还没有请求级上下文快照。<br />
+                  下一次模型请求后，这里会显示这一轮和上一轮的变化。
+                </>
+              )}
             </div>
           ) : (
             <SummaryView
@@ -542,7 +511,7 @@ function SummaryView({
       <div className="rounded-lg border border-hairline">
         <div className="flex items-center gap-2 border-b border-hairline bg-panel px-2.5 py-1.5 text-[10px] text-fg-3">
           <b className="font-medium text-fg-2">System 与工具</b>
-          <span className="ml-auto">{systemLabel(view.system, view.approximate)} · {toolsLabel(view.tools, view.toolsApproximate)}</span>
+          <span className="ml-auto">{systemLabel(view.system)} · {toolsLabel(view.tools, view.toolsApproximate)}</span>
         </div>
       </div>
 

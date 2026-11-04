@@ -94,8 +94,6 @@ export const IPC = {
   contextDiffSnapshots: 'host:context-diff:snapshots',
   /** 上下文 Diff：取一条消息详情 */
   contextDiffDetail: 'host:context-diff:detail',
-  /** 上下文 Diff：从会话历史重建近似对比 */
-  contextDiffApproximate: 'host:context-diff:approximate',
   /** 列当前模型可用的思考等级 */
   thinkingLevels: 'host:thinking:levels',
   /** 设置某个标签的思考等级 */
@@ -428,7 +426,6 @@ export interface ContextDiffGroup {
 export interface ContextDiffView {
   current: ContextSnapshotRef
   baseline: ContextSnapshotRef | null
-  approximate: boolean
   tokens: { before: number; after: number }
   system: 'same' | 'changed' | 'only-current' | 'only-baseline' | 'unknown'
   tools: 'same' | 'changed' | 'unknown'
@@ -719,8 +716,6 @@ export interface CodeletApi {
     turn: number,
     baselineId?: string
   ): Promise<ContextDiffView | null>
-  /** 没有请求级快照时，从会话历史重建一份近似对比 */
-  getApproximateContextDiff(tabId: string, turn?: number): Promise<ContextDiffView | null>
   /** 列出有快照可比较的会话 */
   listContextDiffSessions(): Promise<ContextDiffSession[]>
   /** 列出某个标签属于当前会话的请求快照 */

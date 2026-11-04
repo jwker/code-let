@@ -51,7 +51,6 @@ const FAKE_CONTEXT_CURRENT: ContextSnapshotRef = {
 const FAKE_CONTEXT_DIFF: ContextDiffView = {
   current: FAKE_CONTEXT_CURRENT,
   baseline: FAKE_CONTEXT_BASELINE,
-  approximate: false,
   tokens: { before: 12_400, after: 13_100 },
   system: 'same',
   tools: 'same',
@@ -640,7 +639,6 @@ export function createMockApi(): CodeletApi {
 
     getContextDiff: async () => FAKE_CONTEXT_DIFF,
     getContextDiffForTurn: async () => FAKE_CONTEXT_DIFF,
-    getApproximateContextDiff: async () => ({ ...FAKE_CONTEXT_DIFF, approximate: true }),
     listContextDiffSessions: async () => FAKE_CONTEXT_SESSIONS,
     listContextDiffSnapshots: async () => [FAKE_CONTEXT_BASELINE, FAKE_CONTEXT_CURRENT],
     getContextDiffDetail: async (_tabId, _snapshotId, key) => {

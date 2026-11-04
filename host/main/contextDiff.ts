@@ -132,8 +132,6 @@ function summaryOf(message: StoredMessage): ContextMessageSummary {
 export class ContextDiffStore {
   private readonly tabs = new Map<string, Snapshot[]>()
   private readonly sessions = new Map<string, Snapshot[]>()
-  /** 由会话历史重建的近似快照；只存在于当前进程 */
-  private readonly approximateTabs = new Map<string, Snapshot[]>()
   private readonly content = new Map<string, string>()
   /** 会话文件里按 hash 找全文的缓存；详情回源用 */
   private readonly sessionText = new Map<string, Map<string, string>>()
@@ -177,7 +175,6 @@ export class ContextDiffStore {
     const nextHistory = trimHistory([...history, snapshot])
     this.sessions.set(raw.sessionId, nextHistory)
     this.tabs.set(tabId, nextHistory)
-    this.approximateTabs.delete(tabId)
     this.persist(nextHistory)
   }
 
@@ -185,179 +182,7 @@ export class ContextDiffStore {
   attachTab(tabId: string, sessionId: string): void {
     if (this.tabs.has(tabId)) return
     const history = this.loadSession(sessionId)
-    if (history && history.length > 0) {
-      this.tabs.set(tabId, history)
-      this.approximateTabs.delete(tabId)
-    }
-  }
-
-  /**
-   * 从会话历史重建一个近似对比。
-   *
-   * 没有请求级快照时（例如对话是在终端里产生的），只能按会话条目重放：
-   * - 每个用户轮次开始时冻结一份累计上下文快照；
-   * - 遇到 `compaction` 时用摘要、firstKeptEntryId 和 system checkpoint 替换旧历史；
-   * - 没有 checkpoint 时 system 仍然未知。
-   *
-   * 这不是精确请求：工具声明、provider 转换和 context_edit 都拿不到，
-   * 所以返回的 view.approximate 一定是 true。
-   */
-  approximate(
-    tabId: string,
-    sessionId: string,
-    sessionPath: string | null,
-    sessionName: string | undefined,
-    entries: readonly unknown[]
-  ): ContextDiffView | null {
-    const turns: Snapshot[] = []
-    let current: StoredMessage[] = []
-    let turn = 0
-    let active: Snapshot | null = null
-    let frozen = false
-
-    const messageOf = (role: string, text: string, key?: string): StoredMessage | null => {
-      const content = text.trim()
-      if (!content) return null
-      const digest = createHash('sha256').update(`${role}\u0000${content}`).digest('hex').slice(0, 24)
-      return {
-        key: key ?? `${current.length}:${digest}`,
-        role,
-        hash: digest,
-        tokens: Math.ceil(content.length / 4) + 1,
-        preview: content.replace(/\s+/g, ' ').slice(0, 200)
-      }
-    }
-
-    const refreshActive = (): void => {
-      if (!active || frozen) return
-      active.messages = current.slice()
-      active.totalTokens = current.reduce((sum, message) => sum + message.tokens, 0)
-    }
-
-    const append = (role: string, text: string, updateActive = true): void => {
-      const message = messageOf(role, text)
-      if (!message) return
-      current.push(message)
-      if (updateActive) refreshActive()
-    }
-
-    const openTurn = (): void => {
-      turn += 1
-      active = {
-        id: `approx:${sessionId}:${turn}`,
-        sessionId,
-        sessionPath,
-        ...(sessionName ? { sessionName } : {}),
-        turn,
-        request: turn,
-        capturedAt: Date.now(),
-        totalTokens: current.reduce((sum, message) => sum + message.tokens, 0),
-        toolsHash: null,
-        messages: current.slice()
-      }
-      turns.push(active)
-      frozen = false
-    }
-
-    const applyCompaction = (entry: Record<string, unknown>, index: number): void => {
-      if (active) frozen = true
-      const firstKeptId = typeof entry.firstKeptEntryId === 'string' ? entry.firstKeptEntryId : null
-      let start = index
-      if (firstKeptId) {
-        const found = entries.findIndex((item) => {
-          return Boolean(item && typeof item === 'object' && (item as { id?: unknown }).id === firstKeptId)
-        })
-        if (found >= 0) start = found
-      }
-
-      const kept: StoredMessage[] = []
-      for (let i = start; i < index; i += 1) {
-        const raw = entries[i]
-        if (!raw || typeof raw !== 'object') continue
-        const item = raw as { type?: string; message?: { role?: string; content?: unknown; text?: string } }
-        if (item.type !== 'message' || !item.message) continue
-        const role = typeof item.message.role === 'string' ? item.message.role : 'unknown'
-        if (role === 'system') continue
-        const text = contentText(item.message.content) || item.message.text || ''
-        const message = messageOf(role, text, `${i}:${role}`)
-        if (message) kept.push(message)
-      }
-
-      const next: StoredMessage[] = []
-      const systemMessage = entry.systemMessage as
-        | { content?: unknown; text?: string }
-        | string
-        | undefined
-      const systemText =
-        typeof systemMessage === 'string'
-          ? systemMessage
-          : contentText(systemMessage?.content) || systemMessage?.text || ''
-      if (systemText) {
-        const message = messageOf('system', systemText, `compaction:${index}:system`)
-        if (message) {
-          this.remember(message.hash, systemText)
-          next.push(message)
-        }
-      }
-      const summary = typeof entry.summary === 'string' ? entry.summary : ''
-      if (summary) {
-        const message = messageOf('compactionSummary', summary, `compaction:${index}:summary`)
-        if (message) {
-          this.remember(message.hash, summary)
-          next.push(message)
-        }
-      }
-      next.push(...kept)
-      current = next
-    }
-
-    for (let index = 0; index < entries.length; index += 1) {
-      const raw = entries[index]
-      if (!raw || typeof raw !== 'object') continue
-      const entry = raw as Record<string, unknown>
-
-      if (entry.type === 'compaction') {
-        applyCompaction(entry, index)
-        continue
-      }
-
-      if (entry.type === 'custom_message') {
-        const text = contentText(entry.content)
-        append('custom', text)
-        continue
-      }
-
-      if (entry.type !== 'message') continue
-      const message = entry.message as
-        | { role?: string; content?: unknown; text?: string }
-        | undefined
-      if (!message) continue
-      const role = typeof message.role === 'string' ? message.role : 'unknown'
-      const text = contentText(message.content) || message.text || ''
-      if (role === 'user') {
-        // 用户轮次开始时新开一份累计快照，不把这条用户消息算进上一轮。
-        append(role, text, false)
-        openTurn()
-      } else {
-        append(role, text)
-      }
-    }
-
-    // 压缩发生在最后一轮之后时没有下一条用户消息来开新快照；
-    // 用压缩后的上下文更新当前快照，至少让摘要出现在当前视图里。
-    const lastTurn = turns.at(-1)
-    if (lastTurn && frozen) {
-      lastTurn.messages = current.slice()
-      lastTurn.totalTokens = current.reduce((sum, message) => sum + message.tokens, 0)
-    }
-
-    if (turns.length === 0) {
-      this.approximateTabs.delete(tabId)
-      return null
-    }
-    this.approximateTabs.set(tabId, turns)
-    const view = this.buildView(turns.at(-1)!, turns.length >= 2 ? turns[turns.length - 2] : null)
-    return { ...view, approximate: true }
+    if (history && history.length > 0) this.tabs.set(tabId, history)
   }
 
   /** 截至某一用户轮次的最后两次请求；用于点对话导航圆点看那一轮的 diff */
@@ -366,8 +191,8 @@ export class ContextDiffStore {
     turn: number,
     baselineId?: string
   ): ContextDiffView | null {
-    const history = this.mergedHistory(tabId)
-    if (history.length === 0) return null
+    const history = this.tabs.get(tabId)
+    if (!history || history.length === 0) return null
 
     const upTo = history.filter((snapshot) => snapshot.turn <= turn)
     const current = upTo.at(-1)
@@ -378,48 +203,24 @@ export class ContextDiffStore {
         ? upTo[upTo.length - 2]
         : null
 
-    const view = this.buildView(current, baseline)
-    return { ...view, approximate: current.id.startsWith('approx:') }
-  }
-
-  /**
-   * 请求级快照和近似快照可能混在一起：Codelet 能采集到的轮次用精确快照，
-   * 其余轮次用近似重放。同一个 turn 以精确快照为准，近似只补缺的轮次。
-   */
-  private mergedHistory(tabId: string): Snapshot[] {
-    const exact = this.tabs.get(tabId) ?? []
-    const approximate = this.approximateTabs.get(tabId) ?? []
-    if (approximate.length === 0) return exact
-    const exactTurns = new Set(exact.map((snapshot) => snapshot.turn))
-    return [...exact, ...approximate.filter((snapshot) => !exactTurns.has(snapshot.turn))]
-      .sort((a, b) => a.turn - b.turn || a.request - b.request)
+    return this.buildView(current, baseline)
   }
 
   /** 当前请求对比默认上一次请求，或指定的快照 */
   getView(tabId: string, baselineId?: string): ContextDiffView | null {
-    const exact = this.tabs.get(tabId)
-    if (exact && exact.length > 0) {
-      const current = exact.at(-1)!
-      let baseline: Snapshot | null = null
-      if (baselineId) baseline = this.findSnapshot(baselineId)
-      else baseline = exact.length >= 2 ? exact[exact.length - 2] : null
-      return this.buildView(current, baseline)
-    }
-
-    // 没有请求级快照时，用会话历史重建出来的用户轮次作为临时快照。
-    const approximate = this.approximateTabs.get(tabId)
-    if (!approximate || approximate.length === 0) return null
-    const current = approximate.at(-1)!
+    const history = this.tabs.get(tabId)
+    const current = history?.at(-1)
+    if (!history || !current) return null
     const baseline = baselineId
-      ? (approximate.find((snapshot) => snapshot.id === baselineId) ?? null)
-      : approximate.length >= 2
-        ? approximate[approximate.length - 2]
+      ? this.findSnapshot(baselineId)
+      : history.length >= 2
+        ? history[history.length - 2]
         : null
-    return { ...this.buildView(current, baseline), approximate: true }
+    return this.buildView(current, baseline)
   }
 
   listSnapshots(tabId: string): ContextSnapshotRef[] {
-    return this.mergedHistory(tabId).map(refOf)
+    return (this.tabs.get(tabId) ?? []).map(refOf)
   }
 
   listSessions(): ContextDiffSession[] {
@@ -603,7 +404,7 @@ export class ContextDiffStore {
     if (summaryMessages.length > 0) {
       groups.push({
         kind: 'compacted',
-        label: current.id.startsWith('approx:') ? '上下文已压缩（近似）' : '上下文被压缩',
+        label: '上下文被压缩',
         messages: summaryMessages.map(summaryOf),
         tokens: summaryMessages.reduce((sum, message) => sum + message.tokens, 0)
       })
@@ -619,7 +420,6 @@ export class ContextDiffStore {
     return {
       current: refOf(current),
       baseline: baseline ? refOf(baseline) : null,
-      approximate: false,
       tokens: { before, after },
       system,
       tools,
@@ -673,10 +473,6 @@ export class ContextDiffStore {
 
   private findSnapshot(id: string): Snapshot | null {
     for (const history of this.sessions.values()) {
-      const found = history.find((snapshot) => snapshot.id === id)
-      if (found) return found
-    }
-    for (const history of this.approximateTabs.values()) {
       const found = history.find((snapshot) => snapshot.id === id)
       if (found) return found
     }

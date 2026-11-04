@@ -92,8 +92,6 @@ export interface PiRuntimePort {
   tabState(tabId: string): TabRuntimeState
   /** 某个标签的会话条目 */
   readEntries(tabId: string): StreamItem[]
-  /** 当前分支的原始会话条目；近似上下文重建用 */
-  readBranchEntries(tabId: string): unknown[]
   /** 某个标签的可用模型清单 */
   listModels(tabId: string): Promise<ModelOption[]>
   /** 切某个标签的模型（persist 时同时设为新会话默认） */
@@ -481,7 +479,10 @@ export class PiRuntime implements PiRuntimePort {
    * 不是为了让人忘掉。
    */
   readEntries(tabId: string): StreamItem[] {
-    const entries = this.readBranchEntries(tabId)
+    const sessionManager = this.tabs.get(tabId)?.runtime?.session.sessionManager
+    if (!sessionManager) return []
+    const branch = sessionManager.getBranch()
+    const entries = branch.length > 0 ? branch : sessionManager.getEntries()
     return entriesToItems(entries).map((item) => {
       if (item.kind !== 'message' || item.role !== 'user' || !item.images?.length) return item
       const images = item.images
@@ -489,19 +490,6 @@ export class PiRuntime implements PiRuntimePort {
         .filter((image): image is NonNullable<typeof image> => image !== null)
       return { ...item, ...(images.length > 0 ? { images } : { images: undefined }) }
     })
-  }
-
-  /**
-   * 当前分支的原始会话条目。
-   *
-   * `readEntries()` 给界面用，会丢掉压缩条目；近似上下文重建需要原始条目
-   * （尤其是 `compaction` 的摘要、保留边界和 system checkpoint）。
-   */
-  readBranchEntries(tabId: string): unknown[] {
-    const sessionManager = this.tabs.get(tabId)?.runtime?.session.sessionManager
-    if (!sessionManager) return []
-    const branch = sessionManager.getBranch()
-    return branch.length > 0 ? branch : sessionManager.getEntries()
   }
 
   // -------------------------------------------------------------------------
