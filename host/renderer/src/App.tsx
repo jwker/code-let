@@ -6,6 +6,7 @@ import { MainArea } from './shell/MainArea'
 import { ModelPicker } from './shell/ModelPicker'
 import { TemporaryChat } from './shell/TemporaryChat'
 import { PaneResizer } from './shell/PaneResizer'
+import { createBrowserFocusController } from './shell/browserFocus'
 import { Sidebar } from './shell/Sidebar'
 import { TitleBar } from './shell/TitleBar'
 import {
@@ -84,6 +85,23 @@ export function App() {
       offEvents()
     }
   }, [setSnapshot, applySessionEvents])
+
+  /*
+   * agent 操作浏览器时，把右侧面板切到浏览器视图。
+   *
+   * 判定在 browserFocus.ts 里：主进程每次 agent 调浏览器工具就换一份新的活动记录，
+   * 渲染进程认出「换了一份」就切过去。面板收着的时候也展开 ——
+   * 收起来的检视器只剩一条窄轨，看不见浏览器。
+   *
+   * 用户自己在面板里点不触发 —— 那条路不写活动记录。
+   */
+  useEffect(() => {
+    const controller = createBrowserFocusController(() => {
+      useStore.getState().focusBrowser()
+    })
+    const off = host.onBrowserState((state) => controller.handle(state))
+    return () => off()
+  }, [])
 
   /**
    * 切标签就换内容流（R1 R5）：持久态在 Pi 的会话文件里，宿主不另存一份。

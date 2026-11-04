@@ -218,6 +218,12 @@ interface RendererStore {
   toggleTheme: () => void
   /** 展开 / 收起右侧检视器 */
   toggleInspector: () => void
+  /**
+   * 把右侧检视器切到浏览器视图，必要时展开面板。
+   *
+   * agent 操作浏览器时调它 —— 用户不用自己找面板。
+   */
+  focusBrowser: () => void
   /** 展开 / 收起左侧栏 */
   toggleSidebar: () => void
   /** 请求侧栏对某条对话进入行内改名 */
@@ -414,6 +420,12 @@ export const useStore = create<RendererStore>((set, get) => ({
     const next = !get().inspectorOpen
     saveInspectorOpen(next)
     set({ inspectorOpen: next })
+  },
+
+  focusBrowser: () => {
+    // 面板收着也要先展开 —— 收起来的检视器只留一条窄轨，看不见浏览器
+    if (!get().inspectorOpen) saveInspectorOpen(true)
+    set({ inspectorOpen: true, nav: 'browser' })
   },
 
   toggleSidebar: () => {

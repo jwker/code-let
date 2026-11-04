@@ -133,6 +133,12 @@ export class BrowserManager {
       this.agentTimer = null
       this.emit()
     }, 6000)
+    /*
+     * 推一次 —— 渲染进程靠这个活动记录判断「agent 刚动过浏览器」，
+     * 好把右侧面板切到浏览器视图（收着的话顺手展开）。
+     * 不推的话，只读类工具（截图、读页面结构）就没有这条通知。
+     */
+    this.emit()
   }
 
   getState(): Promise<BrowserState> {
@@ -256,7 +262,10 @@ export class BrowserManager {
       this.tabs[0]
     const url = typeof args.url === 'string' ? args.url : ''
 
-    if (tool === 'tabs') return this.state()
+    if (tool === 'tabs') {
+      this.noteAgent('browser_tabs', '查看标签列表')
+      return this.state()
+    }
     if (tool === 'open') {
       this.noteAgent('browser_open', `打开 ${url || '空白页'}`)
       return this.create(url || 'about:blank')
@@ -278,6 +287,7 @@ export class BrowserManager {
     if (tool === 'snapshot') {
       const offset = Number.isInteger(args.offset) ? Number(args.offset) : 0
       const limit = Number.isInteger(args.limit) ? Number(args.limit) : DEFAULT_PAGE_SIZE
+      this.noteAgent('browser_snapshot', '读取页面结构')
       return this.snapshot(tab.id, Math.max(0, offset), Math.min(MAX_PAGE_SIZE, Math.max(1, limit)))
     }
     if (tool === 'click') {
