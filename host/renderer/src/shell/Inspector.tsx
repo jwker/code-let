@@ -46,7 +46,7 @@ export function Inspector() {
       {open && nav === 'context' && <ContextDiffPane />}
       {open && nav !== 'code' && nav !== 'context' && (
         <div className="insp-body">
-          <section className="flex min-h-0 flex-1 flex-col rounded-xl border border-hairline bg-raised shadow-[var(--sh-sm)]">
+          <section className="flex min-h-0 flex-1 flex-col">
             <header className="flex h-10 flex-none items-center px-3 text-[13px] font-medium text-fg-1">
               {TITLES[nav]}
             </header>
