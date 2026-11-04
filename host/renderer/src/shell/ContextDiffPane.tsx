@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type {
   ContextDiffGroup,
   ContextDiffSession,
@@ -50,7 +50,6 @@ export function ContextDiffPane() {
   const [mode, setMode] = useState<'summary' | 'history'>('summary')
   const [sessions, setSessions] = useState<ContextDiffSession[]>([])
   const [snapshots, setSnapshots] = useState<ContextSnapshotRef[]>([])
-  const [wide, setWide] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<{
@@ -59,7 +58,6 @@ export function ContextDiffPane() {
     truncated: boolean
     released: boolean
   } | null>(null)
-  const rootRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setView(diff)
@@ -73,14 +71,6 @@ export function ContextDiffPane() {
     if (!baselineId) setView(diff)
   }, [diff, baselineId])
 
-  useEffect(() => {
-    const node = rootRef.current
-    if (!node) return
-    const observer = new ResizeObserver(() => setWide(node.clientWidth >= 500))
-    observer.observe(node)
-    setWide(node.clientWidth >= 500)
-    return () => observer.disconnect()
-  }, [])
 
   async function chooseBaseline(snapshotId: string): Promise<void> {
     if (!activeTabId) return
@@ -146,7 +136,6 @@ export function ContextDiffPane() {
   }
 
   const current = view?.current ?? null
-  const baseline = view?.baseline ?? null
   const maxTokens = Math.max(view?.tokens.before ?? 0, view?.tokens.after ?? 0, 1)
   const beforePct = Math.round(((view?.tokens.before ?? 0) / maxTokens) * 100)
   const afterPct = Math.round(((view?.tokens.after ?? 0) / maxTokens) * 100)
@@ -155,7 +144,7 @@ export function ContextDiffPane() {
   const compacted = view?.groups.find((group) => group.kind === 'compacted')
 
   return (
-    <div className="insp-body" ref={rootRef}>
+    <div className="insp-body">
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-hairline bg-raised shadow-[var(--sh-sm)]">
         <header className="flex h-10 flex-none items-center gap-2 border-b border-hairline px-3">
           <h2 className="text-[13px] font-medium text-fg-1">上下文变化</h2>
@@ -196,11 +185,6 @@ export function ContextDiffPane() {
               还没有请求级上下文快照。<br />
               下一次模型请求后，这里会显示这一轮和上一轮的变化。
             </div>
-          ) : wide && baseline ? (
-            <SplitView
-              view={view}
-              onDetail={(snapshotId, message) => void openDetail(snapshotId, message)}
-            />
           ) : (
             <SummaryView
               view={view}
@@ -354,55 +338,6 @@ function SummaryView({
           这两次请求的上下文消息没有变化。
         </div>
       )}
-    </div>
-  )
-}
-
-function SplitView({
-  view,
-  onDetail
-}: {
-  view: ContextDiffView
-  onDetail: (snapshotId: string, message: ContextMessageSummary) => void
-}) {
-  const added = view.groups.find((group) => group.kind === 'added')
-  const removed = view.groups.find((group) => group.kind === 'removed')
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="grid grid-cols-2 gap-2">
-        <SideRef label="基线" ref={view.baseline} />
-        <SideRef label="当前" ref={view.current} />
-      </div>
-      <div className="grid grid-cols-2 gap-2 rounded-lg border border-hairline bg-panel p-2 text-[9px] text-fg-3">
-        <div><b className="block text-[10px] text-fg-2">System / 工具</b>{systemLabel(view.system)} · {toolsLabel(view.tools, view.toolsApproximate)}</div>
-        <div><b className="block text-[10px] text-fg-2">共享消息</b>{view.counts.shared} 条</div>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="min-w-0">
-          {removed && removed.messages.length > 0 ? (
-            <MessageGroup title={removed.label} messages={removed.messages} snapshotId={view.baseline!.id} onDetail={onDetail} removed />
-          ) : (
-            <div className="rounded-lg border border-dashed border-hairline px-2 py-3 text-center text-[9px] text-fg-3">无</div>
-          )}
-        </div>
-        <div className="min-w-0">
-          {added && added.messages.length > 0 ? (
-            <MessageGroup title={added.label} messages={added.messages} snapshotId={view.current.id} onDetail={onDetail} />
-          ) : (
-            <div className="rounded-lg border border-dashed border-hairline px-2 py-3 text-center text-[9px] text-fg-3">无</div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function SideRef({ label, ref }: { label: string; ref: ContextSnapshotRef | null }) {
-  return (
-    <div className="min-w-0 rounded-lg border border-hairline bg-panel p-2">
-      <div className="text-[8.5px] uppercase tracking-[.06em] text-fg-3">{label}</div>
-      <div className="mt-1 truncate text-[10px] font-medium text-fg-1">{ref ? refLabel(ref) : '无'}</div>
-      <div className="mt-1 font-mono text-[9px] text-fg-3">{ref ? `${tokenLabel(ref.totalTokens)} tokens` : ''}</div>
     </div>
   )
 }
