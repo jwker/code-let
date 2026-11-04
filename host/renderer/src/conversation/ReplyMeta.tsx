@@ -35,9 +35,9 @@ export function ReplyMeta({
   // 还在跑循环：只显示走过的秒数，不显示复制和 token。
   if (streaming) {
     return (
-      <div className="mt-3 flex w-fit items-center gap-2 rounded-full border border-hairline bg-panel py-1.5 pl-3 pr-3">
+      <div className="mt-2.5 flex w-fit items-center gap-1.5 rounded-full border border-hairline bg-panel py-0.5 pl-2.5 pr-2.5">
         <Thinking />
-        <span className="h-3 w-px flex-none bg-hairline-strong" />
+        <span className="h-2.5 w-px flex-none bg-hairline-strong" />
         <Elapsed stats={summary.stats} startedAt={startedAt} showDot={false} />
       </div>
     )
@@ -60,12 +60,12 @@ export function ReplyMeta({
   return (
     // mt-3：正文最后一段的下边距被 Markdown 清成 0（.md-bubble .md-p），
     // 胶囊不自己留出间距就贴上去了。设计稿 .meta-b 的 margin-top 是 12px。
-    <div className="mt-3 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full border border-hairline bg-panel py-1 pl-1 pr-3">
+    <div className="mt-2.5 flex w-fit max-w-full flex-wrap items-center gap-1.5 rounded-full border border-hairline bg-panel py-0.5 pl-0.5 pr-2.5">
       <button
         type="button"
         onClick={() => void copy()}
         disabled={streaming}
-        className={`flex flex-none items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] transition-colors ${
+        className={`flex flex-none items-center gap-1 whitespace-nowrap rounded-full px-1.5 py-0.5 text-[11.5px] transition-colors ${
           copied
             ? 'text-ok'
             : 'text-fg-2 hover:bg-sunken hover:text-fg-1 disabled:cursor-not-allowed disabled:text-fg-3 disabled:hover:bg-transparent'
