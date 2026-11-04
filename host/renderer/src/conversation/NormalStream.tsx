@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { AnsiText } from './AnsiText'
@@ -271,6 +271,11 @@ function ProcessBlock({
   streaming: boolean
 }) {
   const [open, setOpen] = useState(false)
+
+  // 生成中允许用户展开查看；一轮结束统一收回折叠态，下一次打开仍是默认收起。
+  useEffect(() => {
+    if (!streaming) setOpen(false)
+  }, [streaming])
 
   function toggle(): void {
     setOpen((value) => !value)
