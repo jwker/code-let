@@ -30,6 +30,28 @@ export interface TurnSummary {
   aborted: boolean
 }
 
+/** 还没有最终答案时，只统计过程里的工具和叙述段落 */
+export function summarizeProcess(body: readonly StreamItem[]): TurnSummary {
+  let toolCalls = 0
+  let segments = 0
+  for (const item of body) {
+    if (item.kind === 'tool') {
+      toolCalls += 1
+      continue
+    }
+    if (item.kind === 'message' && item.role === 'assistant' && item.text.trim().length > 0) {
+      segments += 1
+    }
+  }
+  return {
+    answer: '',
+    answerIndex: body.length,
+    toolCalls,
+    segments,
+    aborted: body.some((item) => item.kind === 'message' && item.aborted === true)
+  }
+}
+
 /**
  * 把一轮的内容聚合成「过程 + 答案」。
  *

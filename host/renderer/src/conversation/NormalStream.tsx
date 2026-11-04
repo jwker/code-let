@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { AnsiText } from './AnsiText'
 import { groupBody } from './groupBody'
 import { Markdown } from './Markdown'
 import { ReplyMeta } from './ReplyMeta'
-import { summarizeTurn, type TurnSummary } from './turnMeta'
+import { summarizeProcess, summarizeTurn, type TurnSummary } from './turnMeta'
 import { CustomMessage } from './CustomMessage'
 import { Thinking } from './Thinking'
 import { useToolOutputs } from './useToolOutputs'
@@ -129,27 +129,35 @@ function TurnRow({
   streaming: boolean
 }) {
   const summary = useMemo(() => summarizeTurn(turn.body), [turn.body])
+  const turnStartedAt = useRef(Date.now()).current
 
   // 认不出答案（这一轮没有助手正文）—— 原样铺开，不做主次分层
   if (!summary) {
+    const processSummary = summarizeProcess(turn.body)
+    const processItems = turn.body.filter((item) => item.kind !== 'custom')
+    const customItems = turn.body.filter((item): item is CustomItem => item.kind === 'custom')
     return (
       <div className="flex flex-col gap-2">
         <UserBubble item={turn.user} userIndex={turn.userIndex} />
-        {/*
-          消息发出去了、首个 token 还没回来 —— 这一轮除了用户消息什么都没有。
-          `turn.body.length === 0` 比 `streaming` 更准：工具执行期间也 streaming，
-          但那时候已经有内容了，不该再说「思考中」。
-        */}
-        {streaming && turn.body.length === 0 && <Thinking />}
-        <Body
-          items={turn.body}
-          outputs={outputs}
-          isExpanded={isExpanded}
-          onToggle={onToggle}
-          toolIds={toolIds}
-          variant="process"
-          streaming={streaming}
-        />
+        {streaming && <Thinking />}
+        {processItems.length > 0 && (
+          <ProcessBlock
+            summary={processSummary}
+            items={processItems}
+            outputs={outputs}
+            isExpanded={isExpanded}
+            onToggle={onToggle}
+            toolIds={toolIds}
+            streaming={streaming}
+          />
+        )}
+        {customItems.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {customItems.map((item, index) => (
+              <CustomMessage key={`custom-only-${index}`} item={item} />
+            ))}
+          </div>
+        )}
       </div>
     )
   }
@@ -164,6 +172,7 @@ function TurnRow({
   return (
     <div className="flex flex-col gap-2">
       <UserBubble item={turn.user} userIndex={turn.userIndex} />
+      {streaming && <Thinking />}
 
       {processItems.length > 0 && (
         <ProcessBlock
@@ -189,7 +198,6 @@ function TurnRow({
         {answerItem.kind === 'message' && (
           <div className="text-[14.5px] leading-[1.9] text-fg-1">
             <Markdown text={answerItem.text} variant="normal" />
-            {streaming && restItems.length === 0 && <span className="cursor" />}
           </div>
         )}
 
@@ -201,11 +209,10 @@ function TurnRow({
             onToggle={onToggle}
             toolIds={toolIds}
             variant="process"
-            streaming={streaming}
           />
         )}
 
-        <ReplyMeta summary={summary} streaming={streaming} />
+        <ReplyMeta summary={summary} streaming={streaming} startedAt={turnStartedAt} />
       </div>
     </div>
   )
@@ -241,10 +248,10 @@ function UserBubble({ item, userIndex }: { item: MessageItem | null; userIndex: 
 }
 
 /**
- * 过程：默认收成一行，点开才展开。
+ * 过程：始终默认收成一行，点开才展开。
  *
- * 生成中默认展开 —— 实时工具输出要看得见（R4）；一轮结束后自动收起，
- * 让答案落到顶格位置。用户点过就听用户的，不再自动收。
+ * 生成中也不自动展开；折叠行里的工具次数和段落数会随内容更新。
+ * 用户展开后保持展开，直到这一轮结束或用户自己收起。
  */
 function ProcessBlock({
   summary,
@@ -263,16 +270,9 @@ function ProcessBlock({
   toolIds: Set<string>
   streaming: boolean
 }) {
-  const [open, setOpen] = useState(streaming)
-  const touched = useRef(false)
-
-  // 生成结束 → 自动收起（用户手动点过就不插手）
-  useEffect(() => {
-    if (!streaming && !touched.current) setOpen(false)
-  }, [streaming])
+  const [open, setOpen] = useState(false)
 
   function toggle(): void {
-    touched.current = true
     setOpen((value) => !value)
   }
 
@@ -307,7 +307,6 @@ function ProcessBlock({
             onToggle={onToggle}
             toolIds={toolIds}
             variant="process"
-            streaming={streaming}
           />
         </div>
       )}
@@ -338,8 +337,7 @@ function Body({
   isExpanded,
   onToggle,
   toolIds,
-  variant,
-  streaming
+  variant
 }: {
   items: StreamItem[]
   outputs: Map<string, string>
@@ -347,13 +345,11 @@ function Body({
   onToggle: (callId: string, expanded: boolean) => void
   toolIds: Set<string>
   variant: 'process' | 'answer'
-  streaming: boolean
 }) {
   const rows: ReactNode[] = []
   const groups = groupBody(items, toolIds)
 
   for (const [i, row] of groups.entries()) {
-    const isLastRow = i === groups.length - 1
     if (row.kind === 'custom') {
       rows.push(<CustomMessage key={`custom-${i}`} item={row.item} />)
       continue
@@ -373,12 +369,10 @@ function Body({
       continue
     }
 
-    const last = isLastRow
     rows.push(
       <div key={`msg-${i}`} className={variant === 'process' ? 'mb-3 last:mb-0' : 'min-w-0'}>
         <div className={variant === 'process' ? 'md-process' : 'text-[14.5px] leading-[1.9] text-fg-1'}>
           <Markdown text={row.item.text} variant="normal" />
-          {streaming && last && <span className="cursor" />}
         </div>
         {row.tools.length > 0 && (
           <div className="mt-1.5 flex flex-col gap-1">

@@ -67,7 +67,6 @@ export function TerminalStream({
   return (
     <div className="mx-auto flex w-full max-w-[var(--content-max)] flex-col gap-2 py-10 font-mono text-[12.5px] leading-[1.75]">
       {items.map((item, index) => {
-        const last = index === items.length - 1
         switch (item.kind) {
           case 'custom': {
             return (
@@ -115,7 +114,6 @@ export function TerminalStream({
                 <span style={{ color: 'var(--fg-3)' }}>·</span>
                 <div className="min-w-0 flex-1">
                   <Markdown text={item.text} variant="terminal" />
-                  {streaming && last && <span className="cursor" />}
                 </div>
               </div>
             )

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StreamItem } from '@contract/index'
-import { summarizeTurn } from '../host/renderer/src/conversation/turnMeta'
+import { summarizeProcess, summarizeTurn } from '../host/renderer/src/conversation/turnMeta'
 
 /**
  * 一轮的结构：过程 / 最终答案 / 计量。
@@ -58,6 +58,21 @@ describe('认出最终答案', () => {
   it('一条正文都没有就认不出答案', () => {
     expect(summarizeTurn([say('', { output: 1, cacheRead: 1 }), tool('t1')])).toBeUndefined()
     expect(summarizeTurn([])).toBeUndefined()
+  })
+})
+
+describe('还没有最终答案时的过程统计', () => {
+  it('只统计工具次数和叙述段数，供折叠行实时更新', () => {
+    const summary = summarizeProcess([
+      say('先读文件', { output: 1, cacheRead: 1 }),
+      tool('t1'),
+      say('再跑测试', { output: 1, cacheRead: 1 }),
+      tool('t2')
+    ])
+    expect(summary.toolCalls).toBe(2)
+    expect(summary.segments).toBe(2)
+    expect(summary.answer).toBe('')
+    expect(summary.answerIndex).toBe(4)
   })
 })
 

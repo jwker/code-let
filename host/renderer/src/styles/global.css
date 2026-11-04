@@ -1355,14 +1355,10 @@ ol.md-list {
   background: var(--sunken);
 }
 
-/* 正在生成时的光标 */
 /*
- * 「思考中」—— 消息发出去到首个 token 回来之间的指示。
+ * 「思考中」—— 从用户发消息后一直显示到整轮流式输出结束。
  *
- * 那段时间是 TTFT（发请求 + 等服务端开始输出），慢模型要好几秒。
- * 没有这个指示的话，用户只看见自己的气泡，不知道对面动了没有 ——
- * 按钮虽然已经变成停止方块，但视线在内容区。
- *
+ * 中间可能经历工具循环和多次模型请求；这段期间内容区始终保留一个“还在跑”的提示。
  * 三个点依次亮起，不是转圈：转圈是「后台在忙」（状态栏的刷新中就用它），
  * 而这里是主流程在等一个回答，节奏该慢一点。
  */
@@ -1398,22 +1394,6 @@ ol.md-list {
   .thinking-dots i {
     animation: none;
     opacity: 0.55;
-  }
-}
-
-.cursor {
-  display: inline-block;
-  width: 2px;
-  height: 1.05em;
-  background: var(--fg-2);
-  vertical-align: -2px;
-  margin-left: 2px;
-  border-radius: 1px;
-  animation: cursor-blink 1s steps(2) infinite;
-}
-@keyframes cursor-blink {
-  50% {
-    opacity: 0;
   }
 }
 

@@ -10,12 +10,18 @@ const COPIED_MS = 1500
 /**
  * 一轮对话下方的元信息行（方案 B）。
  *
- * 一个胶囊：左边复制，右边这一轮的 token 与耗时。复制按钮常显。
- *
- * 复制的是**这一轮的最终答案**，过程里的叙述不进去 —— 用户要的是
- * 「AI 最后说了什么」，不是「它一路念叨了什么」。
+ * 生成中只显示走过的秒数；所有循环结束、最终答案输出完之后，才显示复制和 token。
+ * 复制的是**这一轮的最终答案**，过程里的叙述不进去。
  */
-export function ReplyMeta({ summary, streaming }: { summary: TurnSummary; streaming: boolean }) {
+export function ReplyMeta({
+  summary,
+  streaming,
+  startedAt
+}: {
+  summary: TurnSummary
+  streaming: boolean
+  startedAt?: number
+}) {
   const [copied, setCopied] = useState(false)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -24,6 +30,17 @@ export function ReplyMeta({ summary, streaming }: { summary: TurnSummary; stream
       if (timer.current) clearTimeout(timer.current)
     }
   }, [])
+
+  // 还在跑循环：只显示走过的秒数，不显示复制和 token。
+  if (streaming) {
+    const stats = summary.stats
+    if (!stats && startedAt === undefined) return null
+    return (
+      <div className="mt-3 flex w-fit items-center rounded-full border border-hairline bg-panel px-3 py-1.5">
+        <Elapsed stats={stats} startedAt={startedAt} />
+      </div>
+    )
+  }
 
   async function copy(): Promise<void> {
     // 还在生成时答案不完整，不让复制 —— 否则拿到半截
@@ -100,7 +117,13 @@ function Stats({ summary, streaming }: { summary: TurnSummary; streaming: boolea
 }
 
 /** 生成中的耗时：按秒走，不按毫秒跳 */
-function Elapsed({ stats }: { stats: NonNullable<TurnSummary['stats']> }) {
+function Elapsed({
+  stats,
+  startedAt
+}: {
+  stats?: NonNullable<TurnSummary['stats']>
+  startedAt?: number
+}) {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -108,7 +131,8 @@ function Elapsed({ stats }: { stats: NonNullable<TurnSummary['stats']> }) {
     return () => clearInterval(id)
   }, [])
 
-  const elapsed = stats.startedAt === undefined ? 0 : Math.max(0, now - stats.startedAt)
+  const start = stats?.startedAt ?? startedAt
+  const elapsed = start === undefined ? 0 : Math.max(0, now - start)
   return (
     <span className="flex flex-none items-center gap-1.5">
       <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-info" />
