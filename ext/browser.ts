@@ -15,6 +15,13 @@ interface Response {
   error?: string
 }
 
+/** 工具结果里可以带图片；截图就靠这个进模型上下文 */
+interface ImageBlock {
+  type: 'image'
+  data: string
+  mimeType: string
+}
+
 function request(pi: ExtensionAPI, tool: string, args: Record<string, unknown>): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const id = `browser-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -52,6 +59,33 @@ function result(value: unknown): { content: Array<{ type: 'text'; text: string }
       }
     ],
     details: value
+  }
+}
+
+/** 截图结果：文字说明 + 图片本身 */
+function screenshotResult(value: {
+  ok?: boolean
+  error?: string
+  mimeType?: string
+  data?: string
+  width?: number
+  height?: number
+}): {
+  content: Array<{ type: 'text'; text: string } | ImageBlock>
+  details: unknown
+} {
+  if (!value.ok || !value.data || !value.mimeType) {
+    return {
+      content: [{ type: 'text', text: `截图失败：${value.error ?? '未知原因'}` }],
+      details: value
+    }
+  }
+  return {
+    content: [
+      { type: 'text', text: `已截取页面（${value.width}×${value.height}）` },
+      { type: 'image', data: value.data, mimeType: value.mimeType }
+    ],
+    details: { width: value.width, height: value.height }
   }
 }
 
@@ -123,13 +157,22 @@ export default function browserExtension(pi: ExtensionAPI): void {
     defineTool({
       name: 'browser_snapshot',
       label: 'Browser snapshot',
-      description: '读取浏览器页面摘要、可见文本和可操作元素引用。',
+      description:
+        '读取浏览器页面摘要、可见文本和可操作元素引用。元素很多时用 offset/limit 分页取。',
       parameters: Type.Object({
-        tabId: Type.Optional(Type.String({ description: '目标标签；省略时用当前活动标签' }))
+        tabId: Type.Optional(Type.String({ description: '目标标签；省略时用当前活动标签' })),
+        offset: Type.Optional(Type.Number({ description: '从第几个元素开始；默认 0' })),
+        limit: Type.Optional(Type.Number({ description: '本页最多取多少个元素；默认 80，最多 200' }))
       }),
       async execute(_id, params) {
         try {
-          return result(await call('snapshot', params.tabId ? { tabId: params.tabId } : {}))
+          return result(
+            await call('snapshot', {
+              ...(params.tabId ? { tabId: params.tabId } : {}),
+              ...(params.offset !== undefined ? { offset: params.offset } : {}),
+              ...(params.limit !== undefined ? { limit: params.limit } : {})
+            })
+          )
         } catch (error) {
           return failure(error)
         }
@@ -149,6 +192,51 @@ export default function browserExtension(pi: ExtensionAPI): void {
       async execute(_id, params) {
         try {
           return result(await call('click', { ref: params.ref, ...(params.tabId ? { tabId: params.tabId } : {}) }))
+        } catch (error) {
+          return failure(error)
+        }
+      }
+    })
+  )
+
+  pi.registerTool(
+    defineTool({
+      name: 'browser_screenshot',
+      label: 'Browser screenshot',
+      description: '截取浏览器当前页面的图片，用来确认页面视觉布局。',
+      parameters: Type.Object({
+        tabId: Type.Optional(Type.String({ description: '目标标签；省略时用当前活动标签' }))
+      }),
+      async execute(_id, params) {
+        try {
+          const value = await call('screenshot', params.tabId ? { tabId: params.tabId } : {})
+          return screenshotResult(value as Parameters<typeof screenshotResult>[0])
+        } catch (error) {
+          return failure(error)
+        }
+      }
+    })
+  )
+
+  pi.registerTool(
+    defineTool({
+      name: 'browser_wait',
+      label: 'Browser wait',
+      description: '等待页面条件成立：给了 selector 就等它出现，否则等页面加载完成。',
+      parameters: Type.Object({
+        selector: Type.Optional(Type.String({ description: '要等待出现的 CSS 选择器' })),
+        timeoutMs: Type.Optional(Type.Number({ description: '最多等多少毫秒；默认 10000，最多 30000' })),
+        tabId: Type.Optional(Type.String({ description: '目标标签；省略时用当前活动标签' }))
+      }),
+      async execute(_id, params) {
+        try {
+          return result(
+            await call('wait', {
+              ...(params.selector ? { selector: params.selector } : {}),
+              ...(params.timeoutMs !== undefined ? { timeoutMs: params.timeoutMs } : {}),
+              ...(params.tabId ? { tabId: params.tabId } : {})
+            })
+          )
         } catch (error) {
           return failure(error)
         }

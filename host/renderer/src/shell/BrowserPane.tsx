@@ -15,7 +15,7 @@ function displayUrl(tab: BrowserTabState | null): string {
 }
 
 export function BrowserPane() {
-  const [state, setState] = useState<BrowserState>({ tabs: [], activeTabId: null })
+  const [state, setState] = useState<BrowserState>({ tabs: [], activeTabId: null, agent: null })
   const [address, setAddress] = useState('')
   const [addressFocused, setAddressFocused] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -25,6 +25,7 @@ export function BrowserPane() {
     () => state.tabs.find((tab) => tab.id === state.activeTabId) ?? null,
     [state]
   )
+  const agent = state.agent
 
   useEffect(() => {
     let cancelled = false
@@ -224,6 +225,14 @@ export function BrowserPane() {
         </button>
       </div>
 
+      {agent && (
+        <div className="flex h-[22px] flex-none items-center gap-1.5 border-b border-hairline bg-warn-wash px-2 text-[8px] text-warn">
+          <span className="h-1.5 w-1.5 flex-none animate-pulse rounded-full bg-warn" />
+          <span className="min-w-0 truncate">Agent 正在操作 · {agent.label}</span>
+          <span className="ml-auto flex-none font-mono text-[7px] opacity-70">{agent.tool}</span>
+        </div>
+      )}
+
       <div ref={pageRef} className="relative min-h-0 flex-1 overflow-hidden bg-surface">
         {!active && !creating && (
           <div className="flex h-full flex-col items-center justify-center px-5 text-center text-[10px] leading-6 text-fg-3">
@@ -248,7 +257,12 @@ export function BrowserPane() {
         <span>本地页面</span>
         <span>·</span>
         <span>独立 session</span>
-        <span className="ml-auto font-mono">WebContentsView</span>
+        {agent && (
+          <span className="min-w-0 truncate text-fg-2" title={agent.label}>
+            {agent.label}
+          </span>
+        )}
+        <span className="ml-auto flex-none font-mono">WebContentsView</span>
       </div>
     </div>
   )

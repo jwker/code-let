@@ -26,7 +26,10 @@ test.describe.serial('浏览器面板', () => {
 
     server = createServer((_request, response) => {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
-      response.end('<!doctype html><title>Local Test</title><h1>LOCAL_PAGE_OK</h1>')
+      response.end(
+        '<!doctype html><title>Local Test</title><h1>LOCAL_PAGE_OK</h1>' +
+          '<button id="go">点我</button><input id="field" placeholder="输入框" />'
+      )
     })
     await new Promise<void>((resolveReady) => server!.listen(0, '127.0.0.1', resolveReady))
     const address = server.address()
@@ -108,6 +111,55 @@ test.describe.serial('浏览器面板', () => {
     await addressBar.fill('https://example.com/')
     await addressBar.press('Enter')
     await expect(page.getByText('当前浏览器只打开本地页面')).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('agent 工具能读页面、点击、输入、等待和截图', async () => {
+    await page.getByRole('button', { name: '浏览器', exact: true }).click()
+    const addressBar = page.getByLabel('浏览器地址')
+    await addressBar.fill(`http://127.0.0.1:${port}/`)
+    await addressBar.press('Enter')
+    await expect(page.getByRole('button', { name: /Local Test/ })).toBeVisible({ timeout: 10_000 })
+
+    const snapshot = (await app!.evaluate(async () => {
+      const manager = (globalThis as never as { __codeletBrowser: { tool: (name: string, args: Record<string, unknown>) => Promise<unknown> } }).__codeletBrowser
+      return manager.tool('snapshot', {})
+    })) as {
+      total: number
+      elements: Array<{ ref: string; tag: string; text: string }>
+    }
+    expect(snapshot.total).toBeGreaterThan(0)
+    const button = snapshot.elements.find((element) => element.text.includes('点我'))
+    expect(button).toBeTruthy()
+
+    const clicked = (await app!.evaluate(async (_electron, ref: string) => {
+      const manager = (globalThis as never as { __codeletBrowser: { tool: (name: string, args: Record<string, unknown>) => Promise<unknown> } }).__codeletBrowser
+      return manager.tool('click', { ref })
+    }, button!.ref)) as { clicked: string; label: string }
+    expect(clicked.clicked).toBe(button!.ref)
+
+    const typed = (await app!.evaluate(async (_electron, ref: string) => {
+      const manager = (globalThis as never as { __codeletBrowser: { tool: (name: string, args: Record<string, unknown>) => Promise<unknown> } }).__codeletBrowser
+      return manager.tool('type', { ref, text: 'hello' })
+    }, snapshot.elements.find((element) => element.tag === 'input')!.ref)) as { typed: string }
+    expect(typed.typed).toBeTruthy()
+
+    const waited = (await app!.evaluate(async () => {
+      const manager = (globalThis as never as { __codeletBrowser: { tool: (name: string, args: Record<string, unknown>) => Promise<unknown> } }).__codeletBrowser
+      return manager.tool('wait', { selector: '#go', timeoutMs: 2000 })
+    })) as { ok: boolean }
+    expect(waited.ok).toBe(true)
+
+    const shot = (await app!.evaluate(async () => {
+      const manager = (globalThis as never as { __codeletBrowser: { tool: (name: string, args: Record<string, unknown>) => Promise<unknown> } }).__codeletBrowser
+      return manager.tool('screenshot', {})
+    })) as { ok: boolean; mimeType?: string; data?: string }
+    expect(shot.ok).toBe(true)
+    expect(shot.mimeType).toBe('image/jpeg')
+    expect((shot.data ?? '').length).toBeGreaterThan(1000)
+
+    // 面板上要能看到 agent 刚才做了什么
+    await expect(page.getByText('Agent 正在操作')).toBeVisible()
+    await expect(page.getByText('Agent 正在操作 · 等待 #go')).toBeVisible()
   })
 
   test('可以新建和关闭标签', async () => {

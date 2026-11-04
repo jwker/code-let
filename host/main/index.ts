@@ -59,6 +59,13 @@ function createWindow(): BrowserWindow {
     }
   })
   state.attachBrowser(browser)
+  /*
+   * 自动化测试用的钩子：E2E 要直接驱动浏览器工具（快照、点击、截图），
+   * 走模型太慢。只在设置了 CODELET_USER_DATA 的测试环境里挂。
+   */
+  if (process.env.CODELET_USER_DATA) {
+    ;(globalThis as unknown as { __codeletBrowser?: BrowserManager }).__codeletBrowser = browser
+  }
   // 必须在窗口真正销毁前移除原生 view；窗口关闭后再 removeChildView 可能卡住。
   win.on('close', () => {
     browser?.dispose()

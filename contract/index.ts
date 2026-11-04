@@ -449,9 +449,22 @@ export interface BrowserTabState {
   error: string | null
 }
 
+/** agent 刚刚在浏览器里做的一件事 —— 面板上给用户看 */
+export interface BrowserAgentActivity {
+  /** 工具名：browser_click / browser_type / browser_navigate … */
+  tool: string
+  /** 一句话说明做了什么 */
+  label: string
+  /** 涉及的元素引用 */
+  ref?: string
+  at: number
+}
+
 export interface BrowserState {
   tabs: BrowserTabState[]
   activeTabId: string | null
+  /** 最近一次 agent 操作；没有则为空 */
+  agent: BrowserAgentActivity | null
 }
 
 export interface BrowserBounds {
@@ -473,6 +486,12 @@ export interface BrowserSnapshot {
     text: string
     type?: string
   }>
+  /** 页面里可交互元素的总数 */
+  total: number
+  /** 本次返回的是第几个到第几个 */
+  offset: number
+  /** 还有没有更多元素没返回 */
+  hasMore: boolean
 }
 
 export type GitDiffScope = 'staged' | 'unstaged' | 'untracked' | 'conflicts'

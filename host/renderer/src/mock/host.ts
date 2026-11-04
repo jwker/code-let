@@ -50,7 +50,8 @@ const FAKE_BROWSER: BrowserState = {
       error: null
     }
   ],
-  activeTabId: 'browser-1'
+  activeTabId: 'browser-1',
+  agent: null
 }
 
 const FAKE_GIT_STATUS: GitStatus = {
