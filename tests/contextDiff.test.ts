@@ -102,6 +102,11 @@ describe('上下文快照 diff', () => {
     expect(view?.groups.find((group) => group.kind === 'added')?.messages[0].preview).toContain('第二轮')
     expect(view?.system).toBe('unknown')
     expect(view?.tools).toBe('unknown')
+    expect(s.listSnapshots('tab-1')).toHaveLength(2)
+    const selected = s.getView('tab-1', 'approx:s1:1')
+    expect(selected?.approximate).toBe(true)
+    expect(selected?.baseline?.id).toBe('approx:s1:1')
+    expect(selected?.counts.added).toBeGreaterThan(0)
   })
 
   it('删除会话时清掉对应索引', () => {

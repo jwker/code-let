@@ -84,6 +84,8 @@ function summaryOf(message: StoredMessage): ContextMessageSummary {
 export class ContextDiffStore {
   private readonly tabs = new Map<string, Snapshot[]>()
   private readonly sessions = new Map<string, Snapshot[]>()
+  /** 由会话历史重建的近似快照；只存在于当前进程 */
+  private readonly approximateTabs = new Map<string, Snapshot[]>()
   private readonly content = new Map<string, string>()
   private contentBytes = 0
 
@@ -125,6 +127,7 @@ export class ContextDiffStore {
     const nextHistory = trimHistory([...history, snapshot])
     this.sessions.set(raw.sessionId, nextHistory)
     this.tabs.set(tabId, nextHistory)
+    this.approximateTabs.delete(tabId)
     this.persist(nextHistory)
   }
 
@@ -132,7 +135,10 @@ export class ContextDiffStore {
   attachTab(tabId: string, sessionId: string): void {
     if (this.tabs.has(tabId)) return
     const history = this.loadSession(sessionId)
-    if (history && history.length > 0) this.tabs.set(tabId, history)
+    if (history && history.length > 0) {
+      this.tabs.set(tabId, history)
+      this.approximateTabs.delete(tabId)
+    }
   }
 
   /**
@@ -143,7 +149,7 @@ export class ContextDiffStore {
    * 所以返回的 view.approximate 一定是 true。
    */
   approximate(
-    _tabId: string,
+    tabId: string,
     sessionId: string,
     sessionPath: string | null,
     sessionName: string | undefined,
@@ -205,29 +211,42 @@ export class ContextDiffStore {
     }
     finishTurn()
 
-    if (turns.length === 0) return null
+    if (turns.length === 0) {
+      this.approximateTabs.delete(tabId)
+      return null
+    }
+    this.approximateTabs.set(tabId, turns)
     const view = this.buildView(turns.at(-1)!, turns.length > 1 ? turns[turns.length - 2] : null)
     return { ...view, approximate: true }
   }
 
   /** 当前请求对比默认上一次请求，或指定的快照 */
   getView(tabId: string, baselineId?: string): ContextDiffView | null {
-    const history = this.tabs.get(tabId)
-    const current = history?.at(-1)
-    if (!current) return null
-
-    let baseline: Snapshot | null = null
-    if (baselineId) {
-      baseline = this.findSnapshot(baselineId)
-    } else {
-      baseline = history && history.length >= 2 ? history[history.length - 2] : null
+    const exact = this.tabs.get(tabId)
+    if (exact && exact.length > 0) {
+      const current = exact.at(-1)!
+      let baseline: Snapshot | null = null
+      if (baselineId) baseline = this.findSnapshot(baselineId)
+      else baseline = exact.length >= 2 ? exact[exact.length - 2] : null
+      return this.buildView(current, baseline)
     }
 
-    return this.buildView(current, baseline)
+    // 没有请求级快照时，用会话历史重建出来的用户轮次作为临时快照。
+    const approximate = this.approximateTabs.get(tabId)
+    if (!approximate || approximate.length === 0) return null
+    const current = approximate.at(-1)!
+    const baseline = baselineId
+      ? (approximate.find((snapshot) => snapshot.id === baselineId) ?? null)
+      : approximate.length >= 2
+        ? approximate[approximate.length - 2]
+        : null
+    return { ...this.buildView(current, baseline), approximate: true }
   }
 
   listSnapshots(tabId: string): ContextSnapshotRef[] {
-    return (this.tabs.get(tabId) ?? []).map(refOf)
+    const exact = this.tabs.get(tabId)
+    if (exact && exact.length > 0) return exact.map(refOf)
+    return (this.approximateTabs.get(tabId) ?? []).map(refOf)
   }
 
   listSessions(): ContextDiffSession[] {

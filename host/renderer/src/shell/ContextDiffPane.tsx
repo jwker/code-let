@@ -79,7 +79,13 @@ export function ContextDiffPane() {
     host
       .getContextDiff(activeTabId, baselineId)
       .then((next) => {
-        if (!cancelled) setView(next)
+        if (cancelled) return
+        if (next) {
+          setView(next)
+        } else {
+          setBaselineId(null)
+          setView(diff)
+        }
       })
       .catch((caught) => {
         if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught))
@@ -89,15 +95,10 @@ export function ContextDiffPane() {
     }
   }, [activeTabId, baselineId, diff?.current.id])
 
-  useEffect(() => {
-    if (!view?.approximate) return
-    setBaselineId(null)
-    setPickerOpen(false)
-  }, [view?.approximate])
 
 
   async function openPicker(): Promise<void> {
-    if (!activeTabId || view?.approximate) return
+    if (!activeTabId) return
     setPickerOpen(true)
     setLoading(true)
     setError(null)
@@ -123,8 +124,12 @@ export function ContextDiffPane() {
 
   function resetBaseline(): void {
     setBaselineId(null)
-    setView(diff)
     setPickerOpen(false)
+    if (view?.approximate && activeTabId) {
+      void host.getApproximateContextDiff(activeTabId).then(setView)
+    } else {
+      setView(diff)
+    }
   }
 
   async function loadApproximate(): Promise<void> {
@@ -187,7 +192,7 @@ export function ContextDiffPane() {
           <span className="ml-auto text-[9px] text-fg-3">
             {baselineId ? '自定义基线' : '最近两次请求'}
           </span>
-          {view && !view.approximate && (
+          {view && (
             <button
               type="button"
               onClick={() => void openPicker()}
@@ -448,7 +453,7 @@ function SummaryView({
           label="基线"
           value={view.baseline ? refLabel(view.baseline) : '还没有可比较的上一次请求'}
           tokens={view.baseline?.totalTokens ?? 0}
-          onClick={view.approximate ? undefined : onBaseline}
+          onClick={onBaseline}
         />
       </div>
 
