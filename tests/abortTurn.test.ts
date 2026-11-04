@@ -56,6 +56,9 @@ class FakePi implements PiRuntimePort {
   readEntries(): StreamItem[] {
     return []
   }
+  readBranchEntries(): unknown[] {
+    return []
+  }
 
   async listModels(): Promise<ModelOption[]> {
     return []

@@ -1003,7 +1003,7 @@ export class HostState extends EventEmitter {
       state.sessionId,
       tab.path,
       tab.title,
-      this.pi.readEntries(tabId)
+      this.pi.readBranchEntries(tabId)
     )
   }
 

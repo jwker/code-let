@@ -65,6 +65,9 @@ class FakePi implements PiRuntimePort {
   readEntries(): StreamItem[] {
     return []
   }
+  readBranchEntries(): unknown[] {
+    return []
+  }
 }
 
 const dirs: string[] = []

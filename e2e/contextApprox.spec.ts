@@ -35,10 +35,16 @@ test.describe.serial('上下文 Diff · 近似基线', () => {
         content: [{ type: 'text', text: '第一轮问题' }],
         timestamp: Date.now()
       })
-      manager.appendMessage({
+      const keptId = manager.appendMessage({
         role: 'user',
         content: [{ type: 'text', text: '第二轮问题' }],
         timestamp: Date.now() + 2
+      })
+      manager.appendCompaction('压缩摘要正文', keptId, 100)
+      manager.appendMessage({
+        role: 'user',
+        content: [{ type: 'text', text: '压缩后的第三轮问题' }],
+        timestamp: Date.now() + 3
       })
       const sessionFile = manager.getSessionFile()
       if (!sessionFile) throw new Error('会话文件没有创建出来')
@@ -88,6 +94,8 @@ test.describe.serial('上下文 Diff · 近似基线', () => {
 
     await pane.getByRole('button', { name: '从会话历史重建近似对比' }).click()
     await expect(pane.getByText('近似视图')).toBeVisible()
+    await expect(pane.getByText('上下文已压缩（近似）')).toBeVisible()
+    await expect(pane.getByText('压缩摘要正文')).toBeVisible()
 
     await pane.getByRole('button', { name: '切换' }).click()
     await expect(pane.getByText('选择基线')).toBeVisible()

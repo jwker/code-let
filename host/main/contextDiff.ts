@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
-  ContextDiffGroup, StreamItem,
+  ContextDiffGroup,
   ContextDiffSession,
   ContextDiffView,
   ContextMessageSummary,
@@ -194,8 +194,12 @@ export class ContextDiffStore {
   /**
    * 从会话历史重建一个近似对比。
    *
-   * 没有请求级快照时（例如对话是在终端里产生的），只能按用户消息切轮，
-   * 把每一轮结束时的历史当作伪快照。没有 system/tools，也没有请求级转换，
+   * 没有请求级快照时（例如对话是在终端里产生的），只能按会话条目重放：
+   * - 每个用户轮次开始时冻结一份累计上下文快照；
+   * - 遇到 `compaction` 时用摘要、firstKeptEntryId 和 system checkpoint 替换旧历史；
+   * - 没有 checkpoint 时 system 仍然未知。
+   *
+   * 这不是精确请求：工具声明、provider 转换和 context_edit 都拿不到，
    * 所以返回的 view.approximate 一定是 true。
    */
   approximate(
@@ -203,29 +207,43 @@ export class ContextDiffStore {
     sessionId: string,
     sessionPath: string | null,
     sessionName: string | undefined,
-    items: readonly StreamItem[]
+    entries: readonly unknown[]
   ): ContextDiffView | null {
     const turns: Snapshot[] = []
     let current: StoredMessage[] = []
     let turn = 0
+    let active: Snapshot | null = null
+    let frozen = false
 
-    const pushMessage = (role: string, text: string): void => {
+    const messageOf = (role: string, text: string, key?: string): StoredMessage | null => {
       const content = text.trim()
-      if (!content) return
+      if (!content) return null
       const digest = createHash('sha256').update(`${role}\u0000${content}`).digest('hex').slice(0, 24)
-      current.push({
-        key: `${current.length}:${digest}`,
+      return {
+        key: key ?? `${current.length}:${digest}`,
         role,
         hash: digest,
         tokens: Math.ceil(content.length / 4) + 1,
         preview: content.replace(/\s+/g, ' ').slice(0, 200)
-      })
+      }
     }
 
-    const finishTurn = (): void => {
-      if (!current.some((message) => message.role === 'user')) return
+    const refreshActive = (): void => {
+      if (!active || frozen) return
+      active.messages = current.slice()
+      active.totalTokens = current.reduce((sum, message) => sum + message.tokens, 0)
+    }
+
+    const append = (role: string, text: string, updateActive = true): void => {
+      const message = messageOf(role, text)
+      if (!message) return
+      current.push(message)
+      if (updateActive) refreshActive()
+    }
+
+    const openTurn = (): void => {
       turn += 1
-      turns.push({
+      active = {
         id: `approx:${sessionId}:${turn}`,
         sessionId,
         sessionPath,
@@ -236,37 +254,109 @@ export class ContextDiffStore {
         totalTokens: current.reduce((sum, message) => sum + message.tokens, 0),
         toolsHash: null,
         messages: current.slice()
-      })
+      }
+      turns.push(active)
+      frozen = false
     }
 
-    for (const item of items) {
-      if (item.kind === 'message' && item.role === 'user') {
-        finishTurn()
-        current = []
-        pushMessage('user', item.text)
+    const applyCompaction = (entry: Record<string, unknown>, index: number): void => {
+      if (active) frozen = true
+      const firstKeptId = typeof entry.firstKeptEntryId === 'string' ? entry.firstKeptEntryId : null
+      let start = index
+      if (firstKeptId) {
+        const found = entries.findIndex((item) => {
+          return Boolean(item && typeof item === 'object' && (item as { id?: unknown }).id === firstKeptId)
+        })
+        if (found >= 0) start = found
+      }
+
+      const kept: StoredMessage[] = []
+      for (let i = start; i < index; i += 1) {
+        const raw = entries[i]
+        if (!raw || typeof raw !== 'object') continue
+        const item = raw as { type?: string; message?: { role?: string; content?: unknown; text?: string } }
+        if (item.type !== 'message' || !item.message) continue
+        const role = typeof item.message.role === 'string' ? item.message.role : 'unknown'
+        if (role === 'system') continue
+        const text = contentText(item.message.content) || item.message.text || ''
+        const message = messageOf(role, text, `${i}:${role}`)
+        if (message) kept.push(message)
+      }
+
+      const next: StoredMessage[] = []
+      const systemMessage = entry.systemMessage as
+        | { content?: unknown; text?: string }
+        | string
+        | undefined
+      const systemText =
+        typeof systemMessage === 'string'
+          ? systemMessage
+          : contentText(systemMessage?.content) || systemMessage?.text || ''
+      if (systemText) {
+        const message = messageOf('system', systemText, `compaction:${index}:system`)
+        if (message) {
+          this.remember(message.hash, systemText)
+          next.push(message)
+        }
+      }
+      const summary = typeof entry.summary === 'string' ? entry.summary : ''
+      if (summary) {
+        const message = messageOf('compactionSummary', summary, `compaction:${index}:summary`)
+        if (message) {
+          this.remember(message.hash, summary)
+          next.push(message)
+        }
+      }
+      next.push(...kept)
+      current = next
+    }
+
+    for (let index = 0; index < entries.length; index += 1) {
+      const raw = entries[index]
+      if (!raw || typeof raw !== 'object') continue
+      const entry = raw as Record<string, unknown>
+
+      if (entry.type === 'compaction') {
+        applyCompaction(entry, index)
         continue
       }
-      if (item.kind === 'message') {
-        const extra = item.images?.length ? ' [image]' : ''
-        pushMessage(item.role, `${item.text}${extra}`)
+
+      if (entry.type === 'custom_message') {
+        const text = contentText(entry.content)
+        append('custom', text)
         continue
       }
-      if (item.kind === 'tool') {
-        pushMessage('toolResult', `[tool: ${item.name}]${item.label ? ` ${item.label}` : ''}`)
-        continue
-      }
-      if (item.kind === 'custom') {
-        pushMessage('custom', `[${item.customType}] ${item.text}`)
+
+      if (entry.type !== 'message') continue
+      const message = entry.message as
+        | { role?: string; content?: unknown; text?: string }
+        | undefined
+      if (!message) continue
+      const role = typeof message.role === 'string' ? message.role : 'unknown'
+      const text = contentText(message.content) || message.text || ''
+      if (role === 'user') {
+        // 用户轮次开始时新开一份累计快照，不把这条用户消息算进上一轮。
+        append(role, text, false)
+        openTurn()
+      } else {
+        append(role, text)
       }
     }
-    finishTurn()
+
+    // 压缩发生在最后一轮之后时没有下一条用户消息来开新快照；
+    // 用压缩后的上下文更新当前快照，至少让摘要出现在当前视图里。
+    const lastTurn = turns.at(-1)
+    if (lastTurn && frozen) {
+      lastTurn.messages = current.slice()
+      lastTurn.totalTokens = current.reduce((sum, message) => sum + message.tokens, 0)
+    }
 
     if (turns.length === 0) {
       this.approximateTabs.delete(tabId)
       return null
     }
     this.approximateTabs.set(tabId, turns)
-    const view = this.buildView(turns.at(-1)!, turns.length > 1 ? turns[turns.length - 2] : null)
+    const view = this.buildView(turns.at(-1)!, turns.length >= 2 ? turns[turns.length - 2] : null)
     return { ...view, approximate: true }
   }
 
@@ -471,7 +561,17 @@ export class ContextDiffStore {
         tokens: removed.reduce((sum, message) => sum + message.tokens, 0)
       })
     }
-    if (baseline && before > after * 1.3 && after < before - 1000) {
+    const approximateCompaction =
+      current.id.startsWith('approx:') &&
+      currentMessages.some((message) => message.role === 'compactionSummary')
+    if (approximateCompaction) {
+      groups.push({
+        kind: 'compacted',
+        label: '上下文已压缩（近似）',
+        messages: [],
+        tokens: after
+      })
+    } else if (baseline && before > after * 1.3 && after < before - 1000) {
       groups.push({
         kind: 'compacted',
         label: `上下文被压缩：${Math.round(before / 1000)}k → ${Math.round(after / 1000)}k tokens`,
@@ -528,6 +628,10 @@ export class ContextDiffStore {
 
   private findSnapshot(id: string): Snapshot | null {
     for (const history of this.sessions.values()) {
+      const found = history.find((snapshot) => snapshot.id === id)
+      if (found) return found
+    }
+    for (const history of this.approximateTabs.values()) {
       const found = history.find((snapshot) => snapshot.id === id)
       if (found) return found
     }

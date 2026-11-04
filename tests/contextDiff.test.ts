@@ -4,12 +4,19 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ContextDiffStore, type RawContextSnapshot } from '../host/main/contextDiff'
-import type { StreamItem } from '@contract/index'
 
 const dirs: string[] = []
 
 function store(dir: string | null = null): ContextDiffStore {
   return new ContextDiffStore(dir)
+}
+
+function messageEntry(id: string, role: string, text: string) {
+  return {
+    type: 'message',
+    id,
+    message: { role, content: [{ type: 'text', text }] }
+  }
 }
 
 function snapshot(
@@ -133,19 +140,20 @@ describe('上下文快照 diff', () => {
     expect(second.detail('tab-1', 's1:1', 'a')).toBeNull()
   })
 
-  it('没有请求快照时可以从会话历史重建近似对比', () => {
+  it('近似快照累计历史，不会把上一轮算成删除', () => {
     const s = store()
-    const items: StreamItem[] = [
-      { kind: 'message', role: 'user', text: '第一轮' },
-      { kind: 'message', role: 'assistant', text: '第一轮回答' },
-      { kind: 'message', role: 'user', text: '第二轮' },
-      { kind: 'message', role: 'assistant', text: '第二轮回答' }
+    const entries = [
+      messageEntry('u1', 'user', '第一轮'),
+      messageEntry('a1', 'assistant', '第一轮回答'),
+      messageEntry('u2', 'user', '第二轮'),
+      messageEntry('a2', 'assistant', '第二轮回答')
     ]
-    const view = s.approximate('tab-1', 's1', '/tmp/session.jsonl', '测试会话', items)
+    const view = s.approximate('tab-1', 's1', '/tmp/session.jsonl', '测试会话', entries)
     expect(view?.approximate).toBe(true)
     expect(view?.baseline).not.toBeNull()
-    expect(view?.counts.added).toBeGreaterThan(0)
-    expect(view?.groups.find((group) => group.kind === 'added')?.messages[0].preview).toContain('第二轮')
+    expect(view?.counts.removed).toBe(0)
+    expect(view?.counts.added).toBe(2)
+    expect(view?.groups.find((group) => group.kind === 'added')?.messages[0].preview).toBe('第二轮')
     expect(view?.system).toBe('unknown')
     expect(view?.tools).toBe('unknown')
     expect(s.listSnapshots('tab-1')).toHaveLength(2)
@@ -153,6 +161,39 @@ describe('上下文快照 diff', () => {
     expect(selected?.approximate).toBe(true)
     expect(selected?.baseline?.id).toBe('approx:s1:1')
     expect(selected?.counts.added).toBeGreaterThan(0)
+  })
+
+  it('近似重放读到压缩摘要、保留边界和 system checkpoint', () => {
+    const s = store()
+    const entries = [
+      messageEntry('u1', 'user', '压缩前的问题'),
+      messageEntry('a1', 'assistant', '压缩前的回答'),
+      {
+        type: 'compaction',
+        id: 'c1',
+        firstKeptEntryId: 'u2',
+        summary: '压缩摘要正文',
+        tokensBefore: 999,
+        systemMessage: {
+          role: 'system',
+          content: [{ type: 'text', text: 'SYSTEM CHECKPOINT' }]
+        }
+      },
+      messageEntry('u2', 'user', '压缩后的问题'),
+      messageEntry('a2', 'assistant', '压缩后的回答')
+    ]
+    const view = s.approximate('tab-1', 's1', '/tmp/session.jsonl', '测试会话', entries)
+    expect(view?.approximate).toBe(true)
+    expect(view?.system).toBe('only-current')
+    expect(view?.counts.removed).toBe(2)
+    expect(view?.groups.find((group) => group.kind === 'compacted')?.label).toBe('上下文已压缩（近似）')
+    const added = view?.groups.find((group) => group.kind === 'added')?.messages ?? []
+    const summary = added.find((message) => message.role === 'compactionSummary')
+    expect(summary?.preview).toBe('压缩摘要正文')
+    expect(s.detail('tab-1', view!.current.id, summary!.key)).toEqual({
+      text: '压缩摘要正文',
+      truncated: false
+    })
   })
 
   it('删除会话时清掉对应索引', () => {

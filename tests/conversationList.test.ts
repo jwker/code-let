@@ -84,6 +84,9 @@ class FakePi implements PiRuntimePort {
   readEntries(): StreamItem[] {
     return []
   }
+  readBranchEntries(): unknown[] {
+    return []
+  }
 
   // 模型在这份测试里不参与（只盯对话列表的刷新时机）
   async listModels(): Promise<ModelOption[]> {
