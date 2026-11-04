@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type {
-  ContextDiffGroup,
+  ContextDiffGroup, StreamItem,
   ContextDiffSession,
   ContextDiffView,
   ContextMessageSummary,
@@ -132,6 +133,81 @@ export class ContextDiffStore {
     if (this.tabs.has(tabId)) return
     const history = this.loadSession(sessionId)
     if (history && history.length > 0) this.tabs.set(tabId, history)
+  }
+
+  /**
+   * 从会话历史重建一个近似对比。
+   *
+   * 没有请求级快照时（例如对话是在终端里产生的），只能按用户消息切轮，
+   * 把每一轮结束时的历史当作伪快照。没有 system/tools，也没有请求级转换，
+   * 所以返回的 view.approximate 一定是 true。
+   */
+  approximate(
+    _tabId: string,
+    sessionId: string,
+    sessionPath: string | null,
+    sessionName: string | undefined,
+    items: readonly StreamItem[]
+  ): ContextDiffView | null {
+    const turns: Snapshot[] = []
+    let current: StoredMessage[] = []
+    let turn = 0
+
+    const pushMessage = (role: string, text: string): void => {
+      const content = text.trim()
+      if (!content) return
+      const digest = createHash('sha256').update(`${role}\u0000${content}`).digest('hex').slice(0, 24)
+      current.push({
+        key: `${current.length}:${digest}`,
+        role,
+        hash: digest,
+        tokens: Math.ceil(content.length / 4) + 1,
+        preview: content.replace(/\s+/g, ' ').slice(0, 200)
+      })
+    }
+
+    const finishTurn = (): void => {
+      if (!current.some((message) => message.role === 'user')) return
+      turn += 1
+      turns.push({
+        id: `approx:${sessionId}:${turn}`,
+        sessionId,
+        sessionPath,
+        ...(sessionName ? { sessionName } : {}),
+        turn,
+        request: turn,
+        capturedAt: Date.now(),
+        totalTokens: current.reduce((sum, message) => sum + message.tokens, 0),
+        toolsHash: null,
+        messages: current.slice()
+      })
+    }
+
+    for (const item of items) {
+      if (item.kind === 'message' && item.role === 'user') {
+        finishTurn()
+        current = []
+        pushMessage('user', item.text)
+        continue
+      }
+      if (item.kind === 'message') {
+        const extra = item.images?.length ? ' [image]' : ''
+        pushMessage(item.role, `${item.text}${extra}`)
+        continue
+      }
+      if (item.kind === 'tool') {
+        pushMessage('toolResult', `[tool: ${item.name}]${item.label ? ` ${item.label}` : ''}`)
+        continue
+      }
+      if (item.kind === 'custom') {
+        pushMessage('custom', `[${item.customType}] ${item.text}`)
+      }
+    }
+    finishTurn()
+
+    if (turns.length === 0) return null
+    const view = this.buildView(turns.at(-1)!, turns.length > 1 ? turns[turns.length - 2] : null)
+    return { ...view, approximate: true }
   }
 
   /** 当前请求对比默认上一次请求，或指定的快照 */

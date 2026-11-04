@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ContextDiffStore, type RawContextSnapshot } from '../host/main/contextDiff'
+import type { StreamItem } from '@contract/index'
 
 const dirs: string[] = []
 
@@ -84,6 +85,23 @@ describe('上下文快照 diff', () => {
     const second = store(dir)
     expect(second.listSessions()).toHaveLength(1)
     expect(second.detail('tab-1', 's1:1', 'a')).toBeNull()
+  })
+
+  it('没有请求快照时可以从会话历史重建近似对比', () => {
+    const s = store()
+    const items: StreamItem[] = [
+      { kind: 'message', role: 'user', text: '第一轮' },
+      { kind: 'message', role: 'assistant', text: '第一轮回答' },
+      { kind: 'message', role: 'user', text: '第二轮' },
+      { kind: 'message', role: 'assistant', text: '第二轮回答' }
+    ]
+    const view = s.approximate('tab-1', 's1', '/tmp/session.jsonl', '测试会话', items)
+    expect(view?.approximate).toBe(true)
+    expect(view?.baseline).not.toBeNull()
+    expect(view?.counts.added).toBeGreaterThan(0)
+    expect(view?.groups.find((group) => group.kind === 'added')?.messages[0].preview).toContain('第二轮')
+    expect(view?.system).toBe('unknown')
+    expect(view?.tools).toBe('unknown')
   })
 
   it('删除会话时清掉对应索引', () => {

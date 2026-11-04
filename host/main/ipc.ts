@@ -246,6 +246,11 @@ export function registerIpc(state: HostState): () => void {
     return state.getContextDiff(tabId, baselineId)
   })
 
+  ipcMain.handle(IPC.contextDiffApproximate, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    return state.getApproximateContextDiff(tabId)
+  })
+
   ipcMain.handle(IPC.contextDiffSessions, () => state.listContextDiffSessions())
 
   ipcMain.handle(IPC.contextDiffSnapshots, async (_event, payload: unknown) => {
@@ -337,6 +342,7 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.modelsList)
     ipcMain.removeHandler(IPC.attachmentsPick)
     ipcMain.removeHandler(IPC.contextDiffGet)
+    ipcMain.removeHandler(IPC.contextDiffApproximate)
     ipcMain.removeHandler(IPC.contextDiffSessions)
     ipcMain.removeHandler(IPC.contextDiffSnapshots)
     ipcMain.removeHandler(IPC.contextDiffDetail)

@@ -88,6 +88,22 @@ export function ContextDiffPane() {
     }
   }
 
+  async function loadApproximate(): Promise<void> {
+    if (!activeTabId) return
+    setLoading(true)
+    setError(null)
+    try {
+      const next = await host.getApproximateContextDiff(activeTabId)
+      setBaselineId(null)
+      setView(next)
+      setMode('summary')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function openHistory(): Promise<void> {
     if (!activeTabId) return
     setMode('history')
@@ -171,6 +187,12 @@ export function ContextDiffPane() {
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
           {loading && <div className="mb-2 text-[10px] text-fg-3">正在读取上下文…</div>}
           {error && <div className="mb-2 text-[10px] text-danger">{error}</div>}
+          {view?.approximate && (
+            <div className="mb-2 rounded-lg border border-warn/40 bg-warn-wash px-2.5 py-2 text-[9.5px] leading-5 text-warn">
+              近似视图：按会话历史中的用户轮次重建，不包含 system、工具声明和请求级转换。
+              这个会话没有请求级快照，可能是在终端里产生的对话。
+            </div>
+          )}
 
           {mode === 'history' ? (
             <HistoryView
@@ -184,6 +206,19 @@ export function ContextDiffPane() {
               <div className="mb-2 text-[18px] text-fg-2">≋</div>
               还没有请求级上下文快照。<br />
               下一次模型请求后，这里会显示这一轮和上一轮的变化。
+              <div className="mt-3 border-t border-hairline pt-3 text-left">
+                <p className="text-[10px] leading-6 text-fg-3">
+                  如果在终端里聊过这个会话，终端进程不会加载 Codelet 的请求级采集器，
+                  所以这里没有精确快照。可以只用会话历史重建一份近似对比。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void loadApproximate()}
+                  className="mt-2 rounded-md border border-hairline-strong bg-surface px-2.5 py-1 text-[10px] text-fg-2 hover:bg-sunken"
+                >
+                  从会话历史重建近似对比
+                </button>
+              </div>
             </div>
           ) : (
             <SummaryView
