@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type {
   ContextDiffGroup,
+  ContextDiffSession,
   ContextDiffView,
   ContextMessageSummary,
   ContextSnapshotRef
@@ -45,6 +46,10 @@ export function ContextDiffPane() {
   const diff = useStore((s) => s.snapshot.contextDiff)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
   const [view, setView] = useState<ContextDiffView | null>(diff)
+  const [baselineId, setBaselineId] = useState<string | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [snapshots, setSnapshots] = useState<ContextSnapshotRef[]>([])
+  const [sessions, setSessions] = useState<ContextDiffSession[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<{
@@ -56,14 +61,71 @@ export function ContextDiffPane() {
 
   useEffect(() => {
     setView(diff)
+    setBaselineId(null)
+    setPickerOpen(false)
+    setSnapshots([])
+    setSessions([])
     setDetail(null)
     setError(null)
   }, [activeTabId])
 
   useEffect(() => {
-    setView(diff)
-  }, [diff])
+    if (!baselineId) {
+      setView(diff)
+      return
+    }
+    if (!activeTabId) return
+    let cancelled = false
+    host
+      .getContextDiff(activeTabId, baselineId)
+      .then((next) => {
+        if (!cancelled) setView(next)
+      })
+      .catch((caught) => {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [activeTabId, baselineId, diff?.current.id])
 
+  useEffect(() => {
+    if (!view?.approximate) return
+    setBaselineId(null)
+    setPickerOpen(false)
+  }, [view?.approximate])
+
+
+  async function openPicker(): Promise<void> {
+    if (!activeTabId || view?.approximate) return
+    setPickerOpen(true)
+    setLoading(true)
+    setError(null)
+    try {
+      const [sessionList, snapshotList] = await Promise.all([
+        host.listContextDiffSessions(),
+        host.listContextDiffSnapshots(activeTabId)
+      ])
+      setSessions(sessionList)
+      setSnapshots(snapshotList)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function chooseBaseline(snapshotId: string): void {
+    if (snapshotId === view?.current.id) return
+    setBaselineId(snapshotId)
+    setPickerOpen(false)
+  }
+
+  function resetBaseline(): void {
+    setBaselineId(null)
+    setView(diff)
+    setPickerOpen(false)
+  }
 
   async function loadApproximate(): Promise<void> {
     if (!activeTabId) return
@@ -71,6 +133,7 @@ export function ContextDiffPane() {
     setError(null)
     try {
       const next = await host.getApproximateContextDiff(activeTabId)
+      setBaselineId(null)
       setView(next)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -121,7 +184,18 @@ export function ContextDiffPane() {
         <header className="flex h-10 flex-none items-center gap-2 border-b border-hairline px-3">
           <h2 className="text-[13px] font-medium text-fg-1">上下文变化</h2>
           <span className="rounded border border-hairline px-1.5 text-[9px] text-fg-3">Diff</span>
-          <span className="ml-auto text-[9px] text-fg-3">最近两次请求</span>
+          <span className="ml-auto text-[9px] text-fg-3">
+            {baselineId ? '自定义基线' : '最近两次请求'}
+          </span>
+          {view && !view.approximate && (
+            <button
+              type="button"
+              onClick={() => void openPicker()}
+              className="text-[9px] text-fg-3 hover:text-fg-1"
+            >
+              切换
+            </button>
+          )}
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -132,6 +206,19 @@ export function ContextDiffPane() {
               近似视图：按会话历史中的用户轮次重建，不包含 system、工具声明和请求级转换。
               这个会话没有请求级快照，可能是在终端里产生的对话。
             </div>
+          )}
+
+          {pickerOpen && (
+            <BaselinePicker
+              snapshots={snapshots}
+              sessions={sessions}
+              currentId={current?.id ?? null}
+              baselineId={baselineId}
+              loading={loading}
+              onPick={chooseBaseline}
+              onReset={resetBaseline}
+              onClose={() => setPickerOpen(false)}
+            />
           )}
 
           {!view || !current ? (
@@ -161,6 +248,7 @@ export function ContextDiffPane() {
               compacted={compacted}
               beforePct={beforePct}
               afterPct={afterPct}
+              onBaseline={() => void openPicker()}
               onDetail={(snapshotId, message) => void openDetail(snapshotId, message)}
             />
           )}
@@ -213,6 +301,124 @@ export function ContextDiffPane() {
   )
 }
 
+function BaselinePicker({
+  snapshots,
+  sessions,
+  currentId,
+  baselineId,
+  loading,
+  onPick,
+  onReset,
+  onClose
+}: {
+  snapshots: ContextSnapshotRef[]
+  sessions: ContextDiffSession[]
+  currentId: string | null
+  baselineId: string | null
+  loading: boolean
+  onPick: (id: string) => void
+  onReset: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="mb-3 rounded-lg border border-hairline-strong bg-panel p-2.5 shadow-[var(--sh-sm)]">
+      <div className="flex items-center gap-2 border-b border-hairline pb-2">
+        <span className="text-[10px] font-medium text-fg-1">选择基线</span>
+        <span className="text-[8.5px] text-fg-3">当前请求不变</span>
+        <button type="button" onClick={onReset} className="ml-auto text-[9px] text-fg-3 hover:text-fg-1">
+          最近两次
+        </button>
+        <button type="button" onClick={onClose} className="text-[15px] leading-none text-fg-3 hover:text-fg-1" aria-label="关闭基线选择">
+          ×
+        </button>
+      </div>
+
+      {loading && <div className="py-2 text-[9px] text-fg-3">正在读取快照…</div>}
+
+      <div className="mt-2">
+        <div className="mb-1 text-[8.5px] uppercase tracking-[.06em] text-fg-3">本会话请求</div>
+        <div className="flex flex-col gap-0.5">
+          {!loading && snapshots.length === 0 && (
+            <div className="py-1 text-[9px] text-fg-3">还没有请求级快照。</div>
+          )}
+          {[...snapshots].reverse().map((snapshot) => {
+            const isCurrent = snapshot.id === currentId
+            const selected = snapshot.id === baselineId
+            return (
+              <button
+                key={snapshot.id}
+                type="button"
+                disabled={isCurrent}
+                onClick={() => onPick(snapshot.id)}
+                className={`flex items-center gap-2 rounded px-1.5 py-1 text-left text-[9px] ${
+                  selected
+                    ? 'bg-accent-wash text-fg-1'
+                    : isCurrent
+                      ? 'text-fg-3'
+                      : 'text-fg-2 hover:bg-sunken'
+                }`}
+              >
+                <span className="font-mono text-[8px] text-fg-3">
+                  第 {snapshot.turn} 轮 · 第 {snapshot.request} 次
+                </span>
+                <span className="ml-auto font-mono text-[8px] text-fg-3">
+                  {tokenLabel(snapshot.totalTokens)}
+                </span>
+                {isCurrent && <span className="rounded-full border border-hairline px-1 text-[7.5px]">当前</span>}
+                {selected && <span className="text-[9px] text-ok">✓</span>}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="mt-2 border-t border-hairline pt-2">
+        <div className="mb-1 text-[8.5px] uppercase tracking-[.06em] text-fg-3">跨会话</div>
+        <div className="flex flex-col gap-1">
+          {!loading && sessions.length === 0 && (
+            <div className="py-1 text-[9px] text-fg-3">还没有其他已保存的快照。</div>
+          )}
+          {sessions.map((session) => (
+            <div key={session.sessionId} className="rounded border border-hairline bg-surface px-1.5 py-1">
+              <div className="truncate text-[9px] text-fg-2">
+                {session.sessionName || session.sessionId.slice(0, 10)}
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1">
+                {session.first && session.first.id !== currentId && (
+                  <button
+                    type="button"
+                    onClick={() => onPick(session.first!.id)}
+                    className={`rounded border px-1.5 py-0.5 text-[8px] ${
+                      session.first.id === baselineId
+                        ? 'border-hairline-strong bg-accent-wash text-fg-1'
+                        : 'border-hairline text-fg-3 hover:bg-sunken'
+                    }`}
+                  >
+                    第一次 · {tokenLabel(session.first.totalTokens)}
+                  </button>
+                )}
+                {session.last && session.last.id !== currentId && (
+                  <button
+                    type="button"
+                    onClick={() => onPick(session.last!.id)}
+                    className={`rounded border px-1.5 py-0.5 text-[8px] ${
+                      session.last.id === baselineId
+                        ? 'border-hairline-strong bg-accent-wash text-fg-1'
+                        : 'border-hairline text-fg-3 hover:bg-sunken'
+                    }`}
+                  >
+                    最后一次 · {tokenLabel(session.last.totalTokens)}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SummaryView({
   view,
   added,
@@ -220,6 +426,7 @@ function SummaryView({
   compacted,
   beforePct,
   afterPct,
+  onBaseline,
   onDetail
 }: {
   view: ContextDiffView
@@ -228,6 +435,7 @@ function SummaryView({
   compacted?: ContextDiffGroup
   beforePct: number
   afterPct: number
+  onBaseline: () => void
   onDetail: (snapshotId: string, message: ContextMessageSummary) => void
 }) {
   const currentId = view.current.id
@@ -240,6 +448,7 @@ function SummaryView({
           label="基线"
           value={view.baseline ? refLabel(view.baseline) : '还没有可比较的上一次请求'}
           tokens={view.baseline?.totalTokens ?? 0}
+          onClick={view.approximate ? undefined : onBaseline}
         />
       </div>
 

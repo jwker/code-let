@@ -121,5 +121,15 @@ test.describe.serial('上下文 Diff', () => {
     const detail = page.getByRole('dialog', { name: '上下文消息详情' })
     await expect(detail).toBeVisible()
     await expect(detail).toContainText('这次新增的用户消息')
+    await page.getByRole('button', { name: '关闭详情' }).click()
+  })
+
+  test('基线可以切换，选中后回到摘要', async () => {
+    const pane = page.locator('.insp-body')
+    await pane.getByRole('button', { name: '切换' }).click()
+    await expect(pane.getByText('选择基线')).toBeVisible()
+    await pane.getByRole('button', { name: /第一次/ }).click()
+    await expect(pane.getByText('自定义基线')).toBeVisible()
+    await expect(pane.getByText('最近两次请求')).toHaveCount(0)
   })
 })
