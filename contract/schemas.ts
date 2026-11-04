@@ -113,6 +113,12 @@ export const temporaryModelSelectSchema = z.object({
   modelId: z.string().min(1)
 })
 
+export const gitDiffSchema = z.object({
+  tabId: z.string().min(1),
+  path: z.string().min(1).max(4096),
+  scope: z.enum(['staged', 'unstaged', 'untracked', 'conflicts'])
+})
+
 export const contextDiffGetSchema = z.object({
   tabId: z.string().min(1),
   baselineId: z.string().min(1).optional()

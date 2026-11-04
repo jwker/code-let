@@ -5,6 +5,7 @@ import { useStore } from '../store'
 import { FileBrowser } from './FileBrowser'
 import { NavBar } from './NavBar'
 import { ContextDiffPane } from './ContextDiffPane'
+import { GitPane } from './GitPane'
 
 /** 导航项对应的视图标题 */
 const TITLES: Record<NavEntry, string> = {
@@ -18,11 +19,10 @@ const TITLES: Record<NavEntry, string> = {
 }
 
 /** 还没接的视图 —— 先给一句占位说明 */
-const PLACEHOLDER: Record<Exclude<NavEntry, 'code' | 'context'>, string> = {
+const PLACEHOLDER: Record<Exclude<NavEntry, 'code' | 'context' | 'git'>, string> = {
   board: '组件放在 ext/ + view/，一个组件一视图',
   memory: '组件放在 ext/ + view/，一个组件一视图',
   terminal: '常驻终端面板（node-pty），跟对话区的终端模式是两件事',
-  git: '面板还没接',
   agent: '面板还没接'
 }
 
@@ -44,7 +44,8 @@ export function Inspector() {
       <NavBar compact={!open} />
       {open && nav === 'code' && <FilePane />}
       {open && nav === 'context' && <ContextDiffPane />}
-      {open && nav !== 'code' && nav !== 'context' && (
+      {open && nav === 'git' && <GitPane />}
+      {open && nav !== 'code' && nav !== 'context' && nav !== 'git' && (
         <div className="insp-body">
           <section className="flex min-h-0 flex-1 flex-col">
             <header className="flex h-10 flex-none items-center px-3 text-[13px] font-medium text-fg-1">
@@ -53,7 +54,7 @@ export function Inspector() {
             <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
               <div className="placeholder py-8 text-center">
                 <div>{TITLES[nav]} · 视图还没接</div>
-                <div className="text-[11.5px]">{PLACEHOLDER[nav as Exclude<NavEntry, 'code' | 'context'>]}</div>
+                <div className="text-[11.5px]">{PLACEHOLDER[nav as Exclude<NavEntry, 'code' | 'context' | 'git'>]}</div>
               </div>
             </div>
           </section>

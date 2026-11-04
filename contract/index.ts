@@ -84,6 +84,10 @@ export const IPC = {
   temporaryModels: 'host:temporary:models',
   /** 临时对话：切换模型 */
   temporaryModelSelect: 'host:temporary:model-select',
+  /** Git：当前标签的只读状态 */
+  gitStatus: 'host:git:status',
+  /** Git：单个文件的 diff */
+  gitDiff: 'host:git:diff',
   /** 上下文 Diff：取当前对比摘要 */
   contextDiffGet: 'host:context-diff:get',
   /** 上下文 Diff：取截至某一轮的最后两次请求 */
@@ -414,6 +418,47 @@ export interface ContextSnapshotRef {
   totalTokens: number
 }
 
+export type GitDiffScope = 'staged' | 'unstaged' | 'untracked' | 'conflicts'
+
+/** Git 面板里的一行改动 */
+export interface GitFile {
+  path: string
+  /** 重命名/复制时的旧路径 */
+  oldPath?: string
+  /** M A D R C U ? */
+  status: string
+  /** 该文件相对比较基线的增删行数；未跟踪文件可能没有 */
+  additions?: number
+  deletions?: number
+}
+
+/** 当前活动标签的 Git 状态 */
+export interface GitStatus {
+  repo: boolean
+  root: string | null
+  branch: string | null
+  upstream: string | null
+  ahead: number
+  behind: number
+  staged: GitFile[]
+  unstaged: GitFile[]
+  untracked: GitFile[]
+  conflicts: GitFile[]
+  clean: boolean
+  truncated: boolean
+  error: string | null
+}
+
+/** 单个文件的 diff */
+export interface GitDiff {
+  path: string
+  scope: GitDiffScope
+  patch: string
+  binary: boolean
+  truncated: boolean
+  error: string | null
+}
+
 /** 上下文 diff 的分组 */
 export interface ContextDiffGroup {
   kind: 'system' | 'tools' | 'added' | 'removed' | 'modified' | 'shared' | 'compacted'
@@ -708,6 +753,10 @@ export interface CodeletApi {
   listTemporaryModels(id: string): Promise<ModelOption[]>
   /** 临时对话切换模型；只影响这份内存会话 */
   selectTemporaryModel(id: string, provider: string, modelId: string): Promise<HostSnapshot>
+  /** 当前活动标签的 Git 状态；只读 */
+  getGitStatus(tabId: string): Promise<GitStatus>
+  /** 单个文件的 Git diff */
+  getGitDiff(tabId: string, path: string, scope: GitDiffScope): Promise<GitDiff>
   /** 取活动标签的上下文对比；baselineId 为空时用上一次请求 */
   getContextDiff(tabId: string, baselineId?: string): Promise<ContextDiffView | null>
   /** 取截至某一用户轮次的最后两次请求对比 */

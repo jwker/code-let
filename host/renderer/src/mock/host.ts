@@ -8,6 +8,8 @@ import type {
   FileEntry,
   FileSearchResult,
   FileTab,
+  GitDiff,
+  GitStatus,
   HostSnapshot,
   ModelOption,
   ProjectInfo,
@@ -25,6 +27,55 @@ import type {
  *
  * 假数据只到「长得像」为止：不连 Pi，不落盘，不发消息。
  */
+
+const FAKE_GIT_STATUS: GitStatus = {
+  repo: true,
+  root: '/Users/demo/Projects/codelet',
+  branch: 'main',
+  upstream: 'origin/main',
+  ahead: 2,
+  behind: 1,
+  staged: [
+    { path: 'src/main/state.ts', status: 'M', additions: 18, deletions: 3 },
+    { path: 'src/shell/GitPane.tsx', status: 'A', additions: 212, deletions: 0 }
+  ],
+  unstaged: [
+    { path: 'src/shell/Inspector.tsx', status: 'M', additions: 8, deletions: 2 },
+    { path: 'src/legacy/old.git.ts', status: 'D', additions: 0, deletions: 64 }
+  ],
+  untracked: [{ path: 'src/shell/gitStatus.test.ts', status: '?' }],
+  conflicts: [],
+  clean: false,
+  truncated: false,
+  error: null
+}
+
+const FAKE_GIT_DIFF: GitDiff = {
+  path: 'src/shell/Inspector.tsx',
+  scope: 'unstaged',
+  patch: [
+    'diff --git a/src/shell/Inspector.tsx b/src/shell/Inspector.tsx',
+    '--- a/src/shell/Inspector.tsx',
+    '+++ b/src/shell/Inspector.tsx',
+    '@@ -18,6 +18,8 @@ export function Inspector() {',
+    '   const open = useStore((s) => s.inspectorOpen)',
+    '   const nav = useStore((s) => s.nav)',
+    '-  ',
+    '+  const [diffPath, setDiffPath] = useState<string | null>(null)',
+    '+  const git = useStore((s) => s.git)',
+    ' ',
+    '   return (',
+    '@@ -32,7 +34,9 @@ export function Inspector() {',
+    '       {open && nav === "code" && <FilePane />}',
+    '       {open && nav === "context" && <ContextDiffPane />}',
+    '+      {open && nav === "git" && <GitPane />}',
+    '-      {open && nav === "git" && <GitPlaceholder />}',
+    '     </aside>'
+  ].join('\n'),
+  binary: false,
+  truncated: false,
+  error: null
+}
 
 const FAKE_CONTEXT_BASELINE: ContextSnapshotRef = {
   id: 'fake-session:1',
@@ -637,6 +688,8 @@ export function createMockApi(): CodeletApi {
       }
     },
 
+    getGitStatus: async () => FAKE_GIT_STATUS,
+    getGitDiff: async (_tabId, path, scope) => ({ ...FAKE_GIT_DIFF, path, scope }),
     getContextDiff: async () => FAKE_CONTEXT_DIFF,
     getContextDiffForTurn: async () => FAKE_CONTEXT_DIFF,
     listContextDiffSessions: async () => FAKE_CONTEXT_SESSIONS,

@@ -3,6 +3,9 @@ import { existsSync, statSync } from 'node:fs'
 import { basename, normalize, relative } from 'node:path'
 import type {
   CommandArgumentOption,
+  GitDiff,
+  GitDiffScope,
+  GitStatus,
   CommandOption,
   ContextDiffSession,
   ContextDiffView,
@@ -31,6 +34,7 @@ import {
   type ExternalAttachment
 } from './attachments'
 import { ContextDiffStore, type RawContextSnapshot } from './contextDiff'
+import { emptyGitStatus, readGitDiff, readGitStatus } from './git'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
 import { pickFiles } from './filePicker'
@@ -926,6 +930,30 @@ export class HostState extends EventEmitter {
   }
 
   /** 已配置凭据的模型清单（选择器用） */
+  /** 当前活动标签的 Git 状态；只读 */
+  async getGitStatus(tabId: string): Promise<GitStatus> {
+    const tab = this.tabs.find((item) => item.id === tabId)
+    if (!tab) return emptyGitStatus('没有活动标签')
+    return readGitStatus(tab.cwd)
+  }
+
+  /** 单个文件的 Git diff；路径必须由 Git 面板传来 */
+  async getGitDiff(tabId: string, path: string, scope: GitDiffScope): Promise<GitDiff> {
+    const tab = this.tabs.find((item) => item.id === tabId)
+    if (!tab) {
+      return {
+        path,
+        scope,
+        patch: '',
+        binary: false,
+        truncated: false,
+        error: '没有活动标签'
+      }
+    }
+    return readGitDiff(tab.cwd, path, scope)
+  }
+
+  /** 某个标签可用模型清单 */
   listModels(tabId: string): Promise<ModelOption[]> {
     return this.pi.listModels(tabId)
   }

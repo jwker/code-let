@@ -162,6 +162,8 @@ interface RendererStore {
   theme: Theme
   /** 会话流事件计数 —— 骨架阶段先只记账，不渲染 */
   eventCount: number
+  /** agent 结束的计数；Git 面板用它触发防抖刷新 */
+  gitRevision: number
   /**
    * 对话区的内容流 —— **按标签存**（PLAN.md D4 修订）。
    *
@@ -270,6 +272,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   mode: 'normal',
   theme: loadTheme(),
   eventCount: 0,
+  gitRevision: 0,
   items: {},
   streaming: {},
   expandedTools: {},
@@ -374,7 +377,14 @@ export const useStore = create<RendererStore>((set, get) => ({
       items[tabId] = tabItems
       streaming[tabId] = tabStreaming
     }
-    set({ items, streaming, eventCount: get().eventCount + events.length })
+    set({
+      items,
+      streaming,
+      eventCount: get().eventCount + events.length,
+      ...(events.some((event) => event.type === 'agent_settled')
+        ? { gitRevision: get().gitRevision + 1 }
+        : {})
+    })
   },
 
   setMode: (mode) => {

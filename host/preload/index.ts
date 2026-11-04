@@ -12,6 +12,8 @@ import {
   type FileContent,
   type FileEntry,
   type FileSearchResult,
+  type GitDiff,
+  type GitStatus,
   type HostSnapshot,
   type ModelOption,
   type PickAttachmentsResult,
@@ -46,6 +48,10 @@ const api: CodeletApi = {
   compactTab: (tabId) => ipcRenderer.invoke(IPC.promptCompact, { tabId }) as Promise<void>,
   pickAttachments: () =>
     ipcRenderer.invoke(IPC.attachmentsPick) as Promise<PickAttachmentsResult>,
+  getGitStatus: (tabId) =>
+    ipcRenderer.invoke(IPC.gitStatus, { tabId }) as Promise<GitStatus>,
+  getGitDiff: (tabId, path, scope) =>
+    ipcRenderer.invoke(IPC.gitDiff, { tabId, path, scope }) as Promise<GitDiff>,
   getContextDiff: (tabId, baselineId) =>
     ipcRenderer.invoke(IPC.contextDiffGet, { tabId, baselineId }) as Promise<ContextDiffView | null>,
   getContextDiffForTurn: (tabId, turn, baselineId) =>

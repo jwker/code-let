@@ -12,6 +12,7 @@ import {
   commandCompleteSchema,
   contextDiffDetailSchema,
   contextDiffGetSchema,
+  gitDiffSchema,
   contextDiffTurnSchema,
   conversationRenameSchema,
   conversationsDeleteSchema,
@@ -242,6 +243,16 @@ export function registerIpc(state: HostState): () => void {
 
   ipcMain.handle(IPC.attachmentsPick, () => state.pickAttachments())
 
+  ipcMain.handle(IPC.gitStatus, async (_event, payload: unknown) => {
+    const { tabId } = tabIdSchema.parse(payload)
+    return state.getGitStatus(tabId)
+  })
+
+  ipcMain.handle(IPC.gitDiff, async (_event, payload: unknown) => {
+    const { tabId, path, scope } = gitDiffSchema.parse(payload)
+    return state.getGitDiff(tabId, path, scope)
+  })
+
   ipcMain.handle(IPC.contextDiffGet, async (_event, payload: unknown) => {
     const { tabId, baselineId } = contextDiffGetSchema.parse(payload)
     return state.getContextDiff(tabId, baselineId)
@@ -342,6 +353,8 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.filesReload)
     ipcMain.removeHandler(IPC.modelsList)
     ipcMain.removeHandler(IPC.attachmentsPick)
+    ipcMain.removeHandler(IPC.gitStatus)
+    ipcMain.removeHandler(IPC.gitDiff)
     ipcMain.removeHandler(IPC.contextDiffGet)
     ipcMain.removeHandler(IPC.contextDiffTurn)
     ipcMain.removeHandler(IPC.contextDiffSessions)
