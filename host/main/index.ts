@@ -1,9 +1,11 @@
 import { app, BrowserWindow, shell } from 'electron'
+import { IPC_EVENTS } from '@contract/index'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { registerIpc } from './ipc'
 import { APP_ORIGIN, registerSchemesAsPrivileged, serveRenderer } from './protocol'
 import { HostState } from './state'
+import { BrowserManager } from './browser'
 
 /*
  * 自动化测试用：把 userData 指到临时目录。
@@ -24,6 +26,7 @@ const isDev = Boolean(rendererDevUrl)
 
 const state = new HostState({ contextDiffDir: join(app.getPath('userData'), 'context-diff') })
 let disposeIpc: (() => void) | null = null
+let browser: BrowserManager | null = null
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -48,6 +51,18 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false
     }
+  })
+
+  browser = new BrowserManager(win, (state) => {
+    for (const target of BrowserWindow.getAllWindows()) {
+      if (!target.isDestroyed()) target.webContents.send(IPC_EVENTS.browser, state)
+    }
+  })
+  state.attachBrowser(browser)
+  // 必须在窗口真正销毁前移除原生 view；窗口关闭后再 removeChildView 可能卡住。
+  win.on('close', () => {
+    browser?.dispose()
+    browser = null
   })
 
   win.once('ready-to-show', () => win.show())
@@ -111,7 +126,7 @@ if (!app.requestSingleInstanceLock()) {
       serveRenderer(join(currentDir, '../renderer'))
     }
 
-    disposeIpc = registerIpc(state)
+    disposeIpc = registerIpc(state, () => browser)
     createWindow()
     // 初始化失败不能把窗口晾在这儿 —— 记下来，界面还在，能看到错误
     await state.init().catch((error) => {

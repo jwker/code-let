@@ -34,6 +34,7 @@ import {
   type ExternalAttachment
 } from './attachments'
 import { ContextDiffStore, type RawContextSnapshot } from './contextDiff'
+import type { BrowserManager } from './browser'
 import { emptyGitStatus, readGitDiff, readGitStatus } from './git'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
@@ -186,6 +187,19 @@ export class HostState extends EventEmitter {
     this.contextDiff = new ContextDiffStore(options?.contextDiffDir ?? null)
     this.trashFile = options?.trashFile ?? ((path) => shell.trashItem(path))
     this.conversationsRefresh = new DebouncedRefresh(() => this.refreshConversations())
+  }
+
+  /** 把右侧浏览器接到 Pi 的 browser_* 工具 */
+  attachBrowser(browser: BrowserManager): void {
+    this.pi.setBrowserToolHandler?.((_tabId, request) => {
+      const payload = request as { tool?: unknown; args?: unknown }
+      const tool = typeof payload.tool === 'string' ? payload.tool : ''
+      const args =
+        payload.args && typeof payload.args === 'object'
+          ? (payload.args as Record<string, unknown>)
+          : {}
+      return browser.tool(tool, args)
+    })
   }
 
   // ---------------------------------------------------------------------

@@ -92,6 +92,8 @@ export interface PiRuntimePort {
   tabState(tabId: string): TabRuntimeState
   /** 某个标签的会话条目 */
   readEntries(tabId: string): StreamItem[]
+  /** 接上浏览器工具桥 */
+  setBrowserToolHandler?(handler: (tabId: string, request: unknown) => Promise<unknown>): void
   /** 某个标签的可用模型清单 */
   listModels(tabId: string): Promise<ModelOption[]>
   /** 切某个标签的模型（persist 时同时设为新会话默认） */
@@ -180,6 +182,8 @@ interface TabRecord {
   unbind: (() => void) | null
   /** 内置 context-diff 扩展通过 EventBus 发来的快照 */
   contextDiffUnsub: (() => void) | null
+  /** 浏览器工具请求的 EventBus 监听 */
+  browserUnsub: (() => void) | null
   sessionManager: SessionManager | null
 }
 
@@ -194,12 +198,18 @@ export class PiRuntime implements PiRuntimePort {
   private listeners = new Set<PiEventListener>()
   /** 已经打过日志的扩展加载错误 —— 每个标签都会建 runtime，别重复刷屏 */
   private readonly reportedExtensionErrors = new Set<string>()
+  private browserToolHandler: ((tabId: string, request: unknown) => Promise<unknown>) | null = null
 
   constructor(private readonly extensionsDir: string | null = defaultExtensionsDir()) {}
 
   onEvent(listener: PiEventListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
+  }
+
+  /** HostState 把浏览器工具接到当前运行时 */
+  setBrowserToolHandler(handler: (tabId: string, request: unknown) => Promise<unknown>): void {
+    this.browserToolHandler = handler
   }
 
   private emit(event: PiEvent): void {
@@ -246,10 +256,26 @@ export class PiRuntime implements PiRuntimePort {
       runtime: null,
       unbind: null,
       contextDiffUnsub: null,
+      browserUnsub: null,
       sessionManager: null
     }
     record.contextDiffUnsub = record.bus.on('context-diff:snapshot', (data) => {
       this.emit({ type: 'context_diff_snapshot', data, tabId })
+    })
+    record.browserUnsub = record.bus.on('browser:request', (data) => {
+      const request = data as { id?: unknown }
+      const id = typeof request.id === 'string' ? request.id : ''
+      const respond = (payload: unknown): void => {
+        record.bus.emit('browser:response', payload)
+      }
+      if (!this.browserToolHandler) {
+        respond({ id, ok: false, error: '浏览器工具不可用' })
+        return
+      }
+      void this.browserToolHandler(tabId, request).then(
+        (result) => respond({ id, ok: true, result }),
+        (error) => respond({ id, ok: false, error: error instanceof Error ? error.message : String(error) })
+      )
     })
     this.tabs.set(tabId, record)
     if (options.lazy) return
@@ -438,6 +464,8 @@ export class PiRuntime implements PiRuntimePort {
     record.unbind = null
     record.contextDiffUnsub?.()
     record.contextDiffUnsub = null
+    record.browserUnsub?.()
+    record.browserUnsub = null
     const runtime = record.runtime
     record.runtime = null
     if (!runtime) return

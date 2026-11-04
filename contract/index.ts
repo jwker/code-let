@@ -88,6 +88,24 @@ export const IPC = {
   gitStatus: 'host:git:status',
   /** Git：单个文件的 diff */
   gitDiff: 'host:git:diff',
+  /** 浏览器：取当前标签状态 */
+  browserGet: 'host:browser:get',
+  /** 浏览器：新建标签 */
+  browserCreate: 'host:browser:create',
+  /** 浏览器：关闭标签 */
+  browserClose: 'host:browser:close',
+  /** 浏览器：切换标签 */
+  browserActivate: 'host:browser:activate',
+  /** 浏览器：导航 */
+  browserNavigate: 'host:browser:navigate',
+  /** 浏览器：后退 / 前进 / 刷新 */
+  browserBack: 'host:browser:back',
+  browserForward: 'host:browser:forward',
+  browserReload: 'host:browser:reload',
+  /** 浏览器：同步页面内容区矩形 */
+  browserBounds: 'host:browser:bounds',
+  /** 浏览器：显示 / 隐藏原生页面 */
+  browserVisible: 'host:browser:visible',
   /** 上下文 Diff：取当前对比摘要 */
   contextDiffGet: 'host:context-diff:get',
   /** 上下文 Diff：取截至某一轮的最后两次请求 */
@@ -115,7 +133,9 @@ export const IPC_EVENTS = {
   /** 宿主状态快照（项目 / 对话列表 / 会话状态） */
   snapshot: 'host:event:snapshot',
   /** Pi 会话流的增量事件 */
-  session: 'host:event:session'
+  session: 'host:event:session',
+  /** 浏览器标签状态 */
+  browser: 'host:event:browser'
 } as const
 
 export type IpcEventChannel = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS]
@@ -160,7 +180,7 @@ export type ConversationMode = 'normal' | 'terminal' | 'html'
  *
  * Git / Agent 也在里面：右侧面板一次只显示一个视图，没有常驻面板。
  */
-export type NavEntry = 'board' | 'memory' | 'code' | 'terminal' | 'git' | 'agent' | 'context'
+export type NavEntry = 'board' | 'memory' | 'code' | 'terminal' | 'git' | 'agent' | 'context' | 'browser'
 
 /** 一个项目 = 一个目录 */
 export interface ProjectInfo {
@@ -416,6 +436,43 @@ export interface ContextSnapshotRef {
   request: number
   capturedAt: number
   totalTokens: number
+}
+
+/** 右侧浏览器的一个标签 */
+export interface BrowserTabState {
+  id: string
+  url: string
+  title: string
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  error: string | null
+}
+
+export interface BrowserState {
+  tabs: BrowserTabState[]
+  activeTabId: string | null
+}
+
+export interface BrowserBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** agent 读取的页面摘要 */
+export interface BrowserSnapshot {
+  tabId: string
+  url: string
+  title: string
+  text: string
+  elements: Array<{
+    ref: string
+    tag: string
+    text: string
+    type?: string
+  }>
 }
 
 export type GitDiffScope = 'staged' | 'unstaged' | 'untracked' | 'conflicts'
@@ -753,6 +810,25 @@ export interface CodeletApi {
   listTemporaryModels(id: string): Promise<ModelOption[]>
   /** 临时对话切换模型；只影响这份内存会话 */
   selectTemporaryModel(id: string, provider: string, modelId: string): Promise<HostSnapshot>
+  /** 右侧浏览器当前状态 */
+  getBrowserState(): Promise<BrowserState>
+  /** 新建浏览器标签 */
+  createBrowserTab(url?: string): Promise<BrowserState>
+  /** 关闭浏览器标签 */
+  closeBrowserTab(tabId: string): Promise<BrowserState>
+  /** 切换浏览器标签 */
+  activateBrowserTab(tabId: string): Promise<BrowserState>
+  /** 导航浏览器标签 */
+  navigateBrowser(tabId: string, url: string): Promise<BrowserState>
+  browserBack(tabId: string): Promise<BrowserState>
+  browserForward(tabId: string): Promise<BrowserState>
+  browserReload(tabId: string): Promise<BrowserState>
+  /** 同步页面内容区矩形 */
+  setBrowserBounds(bounds: BrowserBounds): Promise<void>
+  /** 显示 / 隐藏浏览器页面 */
+  setBrowserVisible(visible: boolean): Promise<void>
+  /** 订阅浏览器标签状态 */
+  onBrowserState(listener: (state: BrowserState) => void): () => void
   /** 当前活动标签的 Git 状态；只读 */
   getGitStatus(tabId: string): Promise<GitStatus>
   /** 单个文件的 Git diff */
@@ -815,4 +891,6 @@ export interface CodeletApi {
   onSnapshot(listener: (snapshot: HostSnapshot) => void): () => void
   /** 订阅会话流增量事件 */
   onSessionEvent(listener: (events: SessionEvent[]) => void): () => void
+  /** 订阅右侧浏览器标签状态 */
+  onBrowserState(listener: (state: BrowserState) => void): () => void
 }

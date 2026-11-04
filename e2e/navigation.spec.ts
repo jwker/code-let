@@ -87,23 +87,23 @@ test.describe.serial('对话导航', () => {
   test('轮次多于轨道高度时只滚动圆点列表，当前圆点自动进入可视区', async () => {
     const list = page.locator('.conv-nav-list')
     const metrics = await list.evaluate((element) => ({
-      scrollHeight: element.scrollHeight,
+      scrollHeight: (element as HTMLElement).scrollHeight,
       clientHeight: element.clientHeight
     }))
     expect(metrics.scrollHeight).toBeGreaterThan(metrics.clientHeight)
     await expect(list).toHaveClass(/is-overflowing/)
     await expect
-      .poll(() => list.evaluate((element) => element.scrollTop), { timeout: 10_000 })
+      .poll(() => list.evaluate((element) => (element as HTMLElement).scrollTop), { timeout: 10_000 })
       .toBeGreaterThan(0)
     await expect(page.locator('.conv-nav-end')).toHaveCount(2)
 
     await list.evaluate((element) => {
-      element.scrollTop = element.scrollHeight
+      (element as HTMLElement).scrollTop = (element as HTMLElement).scrollHeight
     })
     await expect(page.locator('.conv-nav-end-bottom')).toHaveClass(/is-end/)
 
     await list.evaluate((element) => {
-      element.scrollTop = 0
+      (element as HTMLElement).scrollTop = 0
     })
     await expect(page.locator('.conv-nav-end-top')).toHaveClass(/is-end/)
   })
@@ -119,12 +119,12 @@ test.describe.serial('对话导航', () => {
 
   test('点击靠前的圆点会滚动并更新当前轮次', async () => {
     const thread = page.locator('.conv-normal')
-    const before = await thread.evaluate((element) => element.scrollTop)
+    const before = await thread.evaluate((element) => (element as HTMLElement).scrollTop)
     const target = page.locator('.conv-nav-hit').nth(4)
     await target.click()
     await expect(target).toHaveAttribute('aria-current', 'true', { timeout: 10_000 })
     await expect
-      .poll(() => thread.evaluate((element) => element.scrollTop), { timeout: 10_000 })
+      .poll(() => thread.evaluate((element) => (element as HTMLElement).scrollTop), { timeout: 10_000 })
       .toBeLessThan(before)
   })
 })

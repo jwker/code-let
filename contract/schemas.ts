@@ -113,6 +113,30 @@ export const temporaryModelSelectSchema = z.object({
   modelId: z.string().min(1)
 })
 
+export const browserUrlSchema = z.object({
+  url: z.string().max(4_200_000)
+})
+
+export const browserTabSchema = z.object({
+  tabId: z.string().min(1)
+})
+
+export const browserNavigateSchema = z.object({
+  tabId: z.string().min(1),
+  url: z.string().max(4_200_000)
+})
+
+export const browserBoundsSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number()
+})
+
+export const browserVisibleSchema = z.object({
+  visible: z.boolean()
+})
+
 export const gitDiffSchema = z.object({
   tabId: z.string().min(1),
   path: z.string().min(1).max(4096),

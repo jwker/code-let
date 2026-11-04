@@ -61,6 +61,12 @@ Pi 的会话文件一个字节都不动。
 
 **随时叫停。** 发送按钮在生成中变成停止方块，`Esc` 同效。已经生成的内容会保留并标「已中止」。
 
+**浏览器面板。** 右侧检视器新增浏览器：多标签、地址栏、前进后退和刷新，页面用独立
+`WebContentsView` 渲染。v1 只打开本地页面和明确的协议（`http/https` localhost、`file:`、
+`data:`、`javascript:`、`about:blank`），不把外网站点塞进应用。agent 通过 `browser_tabs`、
+`browser_open`、`browser_navigate`、`browser_snapshot`、`browser_click`、`browser_type`
+操作同一批标签，使用的仍是主进程校验后的本地地址。
+
 **Git 面板。** 右侧检视器新增只读 Git 视图：显示当前分支、上游、ahead/behind，
 按已暂存、未暂存、未跟踪、冲突分组列出文件；点击文件查看相对 HEAD 或 index 的 diff。
 不提供 stage、commit、discard、stash。状态来自本机 `git status --porcelain=v2`，

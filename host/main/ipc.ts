@@ -8,6 +8,11 @@ import {
   type ThinkingLevel
 } from '@contract/index'
 import {
+  browserBoundsSchema,
+  browserNavigateSchema,
+  browserTabSchema,
+  browserUrlSchema,
+  browserVisibleSchema,
   clipboardWriteSchema,
   commandCompleteSchema,
   contextDiffDetailSchema,
@@ -36,6 +41,7 @@ import {
 } from '@contract/schemas'
 import { compactSessionEvent, trimMessageUpdate } from '@contract/stream'
 import type { HostState } from './state'
+import type { BrowserManager } from './browser'
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -87,7 +93,10 @@ class Coalescer {
   }
 }
 
-export function registerIpc(state: HostState): () => void {
+export function registerIpc(
+  state: HostState,
+  getBrowser: () => BrowserManager | null = () => null
+): () => void {
   const coalescer = new Coalescer((events) => {
     broadcast(IPC_EVENTS.session, events.map((e) => ({ ...e, data: capPayload(e.data) })))
   })
@@ -243,6 +252,53 @@ export function registerIpc(state: HostState): () => void {
 
   ipcMain.handle(IPC.attachmentsPick, () => state.pickAttachments())
 
+  ipcMain.handle(IPC.browserGet, () => getBrowser()?.state() ?? { tabs: [], activeTabId: null })
+
+  ipcMain.handle(IPC.browserCreate, async (_event, payload: unknown) => {
+    const { url } = browserUrlSchema.parse(payload ?? {})
+    return (await getBrowser()?.create(url ?? 'about:blank')) ?? { tabs: [], activeTabId: null }
+  })
+
+  ipcMain.handle(IPC.browserClose, async (_event, payload: unknown) => {
+    const { tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.close(tabId)) ?? { tabs: [], activeTabId: null }
+  })
+
+  ipcMain.handle(IPC.browserActivate, async (_event, payload: unknown) => {
+    const { tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.activate(tabId)) ?? { tabs: [], activeTabId: null }
+  })
+
+  ipcMain.handle(IPC.browserNavigate, async (_event, payload: unknown) => {
+    const { tabId, url } = browserNavigateSchema.parse(payload)
+    return (await getBrowser()?.navigate(tabId, url)) ?? { tabs: [], activeTabId: null }
+  })
+
+  ipcMain.handle(IPC.browserBack, async (_event, payload: unknown) => {
+    const { tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.back(tabId)) ?? { tabs: [], activeTabId: null }
+  })
+
+  ipcMain.handle(IPC.browserForward, async (_event, payload: unknown) => {
+    const { tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.forward(tabId)) ?? { tabs: [], activeTabId: null }
+  })
+
+  ipcMain.handle(IPC.browserReload, async (_event, payload: unknown) => {
+    const { tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.reload(tabId)) ?? { tabs: [], activeTabId: null }
+  })
+
+  ipcMain.handle(IPC.browserBounds, async (_event, payload: unknown) => {
+    const bounds = browserBoundsSchema.parse(payload)
+    await getBrowser()?.setBounds(bounds)
+  })
+
+  ipcMain.handle(IPC.browserVisible, async (_event, payload: unknown) => {
+    const { visible } = browserVisibleSchema.parse(payload)
+    await getBrowser()?.setVisible(visible)
+  })
+
   ipcMain.handle(IPC.gitStatus, async (_event, payload: unknown) => {
     const { tabId } = tabIdSchema.parse(payload)
     return state.getGitStatus(tabId)
@@ -353,6 +409,16 @@ export function registerIpc(state: HostState): () => void {
     ipcMain.removeHandler(IPC.filesReload)
     ipcMain.removeHandler(IPC.modelsList)
     ipcMain.removeHandler(IPC.attachmentsPick)
+    ipcMain.removeHandler(IPC.browserGet)
+    ipcMain.removeHandler(IPC.browserCreate)
+    ipcMain.removeHandler(IPC.browserClose)
+    ipcMain.removeHandler(IPC.browserActivate)
+    ipcMain.removeHandler(IPC.browserNavigate)
+    ipcMain.removeHandler(IPC.browserBack)
+    ipcMain.removeHandler(IPC.browserForward)
+    ipcMain.removeHandler(IPC.browserReload)
+    ipcMain.removeHandler(IPC.browserBounds)
+    ipcMain.removeHandler(IPC.browserVisible)
     ipcMain.removeHandler(IPC.gitStatus)
     ipcMain.removeHandler(IPC.gitDiff)
     ipcMain.removeHandler(IPC.contextDiffGet)

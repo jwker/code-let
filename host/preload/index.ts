@@ -12,6 +12,7 @@ import {
   type FileContent,
   type FileEntry,
   type FileSearchResult,
+  type BrowserState,
   type GitDiff,
   type GitStatus,
   type HostSnapshot,
@@ -48,6 +49,17 @@ const api: CodeletApi = {
   compactTab: (tabId) => ipcRenderer.invoke(IPC.promptCompact, { tabId }) as Promise<void>,
   pickAttachments: () =>
     ipcRenderer.invoke(IPC.attachmentsPick) as Promise<PickAttachmentsResult>,
+  getBrowserState: () => ipcRenderer.invoke(IPC.browserGet) as Promise<BrowserState>,
+  createBrowserTab: (url) => ipcRenderer.invoke(IPC.browserCreate, { url }) as Promise<BrowserState>,
+  closeBrowserTab: (tabId) => ipcRenderer.invoke(IPC.browserClose, { tabId }) as Promise<BrowserState>,
+  activateBrowserTab: (tabId) => ipcRenderer.invoke(IPC.browserActivate, { tabId }) as Promise<BrowserState>,
+  navigateBrowser: (tabId, url) =>
+    ipcRenderer.invoke(IPC.browserNavigate, { tabId, url }) as Promise<BrowserState>,
+  browserBack: (tabId) => ipcRenderer.invoke(IPC.browserBack, { tabId }) as Promise<BrowserState>,
+  browserForward: (tabId) => ipcRenderer.invoke(IPC.browserForward, { tabId }) as Promise<BrowserState>,
+  browserReload: (tabId) => ipcRenderer.invoke(IPC.browserReload, { tabId }) as Promise<BrowserState>,
+  setBrowserBounds: (bounds) => ipcRenderer.invoke(IPC.browserBounds, bounds) as Promise<void>,
+  setBrowserVisible: (visible) => ipcRenderer.invoke(IPC.browserVisible, { visible }) as Promise<void>,
   getGitStatus: (tabId) =>
     ipcRenderer.invoke(IPC.gitStatus, { tabId }) as Promise<GitStatus>,
   getGitDiff: (tabId, path, scope) =>
@@ -108,6 +120,14 @@ const api: CodeletApi = {
     ipcRenderer.on(IPC_EVENTS.session, handler)
     return () => {
       ipcRenderer.removeListener(IPC_EVENTS.session, handler)
+    }
+  },
+
+  onBrowserState: (listener) => {
+    const handler = (_event: unknown, state: BrowserState): void => listener(state)
+    ipcRenderer.on(IPC_EVENTS.browser, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_EVENTS.browser, handler)
     }
   }
 }

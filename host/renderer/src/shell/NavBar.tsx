@@ -1,13 +1,13 @@
 import type { ReactElement } from 'react'
 import type { NavEntry } from '@contract/index'
 import { useStore } from '../store'
-import { IconAgent, IconBoard, IconCode, IconContext, IconGit, IconMemory, IconTerminal } from './icons'
+import { IconAgent, IconBoard, IconBrowser, IconCode, IconContext, IconGit, IconMemory, IconTerminal } from './icons'
 
 /**
  * 导航栏 —— 原来在左边的导航轨，现在放在右侧面板顶部。
  *
  * 两种形态：
- * - 展开（检视器面板开着）：图标横排，5 个各占一格均匀铺满
+ * - 展开（检视器面板开着）：图标横排，各占一格均匀铺满
  * - 收起（检视器收成 38px 窄轨）：图标竖排
  *
  * **只有图标，没有文字** —— 所以每一项都必须有 `title`，悬停能看到名字。
@@ -20,7 +20,8 @@ const ENTRIES: Array<{ key: NavEntry; label: string; icon: () => ReactElement }>
   { key: 'terminal', label: '终端', icon: IconTerminal },
   { key: 'git', label: 'Git', icon: IconGit },
   { key: 'agent', label: 'Agent', icon: IconAgent },
-  { key: 'context', label: '上下文', icon: IconContext }
+  { key: 'context', label: '上下文', icon: IconContext },
+  { key: 'browser', label: '浏览器', icon: IconBrowser }
 ]
 
 export function NavBar({ compact }: { compact: boolean }) {

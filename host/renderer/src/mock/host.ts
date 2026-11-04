@@ -7,6 +7,7 @@ import type {
   ConversationInfo,
   FileEntry,
   FileSearchResult,
+  BrowserState,
   FileTab,
   GitDiff,
   GitStatus,
@@ -27,6 +28,30 @@ import type {
  *
  * 假数据只到「长得像」为止：不连 Pi，不落盘，不发消息。
  */
+
+const FAKE_BROWSER: BrowserState = {
+  tabs: [
+    {
+      id: 'browser-1',
+      url: 'http://localhost:5173/',
+      title: 'localhost:5173',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      error: null
+    },
+    {
+      id: 'browser-2',
+      url: 'file:///Users/demo/Projects/codelet/docs/index.html',
+      title: 'docs / 索引',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      error: null
+    }
+  ],
+  activeTabId: 'browser-1'
+}
 
 const FAKE_GIT_STATUS: GitStatus = {
   repo: true,
@@ -688,6 +713,17 @@ export function createMockApi(): CodeletApi {
       }
     },
 
+    getBrowserState: async () => FAKE_BROWSER,
+    createBrowserTab: async () => FAKE_BROWSER,
+    closeBrowserTab: async () => FAKE_BROWSER,
+    activateBrowserTab: async () => FAKE_BROWSER,
+    navigateBrowser: async () => FAKE_BROWSER,
+    browserBack: async () => FAKE_BROWSER,
+    browserForward: async () => FAKE_BROWSER,
+    browserReload: async () => FAKE_BROWSER,
+    setBrowserBounds: async () => undefined,
+    setBrowserVisible: async () => undefined,
+    onBrowserState: () => () => undefined,
     getGitStatus: async () => FAKE_GIT_STATUS,
     getGitDiff: async (_tabId, path, scope) => ({ ...FAKE_GIT_DIFF, path, scope }),
     getContextDiff: async () => FAKE_CONTEXT_DIFF,

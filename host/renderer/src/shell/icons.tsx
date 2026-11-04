@@ -48,6 +48,14 @@ export const IconCode = () => (
   </Icon>
 )
 
+/** 浏览器 —— 一个带经纬线的地球 */
+export const IconBrowser = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="8" />
+    <path d="M4 12h16M12 4c2.4 2.2 3.6 4.9 3.6 8s-1.2 5.8-3.6 8c-2.4-2.2-3.6-4.9-3.6-8S9.6 6.2 12 4z" />
+  </Icon>
+)
+
 /** Git —— 一条分支线上两个提交点 */
 export const IconGit = () => (
   <Icon>

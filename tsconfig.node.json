@@ -12,6 +12,8 @@
     "playwright.config.ts"
   ],
   "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "jsx": "react-jsx",
     "types": ["node"]
   }
 }
