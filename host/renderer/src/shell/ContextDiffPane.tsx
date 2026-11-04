@@ -47,7 +47,6 @@ export function ContextDiffPane() {
   const diff = useStore((s) => s.snapshot.contextDiff)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
   const contextTurn = useStore((s) => s.contextTurn)
-  const setContextTurn = useStore((s) => s.setContextTurn)
   const [view, setView] = useState<ContextDiffView | null>(diff)
   const [baselineId, setBaselineId] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -155,9 +154,8 @@ export function ContextDiffPane() {
     setLoading(true)
     setError(null)
     try {
-      const next = await host.getApproximateContextDiff(activeTabId)
+      const next = await host.getApproximateContextDiff(activeTabId, contextTurn ?? undefined)
       setBaselineId(null)
-      setContextTurn(null)
       setView(next)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))

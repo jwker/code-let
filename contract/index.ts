@@ -720,7 +720,7 @@ export interface CodeletApi {
     baselineId?: string
   ): Promise<ContextDiffView | null>
   /** 没有请求级快照时，从会话历史重建一份近似对比 */
-  getApproximateContextDiff(tabId: string): Promise<ContextDiffView | null>
+  getApproximateContextDiff(tabId: string, turn?: number): Promise<ContextDiffView | null>
   /** 列出有快照可比较的会话 */
   listContextDiffSessions(): Promise<ContextDiffSession[]>
   /** 列出某个标签属于当前会话的请求快照 */

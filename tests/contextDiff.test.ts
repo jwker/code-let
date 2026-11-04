@@ -85,6 +85,25 @@ describe('上下文快照 diff', () => {
     expect(latest?.baseline?.request).toBe(2)
   })
 
+  it('精确快照和近似快照混合时按轮次合并', () => {
+    const s = store()
+    s.capture('tab-1', snapshot('s1', 'a1'))
+    s.approximate('tab-1', 's1', '/tmp/session.jsonl', '测试会话', [
+      messageEntry('u1', 'user', '第一轮'),
+      messageEntry('a1', 'assistant', '第一轮回答'),
+      messageEntry('u2', 'user', '第二轮'),
+      messageEntry('a2', 'assistant', '第二轮回答'),
+      messageEntry('u3', 'user', '第三轮'),
+      messageEntry('a3', 'assistant', '第三轮回答')
+    ])
+
+    expect(s.listSnapshots('tab-1')).toHaveLength(3)
+    const view = s.getViewForTurn('tab-1', 3)
+    expect(view?.current.id).toBe('approx:s1:3')
+    expect(view?.baseline?.id).toBe('approx:s1:2')
+    expect(view?.approximate).toBe(true)
+  })
+
   it('同会话同位置、同角色的内容变化算修改', () => {
     const s = store()
     s.capture('tab-1', snapshot('s1', 'a1'))

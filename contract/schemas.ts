@@ -118,6 +118,11 @@ export const contextDiffGetSchema = z.object({
   baselineId: z.string().min(1).optional()
 })
 
+export const contextDiffApproximateSchema = z.object({
+  tabId: z.string().min(1),
+  turn: z.number().int().positive().optional()
+})
+
 export const contextDiffTurnSchema = z.object({
   tabId: z.string().min(1),
   turn: z.number().int().positive(),

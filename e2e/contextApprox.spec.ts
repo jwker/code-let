@@ -92,7 +92,11 @@ test.describe.serial('上下文 Diff · 近似基线', () => {
     const pane = page.locator('.insp-body')
     await expect(pane.getByText('还没有请求级上下文快照')).toBeVisible()
 
+    // 选中第 3 轮后再重建：重建完成后必须停在第 3 轮，而不是跳回最新两次。
+    await page.locator('.conv-nav-hit').nth(2).click()
+    await expect(pane.getByText('第 3 轮 · 最后两次请求')).toBeVisible()
     await pane.getByRole('button', { name: '从会话历史重建近似对比' }).click()
+    await expect(pane.getByText('第 3 轮 · 最后两次请求')).toBeVisible()
     await expect(pane.getByText('近似视图')).toBeVisible()
     await expect(pane.getByText('上下文已压缩（近似）')).toBeVisible()
     await expect(pane.getByText('压缩摘要正文')).toBeVisible()

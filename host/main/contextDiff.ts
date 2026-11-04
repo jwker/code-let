@@ -366,11 +366,8 @@ export class ContextDiffStore {
     turn: number,
     baselineId?: string
   ): ContextDiffView | null {
-    const exact = this.tabs.get(tabId)
-    const history = exact && exact.length > 0
-      ? exact
-      : this.approximateTabs.get(tabId)
-    if (!history || history.length === 0) return null
+    const history = this.mergedHistory(tabId)
+    if (history.length === 0) return null
 
     const upTo = history.filter((snapshot) => snapshot.turn <= turn)
     const current = upTo.at(-1)
@@ -382,7 +379,20 @@ export class ContextDiffStore {
         : null
 
     const view = this.buildView(current, baseline)
-    return exact && exact.length > 0 ? view : { ...view, approximate: true }
+    return { ...view, approximate: current.id.startsWith('approx:') }
+  }
+
+  /**
+   * 请求级快照和近似快照可能混在一起：Codelet 能采集到的轮次用精确快照，
+   * 其余轮次用近似重放。同一个 turn 以精确快照为准，近似只补缺的轮次。
+   */
+  private mergedHistory(tabId: string): Snapshot[] {
+    const exact = this.tabs.get(tabId) ?? []
+    const approximate = this.approximateTabs.get(tabId) ?? []
+    if (approximate.length === 0) return exact
+    const exactTurns = new Set(exact.map((snapshot) => snapshot.turn))
+    return [...exact, ...approximate.filter((snapshot) => !exactTurns.has(snapshot.turn))]
+      .sort((a, b) => a.turn - b.turn || a.request - b.request)
   }
 
   /** 当前请求对比默认上一次请求，或指定的快照 */
@@ -409,9 +419,7 @@ export class ContextDiffStore {
   }
 
   listSnapshots(tabId: string): ContextSnapshotRef[] {
-    const exact = this.tabs.get(tabId)
-    if (exact && exact.length > 0) return exact.map(refOf)
-    return (this.approximateTabs.get(tabId) ?? []).map(refOf)
+    return this.mergedHistory(tabId).map(refOf)
   }
 
   listSessions(): ContextDiffSession[] {
