@@ -30,6 +30,28 @@ export interface TurnSummary {
   aborted: boolean
 }
 
+/**
+ * 流式过程中，找到最后一段可以暂时当成答案的助手正文。
+ *
+ * 只有它后面没有工具调用或工具结果时才成立；如果后面又出现工具，
+ * 说明这段只是下一轮工具之前的叙述，仍然属于过程。
+ */
+export function findLiveAnswerIndex(body: readonly StreamItem[]): number {
+  for (let i = body.length - 1; i >= 0; i -= 1) {
+    const item = body[i]
+    if (item.kind !== 'message' || item.role !== 'assistant' || !item.text.trim()) continue
+    const hasToolAfter = body
+      .slice(i + 1)
+      .some(
+        (next) =>
+          next.kind === 'tool' ||
+          (next.kind === 'message' && next.role === 'toolResult')
+      )
+    return hasToolAfter ? -1 : i
+  }
+  return -1
+}
+
 /** 还没有最终答案时，只统计过程里的工具和叙述段落 */
 export function summarizeProcess(body: readonly StreamItem[]): TurnSummary {
   let toolCalls = 0

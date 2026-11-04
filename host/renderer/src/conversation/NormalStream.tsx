@@ -5,7 +5,7 @@ import { AnsiText } from './AnsiText'
 import { groupBody } from './groupBody'
 import { Markdown } from './Markdown'
 import { ReplyMeta } from './ReplyMeta'
-import { summarizeProcess, summarizeTurn, type TurnSummary } from './turnMeta'
+import { findLiveAnswerIndex, summarizeProcess, summarizeTurn, type TurnSummary } from './turnMeta'
 import { CustomMessage } from './CustomMessage'
 import { useToolOutputs } from './useToolOutputs'
 import { formatDuration } from './usageFormat'
@@ -130,11 +130,17 @@ function TurnRow({
   const summary = useMemo(() => summarizeTurn(turn.body), [turn.body])
   const turnStartedAt = useRef(Date.now()).current
 
-  // 整轮还没结束时，助手输出仍然属于过程：不提前把最后一段当成最终答案拿出去。
+  // 流式过程中：最后一段后面没有工具的助手正文可以边流边显示；
+  // 它如果只是下一轮工具前的叙述，后续工具出现后会重新并回过程。
   if (streaming) {
-    const processSummary = summarizeProcess(turn.body)
-    const processItems = turn.body.filter((item) => item.kind !== 'custom')
-    const customItems = turn.body.filter((item): item is CustomItem => item.kind === 'custom')
+    const liveAnswerIndex = findLiveAnswerIndex(turn.body)
+    const processBody = liveAnswerIndex >= 0 ? turn.body.slice(0, liveAnswerIndex) : turn.body
+    const answerItem = liveAnswerIndex >= 0 ? turn.body[liveAnswerIndex] : null
+    const afterAnswer = liveAnswerIndex >= 0 ? turn.body.slice(liveAnswerIndex + 1) : []
+    const processSummary = summarizeProcess(processBody)
+    const processItems = processBody.filter((item) => item.kind !== 'custom')
+    const customBefore = processBody.filter((item): item is CustomItem => item.kind === 'custom')
+    const customAfter = afterAnswer.filter((item): item is CustomItem => item.kind === 'custom')
     return (
       <div className="flex flex-col gap-2">
         <UserBubble item={turn.user} userIndex={turn.userIndex} />
@@ -149,10 +155,22 @@ function TurnRow({
             streaming
           />
         )}
-        {customItems.length > 0 && (
+        {customBefore.length > 0 && (
           <div className="flex flex-col gap-1">
-            {customItems.map((item, index) => (
-              <CustomMessage key={`custom-stream-${index}`} item={item} />
+            {customBefore.map((item, index) => (
+              <CustomMessage key={`custom-stream-before-${index}`} item={item} />
+            ))}
+          </div>
+        )}
+        {answerItem?.kind === 'message' && (
+          <div className="text-[14.5px] leading-[1.9] text-fg-1">
+            <Markdown text={answerItem.text} variant="normal" />
+          </div>
+        )}
+        {customAfter.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {customAfter.map((item, index) => (
+              <CustomMessage key={`custom-stream-after-${index}`} item={item} />
             ))}
           </div>
         )}

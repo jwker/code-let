@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { StreamItem } from '@contract/index'
-import { summarizeProcess, summarizeTurn } from '../host/renderer/src/conversation/turnMeta'
+import { findLiveAnswerIndex, summarizeProcess, summarizeTurn } from '../host/renderer/src/conversation/turnMeta'
 
 /**
  * 一轮的结构：过程 / 最终答案 / 计量。
@@ -58,6 +58,25 @@ describe('认出最终答案', () => {
   it('一条正文都没有就认不出答案', () => {
     expect(summarizeTurn([say('', { output: 1, cacheRead: 1 }), tool('t1')])).toBeUndefined()
     expect(summarizeTurn([])).toBeUndefined()
+  })
+})
+
+describe('流式中的最终答案判断', () => {
+  it('最后一段后面没有工具时，可以边流边显示', () => {
+    expect(findLiveAnswerIndex([tool('t1'), say('答案')]) ).toBe(1)
+    expect(findLiveAnswerIndex([say('只有答案')])).toBe(0)
+  })
+
+  it('后面还有工具时，这段仍然属于过程', () => {
+    expect(findLiveAnswerIndex([say('先读一下'), tool('t1')])).toBe(-1)
+    expect(findLiveAnswerIndex([tool('t1'), say('中间叙述'), tool('t2')])).toBe(-1)
+  })
+
+  it('助手正文后面跟着工具结果时，也不当成答案', () => {
+    expect(findLiveAnswerIndex([
+      say('过程'),
+      { kind: 'message', role: 'toolResult', text: 'result', callId: 't1' }
+    ])).toBe(-1)
   })
 })
 
