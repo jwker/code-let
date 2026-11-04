@@ -130,6 +130,37 @@ function TurnRow({
   const summary = useMemo(() => summarizeTurn(turn.body), [turn.body])
   const turnStartedAt = useRef(Date.now()).current
 
+  // 整轮还没结束时，助手输出仍然属于过程：不提前把最后一段当成最终答案拿出去。
+  if (streaming) {
+    const processSummary = summarizeProcess(turn.body)
+    const processItems = turn.body.filter((item) => item.kind !== 'custom')
+    const customItems = turn.body.filter((item): item is CustomItem => item.kind === 'custom')
+    return (
+      <div className="flex flex-col gap-2">
+        <UserBubble item={turn.user} userIndex={turn.userIndex} />
+        {processItems.length > 0 && (
+          <ProcessBlock
+            summary={processSummary}
+            items={processItems}
+            outputs={outputs}
+            isExpanded={isExpanded}
+            onToggle={onToggle}
+            toolIds={toolIds}
+            streaming
+          />
+        )}
+        {customItems.length > 0 && (
+          <div className="flex flex-col gap-1">
+            {customItems.map((item, index) => (
+              <CustomMessage key={`custom-stream-${index}`} item={item} />
+            ))}
+          </div>
+        )}
+        <ReplyMeta summary={processSummary} streaming startedAt={turnStartedAt} />
+      </div>
+    )
+  }
+
   // 认不出答案（这一轮没有助手正文）—— 原样铺开，不做主次分层
   if (!summary) {
     const processSummary = summarizeProcess(turn.body)
@@ -155,9 +186,6 @@ function TurnRow({
               <CustomMessage key={`custom-only-${index}`} item={item} />
             ))}
           </div>
-        )}
-        {streaming && (
-          <ReplyMeta summary={processSummary} streaming startedAt={turnStartedAt} />
         )}
       </div>
     )
