@@ -57,6 +57,7 @@ export function ContextDiffPane() {
     text: string
     truncated: boolean
     released: boolean
+    before: { text: string; truncated: boolean; released: boolean } | null
   } | null>(null)
 
   useEffect(() => {
@@ -147,16 +148,34 @@ export function ContextDiffPane() {
     }
   }
 
-  async function openDetail(snapshotId: string, message: ContextMessageSummary): Promise<void> {
+  async function openDetail(
+    snapshotId: string,
+    message: ContextMessageSummary,
+    baselineId?: string
+  ): Promise<void> {
     if (!activeTabId) return
     setLoading(true)
     try {
-      const result = await host.getContextDiffDetail(activeTabId, snapshotId, message.key)
+      const [result, previous] = await Promise.all([
+        host.getContextDiffDetail(activeTabId, snapshotId, message.key),
+        message.previousKey && baselineId
+          ? host.getContextDiffDetail(activeTabId, baselineId, message.previousKey)
+          : Promise.resolve(null)
+      ])
+      const before =
+        message.previousKey && baselineId
+          ? {
+              text: previous?.text ?? message.previousPreview ?? '',
+              truncated: previous?.truncated ?? false,
+              released: !previous
+            }
+          : null
       setDetail({
-        title: `${roleLabel(message.role)} · ${tokenLabel(message.tokens)} tokens`,
+        title: `${roleLabel(message.role)} · ${tokenLabel(message.tokens)} tokens${before ? ' · 修改' : ''}`,
         text: result?.text ?? message.preview,
         truncated: result?.truncated ?? false,
-        released: !result
+        released: !result,
+        before
       })
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
@@ -256,7 +275,7 @@ export function ContextDiffPane() {
               beforePct={beforePct}
               afterPct={afterPct}
               onBaseline={() => void openPicker()}
-              onDetail={(snapshotId, message) => void openDetail(snapshotId, message)}
+              onDetail={(snapshotId, message, baselineId) => void openDetail(snapshotId, message, baselineId)}
             />
           )}
         </div>
@@ -293,12 +312,28 @@ export function ContextDiffPane() {
                 ×
               </button>
             </header>
-            <div className="min-h-0 overflow-y-auto whitespace-pre-wrap break-words p-4 text-[11.5px] leading-6 text-fg-2">
-              {detail.text}
+            <div className="min-h-0 overflow-y-auto p-4">
+              {detail.before ? (
+                <div className="flex flex-col gap-3">
+                  <DetailBlock label="修改前" text={detail.before.text} tone="before" />
+                  <DetailBlock label="修改后" text={detail.text} />
+                </div>
+              ) : (
+                <div className="whitespace-pre-wrap break-words text-[11.5px] leading-6 text-fg-2">
+                  {detail.text}
+                </div>
+              )}
             </div>
-            {(detail.truncated || detail.released) && (
+            {(detail.truncated || detail.released || detail.before?.truncated || detail.before?.released) && (
               <div className="border-t border-hairline px-4 py-2 text-[10px] text-fg-3">
-                {detail.released ? '详情已释放，上面是 preview。' : '内容过长，只显示前 256KB。'}
+                {[
+                  detail.before?.released && '修改前详情已释放，显示 preview。',
+                  detail.before?.truncated && '修改前内容过长，只显示前 256KB。',
+                  detail.released && '详情已释放，显示 preview。',
+                  detail.truncated && '内容过长，只显示前 256KB。'
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
               </div>
             )}
           </div>
@@ -445,7 +480,7 @@ function SummaryView({
   beforePct: number
   afterPct: number
   onBaseline: () => void
-  onDetail: (snapshotId: string, message: ContextMessageSummary) => void
+  onDetail: (snapshotId: string, message: ContextMessageSummary, baselineId?: string) => void
 }) {
   const currentId = view.current.id
   const baselineId = view.baseline?.id
@@ -502,7 +537,7 @@ function SummaryView({
           title={modified.label}
           messages={modified.messages}
           snapshotId={currentId}
-          onDetail={onDetail}
+          onDetail={(id, message) => onDetail(id, message, baselineId)}
           modified
         />
       )}
@@ -530,6 +565,33 @@ function SummaryView({
         </div>
       )}
     </div>
+  )
+}
+
+function DetailBlock({
+  label,
+  text,
+  tone
+}: {
+  label: string
+  text: string
+  tone?: 'before'
+}) {
+  return (
+    <section>
+      <div className={`mb-1 text-[8.5px] uppercase tracking-[.06em] ${tone === 'before' ? 'text-fg-3' : 'text-ok'}`}>
+        {label}
+      </div>
+      <div
+        className={`whitespace-pre-wrap break-words rounded-md border px-2.5 py-2 text-[11px] leading-6 ${
+          tone === 'before'
+            ? 'border-hairline bg-panel text-fg-3'
+            : 'border-hairline-strong bg-surface text-fg-2'
+        }`}
+      >
+        {text}
+      </div>
+    </section>
   )
 }
 

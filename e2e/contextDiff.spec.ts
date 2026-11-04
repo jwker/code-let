@@ -38,8 +38,13 @@ test.describe.serial('上下文 Diff', () => {
       })
       manager.appendMessage({
         role: 'user',
-        content: [{ type: 'text', text: '这次新增的用户消息' }],
+        content: [{ type: 'text', text: '修改后的用户消息' }],
         timestamp: Date.now() + 1
+      })
+      manager.appendMessage({
+        role: 'user',
+        content: [{ type: 'text', text: '这次新增的用户消息' }],
+        timestamp: Date.now() + 2
       })
       const sessionFile = manager.getSessionFile()
       if (!sessionFile) throw new Error('会话文件没有创建出来')
@@ -86,6 +91,11 @@ test.describe.serial('上下文 Diff', () => {
           }
         ]
       }
+      const changed = {
+        ...base.messages[1],
+        hash: digest('user', '修改后的用户消息'),
+        preview: '修改后的用户消息'
+      }
       const current = {
         ...base,
         id: `${sessionId}:2`,
@@ -94,7 +104,9 @@ test.describe.serial('上下文 Diff', () => {
         totalTokens: 12,
         capturedAt: Date.now() + 1,
         messages: [
-          ...base.messages,
+          base.messages[0],
+          changed,
+          base.messages[2],
           {
             key: 'u2',
             role: 'user',
@@ -136,16 +148,24 @@ test.describe.serial('上下文 Diff', () => {
     }
   })
 
-  test('从持久化索引显示摘要，并能打开消息详情', async () => {
+  test('从持久化索引显示摘要，修改项对照旧新内容', async () => {
     await page.getByRole('button', { name: '上下文', exact: true }).click()
     const pane = page.locator('.insp-body')
     await expect(pane.getByText('上下文变化')).toBeVisible()
+    await expect(pane.getByText('修改后的用户消息')).toBeVisible()
     await expect(pane.getByText('新增消息预览')).toBeVisible()
     await expect(pane.getByText('最近两次请求')).toBeVisible()
 
-    await pane.getByRole('button', { name: /USER/ }).first().click()
+    await pane.getByRole('button', { name: /USER 修改后的用户消息/ }).click()
     const detail = page.getByRole('dialog', { name: '上下文消息详情' })
     await expect(detail).toBeVisible()
+    await expect(detail).toContainText('修改前')
+    await expect(detail).toContainText('修改后')
+    await expect(detail).toContainText('上一次请求')
+    await expect(detail).toContainText('修改后的用户消息')
+    await page.getByRole('button', { name: '关闭详情' }).click()
+
+    await pane.getByRole('button', { name: /USER 新增消息预览/ }).click()
     await expect(detail).toContainText('这次新增的用户消息')
     await page.getByRole('button', { name: '关闭详情' }).click()
   })

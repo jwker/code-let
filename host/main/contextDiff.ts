@@ -389,7 +389,7 @@ export class ContextDiffStore {
 
     const added: StoredMessage[] = []
     const removed: StoredMessage[] = []
-    const modified: StoredMessage[] = []
+    const modified: Array<{ message: StoredMessage; previous: StoredMessage }> = []
     const shared: StoredMessage[] = []
 
     const alignable =
@@ -409,7 +409,9 @@ export class ContextDiffStore {
           baseGap.length === currentGap.length &&
           baseGap.every((message, index) => message.role === currentGap[index].role)
         ) {
-          modified.push(...currentGap)
+          modified.push(
+            ...currentGap.map((message, index) => ({ message, previous: baseGap[index] }))
+          )
         } else {
           removed.push(...baseGap)
           added.push(...currentGap)
@@ -446,8 +448,12 @@ export class ContextDiffStore {
       groups.push({
         kind: 'modified',
         label: '修改',
-        messages: modified.map(summaryOf),
-        tokens: modified.reduce((sum, message) => sum + message.tokens, 0)
+        messages: modified.map(({ message, previous }) => ({
+          ...summaryOf(message),
+          previousKey: previous.key,
+          previousPreview: previous.preview
+        })),
+        tokens: modified.reduce((sum, item) => sum + item.message.tokens, 0)
       })
     }
     if (added.length > 0) {

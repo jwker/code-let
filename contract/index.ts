@@ -396,6 +396,10 @@ export interface ContextMessageSummary {
   hash: string
   tokens: number
   preview: string
+  /** 修改项在基线快照里的对应消息；新增/删除没有 */
+  previousKey?: string
+  /** 基线消息的 preview，详情不可用时兜底 */
+  previousPreview?: string
 }
 
 /** 一次模型请求的上下文快照引用 */

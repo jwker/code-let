@@ -69,8 +69,11 @@ describe('上下文快照 diff', () => {
     expect(view?.counts.removed).toBe(0)
     expect(view?.counts.modified).toBe(1)
     expect(view?.counts.shared).toBe(1)
-    expect(view?.groups.find((group) => group.kind === 'modified')?.label).toBe('修改')
-    expect(view?.groups.find((group) => group.kind === 'modified')?.messages[0].preview).toBe('a2')
+    const modified = view?.groups.find((group) => group.kind === 'modified')
+    expect(modified?.label).toBe('修改')
+    expect(modified?.messages[0].preview).toBe('a2')
+    expect(modified?.messages[0].previousKey).toBe('a')
+    expect(modified?.messages[0].previousPreview).toBe('a1')
   })
 
   it('跨会话按 hash 分共享/仅基线/仅当前', () => {
