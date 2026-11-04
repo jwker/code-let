@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import type {
   ContextDiffGroup,
-  ContextDiffSession,
   ContextDiffView,
   ContextMessageSummary,
   ContextSnapshotRef
@@ -46,10 +45,6 @@ export function ContextDiffPane() {
   const diff = useStore((s) => s.snapshot.contextDiff)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
   const [view, setView] = useState<ContextDiffView | null>(diff)
-  const [baselineId, setBaselineId] = useState<string | null>(null)
-  const [mode, setMode] = useState<'summary' | 'history'>('summary')
-  const [sessions, setSessions] = useState<ContextDiffSession[]>([])
-  const [snapshots, setSnapshots] = useState<ContextSnapshotRef[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [detail, setDetail] = useState<{
@@ -61,32 +56,14 @@ export function ContextDiffPane() {
 
   useEffect(() => {
     setView(diff)
-    setBaselineId(null)
-    setMode('summary')
     setDetail(null)
     setError(null)
   }, [activeTabId])
 
   useEffect(() => {
-    if (!baselineId) setView(diff)
-  }, [diff, baselineId])
+    setView(diff)
+  }, [diff])
 
-
-  async function chooseBaseline(snapshotId: string): Promise<void> {
-    if (!activeTabId) return
-    setLoading(true)
-    setError(null)
-    try {
-      const next = await host.getContextDiff(activeTabId, snapshotId)
-      setBaselineId(snapshotId)
-      setView(next)
-      setMode('summary')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      setLoading(false)
-    }
-  }
 
   async function loadApproximate(): Promise<void> {
     if (!activeTabId) return
@@ -94,28 +71,7 @@ export function ContextDiffPane() {
     setError(null)
     try {
       const next = await host.getApproximateContextDiff(activeTabId)
-      setBaselineId(null)
       setView(next)
-      setMode('summary')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function openHistory(): Promise<void> {
-    if (!activeTabId) return
-    setMode('history')
-    setLoading(true)
-    setError(null)
-    try {
-      const [sessionList, snapshotList] = await Promise.all([
-        host.listContextDiffSessions(),
-        host.listContextDiffSnapshots(activeTabId)
-      ])
-      setSessions(sessionList)
-      setSnapshots(snapshotList)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
     } finally {
@@ -165,23 +121,7 @@ export function ContextDiffPane() {
         <header className="flex h-10 flex-none items-center gap-2 border-b border-hairline px-3">
           <h2 className="text-[13px] font-medium text-fg-1">上下文变化</h2>
           <span className="rounded border border-hairline px-1.5 text-[9px] text-fg-3">Diff</span>
-          {mode === 'history' ? (
-            <button
-              type="button"
-              onClick={() => setMode('summary')}
-              className="ml-auto text-[10px] text-fg-3 hover:text-fg-1"
-            >
-              ← 返回
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void openHistory()}
-              className="ml-auto text-[10px] text-fg-3 hover:text-fg-1"
-            >
-              选择基线
-            </button>
-          )}
+          <span className="ml-auto text-[9px] text-fg-3">最近两次请求</span>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -194,14 +134,7 @@ export function ContextDiffPane() {
             </div>
           )}
 
-          {mode === 'history' ? (
-            <HistoryView
-              snapshots={snapshots}
-              sessions={sessions}
-              current={current}
-              onPick={(id) => void chooseBaseline(id)}
-            />
-          ) : !view || !current ? (
+          {!view || !current ? (
             <div className="px-2 py-10 text-center text-[11.5px] leading-7 text-fg-3">
               <div className="mb-2 text-[18px] text-fg-2">≋</div>
               还没有请求级上下文快照。<br />
@@ -228,13 +161,12 @@ export function ContextDiffPane() {
               compacted={compacted}
               beforePct={beforePct}
               afterPct={afterPct}
-              onBaseline={() => void openHistory()}
               onDetail={(snapshotId, message) => void openDetail(snapshotId, message)}
             />
           )}
         </div>
 
-        {mode === 'summary' && view && (
+        {view && (
           <div className="flex flex-none items-center gap-2 border-t border-hairline px-3 py-1.5 text-[9px] text-fg-3">
             <span>{view.counts.shared} 条共享 · {view.counts.added + view.counts.removed} 条变化</span>
             <span className="ml-auto">详情按需读取</span>
@@ -288,7 +220,6 @@ function SummaryView({
   compacted,
   beforePct,
   afterPct,
-  onBaseline,
   onDetail
 }: {
   view: ContextDiffView
@@ -297,7 +228,6 @@ function SummaryView({
   compacted?: ContextDiffGroup
   beforePct: number
   afterPct: number
-  onBaseline: () => void
   onDetail: (snapshotId: string, message: ContextMessageSummary) => void
 }) {
   const currentId = view.current.id
@@ -310,7 +240,6 @@ function SummaryView({
           label="基线"
           value={view.baseline ? refLabel(view.baseline) : '还没有可比较的上一次请求'}
           tokens={view.baseline?.totalTokens ?? 0}
-          onClick={onBaseline}
         />
       </div>
 
@@ -479,74 +408,3 @@ function MessageGroup({
   )
 }
 
-function HistoryView({
-  snapshots,
-  sessions,
-  current,
-  onPick
-}: {
-  snapshots: ContextSnapshotRef[]
-  sessions: ContextDiffSession[]
-  current: ContextSnapshotRef | null
-  onPick: (id: string) => void
-}) {
-  return (
-    <div className="flex flex-col gap-3">
-      <div>
-        <div className="mb-1.5 text-[9px] uppercase tracking-[.06em] text-fg-3">本会话请求</div>
-        <div className="flex flex-col gap-1">
-          {snapshots.length === 0 && <div className="text-[10px] text-fg-3">还没有请求快照。</div>}
-          {[...snapshots].reverse().map((snapshot) => {
-            const active = snapshot.id === current?.id
-            return (
-              <button
-                key={snapshot.id}
-                type="button"
-                onClick={() => onPick(snapshot.id)}
-                className={`flex items-center gap-2 rounded-md border px-2 py-1.5 text-left text-[9.5px] ${active ? 'border-hairline-strong bg-accent-wash text-fg-1' : 'border-transparent text-fg-2 hover:bg-sunken'}`}
-              >
-                <span className="font-mono text-[8px] text-fg-3">第 {snapshot.turn} 轮 · 第 {snapshot.request} 次</span>
-                <span className="ml-auto font-mono text-[8px] text-fg-3">{tokenLabel(snapshot.totalTokens)}</span>
-                {active && <span className="rounded-full border border-ok/30 bg-ok-wash px-1 text-[8px] text-ok">当前</span>}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      <div>
-        <div className="mb-1.5 text-[9px] uppercase tracking-[.06em] text-fg-3">跨会话基线</div>
-        <div className="flex flex-col gap-1">
-          {sessions.length === 0 && <div className="text-[10px] text-fg-3">还没有已保存的跨会话快照。</div>}
-          {sessions.map((session) => (
-            <div key={session.sessionId} className="rounded-md border border-hairline bg-panel px-2 py-1.5">
-              <div className="truncate text-[9.5px] text-fg-2">
-                {session.sessionName || session.sessionId.slice(0, 10)}
-              </div>
-              <div className="mt-1 flex gap-1">
-                {session.first && (
-                  <button
-                    type="button"
-                    onClick={() => onPick(session.first!.id)}
-                    className="rounded border border-hairline px-1.5 py-0.5 text-[8px] text-fg-3 hover:bg-sunken"
-                  >
-                    第一次 · {tokenLabel(session.first.totalTokens)}
-                  </button>
-                )}
-                {session.last && (
-                  <button
-                    type="button"
-                    onClick={() => onPick(session.last!.id)}
-                    className="rounded border border-hairline px-1.5 py-0.5 text-[8px] text-fg-3 hover:bg-sunken"
-                  >
-                    最后一次 · {tokenLabel(session.last.totalTokens)}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}

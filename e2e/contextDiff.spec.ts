@@ -115,7 +115,7 @@ test.describe.serial('上下文 Diff', () => {
     const pane = page.locator('.insp-body')
     await expect(pane.getByText('上下文变化')).toBeVisible()
     await expect(pane.getByText('这次新增的用户消息')).toBeVisible()
-    await expect(pane.getByText('选择基线')).toBeVisible()
+    await expect(pane.getByText('最近两次请求')).toBeVisible()
 
     await pane.getByRole('button', { name: /USER/ }).first().click()
     const detail = page.getByRole('dialog', { name: '上下文消息详情' })
