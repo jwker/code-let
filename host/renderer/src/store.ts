@@ -183,6 +183,8 @@ interface RendererStore {
   sidebarOpen: boolean
   /** 从输入框发起的改名请求 —— 侧栏看到后进入行内编辑 */
   renameRequest: { path: string; nonce: number } | null
+  /** 新建对话请求 —— App 看到后弹出「先起名再建」的对话框 */
+  newConversationRequest: { cwd: string; nonce: number } | null
   /** 模型选择器的锚点（null = 关着）。position: fixed 用，贴着触发它的控件上方 */
   modelPickerAnchor: { left: number; bottom: number } | null
   /** 临时对话是否收起成右下角胶囊 */
@@ -230,6 +232,10 @@ interface RendererStore {
   requestRename: (path: string) => void
   /** 侧栏已经处理掉改名请求 */
   consumeRenameRequest: () => void
+  /** 请求新建对话（先起名） */
+  requestNewConversation: (cwd: string) => void
+  /** 新建对话对话框已经处理掉请求 */
+  consumeNewConversationRequest: () => void
   bumpEvents: (count: number) => void
   /** 换会话时整体替换内容流（R5）—— 按标签存 */
   setItems: (tabId: string, items: StreamItem[]) => void
@@ -286,6 +292,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   contextTurn: null,
   sidebarOpen: loadSidebarOpen(),
   renameRequest: null,
+  newConversationRequest: null,
   modelPickerAnchor: null,
   tempMinimized: false,
   models: [],
@@ -441,6 +448,14 @@ export const useStore = create<RendererStore>((set, get) => ({
   },
 
   consumeRenameRequest: () => set({ renameRequest: null }),
+
+  requestNewConversation: (cwd) => {
+    set((state) => ({
+      newConversationRequest: { cwd, nonce: (state.newConversationRequest?.nonce ?? 0) + 1 }
+    }))
+  },
+
+  consumeNewConversationRequest: () => set({ newConversationRequest: null }),
 
   openModelPicker: (anchor) => {
     set({ modelPickerAnchor: anchor })

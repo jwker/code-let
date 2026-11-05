@@ -144,8 +144,8 @@ export function registerIpc(
   })
 
   ipcMain.handle(IPC.tabsNew, async (_event, payload: unknown) => {
-    const { cwd } = tabNewSchema.parse(payload)
-    await state.newConversation(cwd)
+    const { cwd, name } = tabNewSchema.parse(payload)
+    await state.newConversation(cwd, name)
     return state.snapshot()
   })
 

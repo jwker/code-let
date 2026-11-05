@@ -106,6 +106,8 @@ export interface PiRuntimePort {
    * 没有就打开会话文件追加一条 `session_info`。
    */
   renameSession(path: string, name: string): Promise<void>
+  /** 给某个标签的会话起名（新建时用 —— 那时还没有会话文件路径） */
+  setSessionName(tabId: string, name: string): Promise<void>
   /** 列某个标签可用的 `/` 命令（Pi 模板、扩展、技能） */
   listCommands(tabId: string): Promise<CommandOption[]>
   /** 列某个扩展命令的参数候选 */
@@ -717,6 +719,12 @@ export class PiRuntime implements PiRuntimePort {
     // 没有 runtime：文件必须还在 —— open() 遇到不存在的路径会新建一个会话，改错文件
     if (!existsSync(path)) throw new TabSessionMissingError(path)
     SessionManager.open(path).appendSessionInfo(name)
+  }
+
+  async setSessionName(tabId: string, name: string): Promise<void> {
+    const session = this.tabs.get(tabId)?.runtime?.session
+    if (!session) throw new Error('runtime 尚未启动')
+    session.setSessionName(name)
   }
 
   /** 往某个标签发一条用户消息 */

@@ -70,6 +70,7 @@ export function ConversationArea() {
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const requestRename = useStore((s) => s.requestRename)
+  const requestNewConversation = useStore((s) => s.requestNewConversation)
   /**
    * 这个标签正在中止 —— 主进程说的「abort 还没返回」。
    *
@@ -630,9 +631,8 @@ export function ConversationArea() {
           showNotice('error', '这个标签没有目录')
           return
         }
-        void host.newConversation(cwd).catch((error) => {
-          showNotice('error', error instanceof Error ? error.message : String(error))
-        })
+        // 先起名 —— 名字在新建对话框里定
+        requestNewConversation(cwd)
         return
       }
       case 'model': {

@@ -459,8 +459,20 @@ export class HostState extends EventEmitter {
   }
 
   /** 在某个目录里新建会话 → 开成新标签 */
-  async newConversation(cwd: string): Promise<void> {
-    await this.openTab({ cwd })
+  /**
+   * 在某个目录里新建会话。
+   *
+   * name 是新建对话框里定的名字：写进 Pi 的会话文件（`session_info` 条目），
+   * 也当标签标题。名字在会话文件还没建的时候只存在内存里，
+   * 等第一条消息落盘时一并写出去 —— Pi 就是这么设计的，不用额外处理。
+   */
+  async newConversation(cwd: string, name?: string): Promise<void> {
+    const trimmed = name?.trim() ?? ''
+    const id = await this.openTab({ cwd, ...(trimmed ? { title: trimmed } : {}) })
+    if (!trimmed) return
+    await this.pi.setSessionName(id, trimmed)
+    this.readSession()
+    this.push()
   }
 
   /** 切到某个标签 */

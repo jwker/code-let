@@ -293,6 +293,7 @@ function OverflowMenu({ tabs, onPick }: { tabs: TabInfo[]; onPick: (id: string) 
 
 /** 「＋」：按项目列的菜单（新建对话需要一个目录，而「当前项目」这个概念已经没了） */
 function NewTabMenu({ projects }: { projects: ProjectEntry[] }) {
+  const requestNewConversation = useStore((s) => s.requestNewConversation)
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -339,7 +340,7 @@ function NewTabMenu({ projects }: { projects: ProjectEntry[] }) {
               role="menuitem"
               onClick={() => {
                 setOpen(false)
-                void host.newConversation(project.path)
+                requestNewConversation(project.path)
               }}
               className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] text-fg-1 transition-colors hover:bg-sunken"
             >

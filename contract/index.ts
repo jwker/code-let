@@ -850,8 +850,8 @@ export interface CodeletApi {
   renameConversation(path: string, name: string): Promise<HostSnapshot>
   /** 打开一个已有会话 → 开成新标签 */
   openConversation(path: string, cwd: string): Promise<HostSnapshot>
-  /** 在某个目录里新建会话 → 开成新标签 */
-  newConversation(cwd: string): Promise<HostSnapshot>
+  /** 在某个目录里新建会话 → 开成新标签。name 为空时标题退回首条用户消息 */
+  newConversation(cwd: string, name?: string): Promise<HostSnapshot>
   /** 切到某个标签 */
   activateTab(tabId: string): Promise<HostSnapshot>
   /** 关掉某个标签 */

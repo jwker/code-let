@@ -68,7 +68,9 @@ export const tabOpenSchema = z.object({
 
 export const tabNewSchema = z.object({
   /** 会话要建在哪个目录 */
-  cwd: z.string().min(1)
+  cwd: z.string().min(1),
+  /** 新建时定的名字；不给就用首条消息当标题 */
+  name: z.string().optional()
 })
 
 export const promptSchema = z.object({

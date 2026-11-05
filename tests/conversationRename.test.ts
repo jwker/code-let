@@ -95,6 +95,8 @@ class FakePi implements PiRuntimePort {
     SessionManager.open(path).appendSessionInfo(name)
   }
 
+  async setSessionName(): Promise<void> {}
+
   async listCommands(): Promise<never[]> {
     return []
   }

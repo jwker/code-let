@@ -50,6 +50,7 @@ class FakePi implements PiRuntimePort {
   }
   async selectModel(): Promise<void> {}
   async renameSession(): Promise<void> {}
+  async setSessionName(): Promise<void> {}
   async listCommands(): Promise<CommandOption[]> {
     return []
   }

@@ -7,6 +7,7 @@ import { ModelPicker } from './shell/ModelPicker'
 import { TemporaryChat } from './shell/TemporaryChat'
 import { PaneResizer } from './shell/PaneResizer'
 import { createBrowserFocusController } from './shell/browserFocus'
+import { NewConversationDialog, randomConversationName } from './shell/NewConversationDialog'
 import { Sidebar } from './shell/Sidebar'
 import { TitleBar } from './shell/TitleBar'
 import {
@@ -42,6 +43,15 @@ export function App() {
   const selectModel = useStore((s) => s.selectModel)
   const closeModelPicker = useStore((s) => s.closeModelPicker)
   const currentModel = useStore((s) => s.snapshot.session.model)
+  const newConversationRequest = useStore((s) => s.newConversationRequest)
+  const consumeNewConversationRequest = useStore((s) => s.consumeNewConversationRequest)
+  /** 新建对话对话框的默认名字 —— 每开一次新拟一个 */
+  const [newName, setNewName] = useState(randomConversationName)
+  const [creating, setCreating] = useState(false)
+
+  useEffect(() => {
+    if (newConversationRequest) setNewName(randomConversationName())
+  }, [newConversationRequest])
 
   const shellRef = useRef<HTMLDivElement>(null)
   const [sideWidth, setSideWidth] = useState(loadSidebarWidth)
@@ -264,6 +274,28 @@ export function App() {
       )}
 
       <TemporaryChat />
+
+      {/* 新建对话：先起名，再建 */}
+      {newConversationRequest && (
+        <NewConversationDialog
+          project={newConversationRequest.cwd}
+          initialName={newName}
+          busy={creating}
+          onCancel={consumeNewConversationRequest}
+          onCreate={(name) => {
+            setCreating(true)
+            void host
+              .newConversation(newConversationRequest.cwd, name)
+              .then(() => {
+                consumeNewConversationRequest()
+              })
+              .catch((error) => {
+                console.error('新建对话失败:', error)
+              })
+              .finally(() => setCreating(false))
+          }}
+        />
+      )}
     </div>
   )
 }

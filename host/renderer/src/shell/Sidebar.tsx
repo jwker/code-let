@@ -75,6 +75,7 @@ export function Sidebar() {
   const consumeRenameRequest = useStore((s) => s.consumeRenameRequest)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
+  const requestNewConversation = useStore((s) => s.requestNewConversation)
 
   const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed())
   /** 待确认移除的项目 */
@@ -432,6 +433,7 @@ export function Sidebar() {
               collapsed={collapsed.has(group.path)}
               onToggle={() => toggle(group.path)}
               onRemove={() => setRemoving(group)}
+              onNewConversation={() => requestNewConversation(group.path)}
               conversations={group.conversations}
               tabs={tabs}
               activeTabId={activeTabId}
@@ -492,6 +494,7 @@ function ProjectGroup({
   collapsed,
   onToggle,
   onRemove,
+  onNewConversation,
   conversations,
   tabs,
   activeTabId,
@@ -512,6 +515,7 @@ function ProjectGroup({
   collapsed: boolean
   onToggle: () => void
   onRemove: () => void
+  onNewConversation: () => void
   conversations: ConversationInfo[]
   tabs: TabInfo[]
   activeTabId: string | null
@@ -599,7 +603,7 @@ function ProjectGroup({
                 role="menuitem"
                 onClick={() => {
                   setMenuOpen(false)
-                  void host.newConversation(project)
+                  onNewConversation()
                 }}
                 className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken"
               >

@@ -65,6 +65,7 @@ class FakePi implements PiRuntimePort {
     if (tab) tab.model = MODEL
   }
   async renameSession(): Promise<void> {}
+  async setSessionName(): Promise<void> {}
   async listCommands(): Promise<CommandOption[]> {
     return []
   }

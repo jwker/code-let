@@ -66,6 +66,8 @@ class FakePi implements PiRuntimePort {
     // 重命名不参与这份测试
   }
 
+  async setSessionName(): Promise<void> {}
+
   async listCommands(): Promise<never[]> {
     return []
   }

@@ -44,7 +44,8 @@ const api: CodeletApi = {
   renameConversation: (path, name) =>
     ipcRenderer.invoke(IPC.conversationsRename, { path, name }) as Promise<HostSnapshot>,
   openConversation: (path, cwd) => ipcRenderer.invoke(IPC.tabsOpen, { path, cwd }) as Promise<HostSnapshot>,
-  newConversation: (cwd) => ipcRenderer.invoke(IPC.tabsNew, { cwd }) as Promise<HostSnapshot>,
+  newConversation: (cwd, name) =>
+    ipcRenderer.invoke(IPC.tabsNew, { cwd, name }) as Promise<HostSnapshot>,
   activateTab: (tabId) => ipcRenderer.invoke(IPC.tabsActivate, { tabId }) as Promise<HostSnapshot>,
   closeTab: (tabId) => ipcRenderer.invoke(IPC.tabsClose, { tabId }) as Promise<HostSnapshot>,
   reloadTab: (tabId) => ipcRenderer.invoke(IPC.tabsReload, { tabId }) as Promise<HostSnapshot>,

@@ -627,11 +627,11 @@ export function createMockApi(): CodeletApi {
       return publish()
     },
 
-    newConversation: async (cwd) => {
+    newConversation: async (cwd, name) => {
       if (!projects.some((p) => p.path === cwd)) {
         projects = [{ path: cwd, name: basenameOf(cwd) }, ...projects]
       }
-      addTab({ cwd, title: '新对话' })
+      addTab({ cwd, title: name?.trim() || '新对话' })
       return publish()
     },
 
