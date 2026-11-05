@@ -2,6 +2,12 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC,
   IPC_EVENTS,
+  type ConsoleEvent,
+  type ConsoleExportRequest,
+  type ConsoleExportResult,
+  type ConsoleFieldResult,
+  type ConsoleListResult,
+  type ConsoleStats,
   type CodeletApi,
   type CommandArgumentOption,
   type CommandOption,
@@ -128,6 +134,37 @@ const api: CodeletApi = {
     ipcRenderer.on(IPC_EVENTS.browser, handler)
     return () => {
       ipcRenderer.removeListener(IPC_EVENTS.browser, handler)
+    }
+  },
+
+  listConsoleRecords: () =>
+    ipcRenderer.invoke(IPC.consoleList) as Promise<ConsoleListResult>,
+  getConsoleField: (recordId, path) =>
+    ipcRenderer.invoke(IPC.consoleField, { recordId, path }) as Promise<ConsoleFieldResult | null>,
+  getConsoleStats: () => ipcRenderer.invoke(IPC.consoleStats) as Promise<ConsoleStats>,
+  deleteConsoleRecord: (recordId) =>
+    ipcRenderer.invoke(IPC.consoleDelete, { recordId }) as Promise<{ deleted: number }>,
+  deleteConsoleSession: (sessionId) =>
+    ipcRenderer.invoke(IPC.consoleDeleteSession, { sessionId }) as Promise<{ deleted: number }>,
+  deleteConsoleRecords: (recordIds) =>
+    ipcRenderer.invoke(IPC.consoleDeleteRecords, { recordIds }) as Promise<{ deleted: number }>,
+  clearConsole: () => ipcRenderer.invoke(IPC.consoleDeleteAll) as Promise<{ deleted: number }>,
+  exportConsole: (request: ConsoleExportRequest) =>
+    ipcRenderer.invoke(IPC.consoleExport, request) as Promise<ConsoleExportResult>,
+  cancelConsoleExport: (jobId) =>
+    ipcRenderer.invoke(IPC.consoleExportCancel, { jobId }) as Promise<void>,
+  revealConsoleDir: () => ipcRenderer.invoke(IPC.consoleReveal) as Promise<void>,
+  openConsoleWindow: () => ipcRenderer.invoke(IPC.consoleWindowOpen) as Promise<void>,
+  closeConsoleWindow: () => ipcRenderer.invoke(IPC.consoleWindowClose) as Promise<void>,
+  getSettings: () => ipcRenderer.invoke(IPC.settingsGet) as Promise<Record<string, unknown>>,
+  setSetting: (id, value) => ipcRenderer.invoke(IPC.settingsSet, { id, value }) as Promise<boolean>,
+  openSettingsWindow: () => ipcRenderer.invoke(IPC.settingsOpen) as Promise<void>,
+
+  onConsoleEvent: (listener) => {
+    const handler = (_event: unknown, payload: ConsoleEvent): void => listener(payload)
+    ipcRenderer.on(IPC_EVENTS.console, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_EVENTS.console, handler)
     }
   }
 }

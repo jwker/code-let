@@ -92,6 +92,14 @@ export const IconTerminal = () => (
   </Icon>
 )
 
+/** 调试控制台 —— 终端加一个指示点 */
+export const IconConsole = () => (
+  <Icon>
+    <path d="m4 17 6-6-6-6M12 19h8" />
+    <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none" />
+  </Icon>
+)
+
 export const IconPanelLeft = () => (
   <Icon>
     <rect x="3" y="4" width="18" height="16" rx="2.5" />

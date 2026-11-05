@@ -34,6 +34,7 @@ import {
   type ExternalAttachment
 } from './attachments'
 import { ContextDiffStore, type RawContextSnapshot } from './contextDiff'
+import { DebugConsoleStore, type ConsoleRecordInput } from './debugConsole'
 import type { BrowserManager } from './browser'
 import { emptyGitStatus, readGitDiff, readGitStatus } from './git'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
@@ -45,6 +46,7 @@ import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
 import { moveSessionFilesToTrash } from './sessionFiles'
 import { TabStore, type StoredFile, type StoredTab } from './tabs'
+
 
 /** 宿主这边记的一个标签 */
 interface HostTab {
@@ -115,6 +117,8 @@ export class HostState extends EventEmitter {
   private temporarySeq = 0
   /** 请求级上下文 diff 的索引和内容缓存 */
   private readonly contextDiff: ContextDiffStore
+  /** 调试控制台的存储 */
+  readonly console: DebugConsoleStore
   /** 活动标签的默认上下文对比 */
   private contextDiffView: ContextDiffView | null = null
   private session: SessionState = {
@@ -176,6 +180,8 @@ export class HostState extends EventEmitter {
     pickDirectory?: () => Promise<string | null>
     pickFiles?: () => Promise<string[] | null>
     contextDiffDir?: string
+    /** 调试控制台的存储目录 */
+    consoleDir?: string
     trashFile?: (path: string) => Promise<void>
   }) {
     super()
@@ -185,6 +191,11 @@ export class HostState extends EventEmitter {
     this.pickDirectory = options?.pickDirectory ?? pickDirectory
     this.pickFiles = options?.pickFiles ?? pickFiles
     this.contextDiff = new ContextDiffStore(options?.contextDiffDir ?? null)
+    this.console = new DebugConsoleStore(options?.consoleDir ?? null)
+    // 写完一条记录就通知宿主，界面据此刷新列表
+    this.console.setChangeListener(() => {
+      this.emit('console-updated')
+    })
     this.trashFile = options?.trashFile ?? ((path) => shell.trashItem(path))
     this.conversationsRefresh = new DebouncedRefresh(() => this.refreshConversations())
   }
@@ -269,6 +280,12 @@ export class HostState extends EventEmitter {
       // 扩展错误走快照，不混进会话事件流
       if (event.type === 'extension_error') {
         this.recordExtensionError(event.tabId, event.data as Omit<ExtensionErrorInfo, 'tabId'>)
+        return
+      }
+      // 调试控制台的记录：进存储，**不进会话事件流** —— 正文太大，不能发给渲染进程
+      if (event.type === 'debug_console_record') {
+        this.console.enqueue(event.data as ConsoleRecordInput)
+        this.emit('console-updated')
         return
       }
       this.emit('session-event', event)

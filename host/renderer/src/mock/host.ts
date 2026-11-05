@@ -1,4 +1,6 @@
 import type {
+  ConsoleRecordMeta,
+  ConsoleStats,
   CodeletApi,
   CommandOption,
   ContextDiffSession,
@@ -161,6 +163,53 @@ const FAKE_PROJECTS: ProjectInfo[] = [
   { path: '/Users/demo/Projects/pi-sdk', name: 'pi-sdk' },
   { path: '/Users/demo/Projects/web', name: 'web' }
 ]
+
+/** 调试控制台的假记录 —— 预览模式里列表有东西可看 */
+const FAKE_CONSOLE_RECORDS: ConsoleRecordMeta[] = [
+  {
+    id: 't1700000000-1',
+    sessionId: 'fake-session',
+    sessionName: '本会话',
+    sessionTitle: '本会话',
+    cwd: '/Users/demo/Projects/codelet',
+    prompt: '帮我看看这个报错',
+    tabId: 'fake-tab',
+    model: { provider: 'anthropic', id: 'claude-sonnet-4' },
+    capturedAt: Date.now() - 60_000,
+    sizes: { meta: 320, transcript: 12_288, provider: 202_752, response: 4_096 },
+    providerStatus: 200,
+    durationMs: 1_840,
+    firstByteMs: 420,
+    truncated: false
+  },
+  {
+    id: 't1700000000-2',
+    sessionId: 'fake-session',
+    sessionName: '本会话',
+    sessionTitle: '本会话',
+    cwd: '/Users/demo/Projects/codelet',
+    prompt: '继续改第二处',
+    tabId: 'fake-tab',
+    model: { provider: 'anthropic', id: 'claude-sonnet-4' },
+    capturedAt: Date.now() - 120_000,
+    sizes: { meta: 320, transcript: 11_264, provider: 199_680, response: 2_048 },
+    providerStatus: 200,
+    durationMs: 960,
+    firstByteMs: 310,
+    truncated: false
+  }
+]
+
+const FAKE_CONSOLE_STATS: ConsoleStats = {
+  dir: '/假数据/debug-console',
+  count: 2,
+  contentBytes: 430_000,
+  indexBytes: 2_400,
+  blobBytes: 0,
+  totalBytes: 432_400,
+  writing: 0,
+  failed: 0
+}
 
 const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
   '/Users/demo/Projects/codelet': [
@@ -725,6 +774,49 @@ export function createMockApi(): CodeletApi {
     setBrowserBounds: async () => undefined,
     setBrowserVisible: async () => undefined,
     onBrowserState: () => () => undefined,
+
+    // —— 调试控制台（预览模式里是假数据）——
+    listConsoleRecords: async () => ({
+      records: FAKE_CONSOLE_RECORDS,
+      dir: '/假数据/debug-console'
+    }),
+    getConsoleField: async (_recordId, path) => {
+      if (path === 'transcript') {
+        return {
+          path,
+          shell: {
+            node: 'transcript',
+            path,
+            bytes: 2048,
+            fields: {},
+            items: [],
+            array: {
+              key: 'messages',
+              count: 2,
+              items: [
+                { index: 0, role: 'system', preview: '你是一个编码助手', bytes: 1200 },
+                { index: 1, role: 'user', preview: '帮我看看这个报错', bytes: 848 }
+              ]
+            }
+          }
+        }
+      }
+      return { path, value: { note: '预览模式的假数据' } }
+    },
+    getConsoleStats: async () => FAKE_CONSOLE_STATS,
+    deleteConsoleRecord: async () => ({ deleted: 0 }),
+    deleteConsoleSession: async () => ({ deleted: 0 }),
+    deleteConsoleRecords: async () => ({ deleted: 0 }),
+    clearConsole: async () => ({ deleted: 0 }),
+    exportConsole: async () => ({ ok: false, jobId: 'preview', message: '预览模式不能导出' }),
+    cancelConsoleExport: async () => undefined,
+    revealConsoleDir: async () => undefined,
+    openConsoleWindow: async () => undefined,
+    closeConsoleWindow: async () => undefined,
+    getSettings: async () => ({ 'console.record': true, 'console.maxRecordBytes': 32 * 1024 * 1024 }),
+    setSetting: async () => true,
+    openSettingsWindow: async () => undefined,
+    onConsoleEvent: () => () => undefined,
     getGitStatus: async () => FAKE_GIT_STATUS,
     getGitDiff: async (_tabId, path, scope) => ({ ...FAKE_GIT_DIFF, path, scope }),
     getContextDiff: async () => FAKE_CONTEXT_DIFF,

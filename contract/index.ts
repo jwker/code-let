@@ -10,6 +10,28 @@
  * 纯映射函数放在 ./stream.ts —— 同样不 import 任何东西。
  */
 
+// 类型再导出一份：调用方统一从 '@contract/index' 取
+export type {
+  ConsoleEvent,
+  ConsoleExportProgress,
+  ConsoleExportRequest,
+  ConsoleExportResult,
+  ConsoleFieldResult,
+  ConsoleItemSkeleton,
+  ConsoleListResult,
+  ConsoleRecordMeta,
+  ConsoleShell,
+  ConsoleStats
+} from './console'
+import type {
+  ConsoleEvent,
+  ConsoleExportRequest,
+  ConsoleExportResult,
+  ConsoleFieldResult,
+  ConsoleListResult,
+  ConsoleStats
+} from './console'
+
 // ---------------------------------------------------------------------------
 // IPC 通道
 // ---------------------------------------------------------------------------
@@ -123,7 +145,37 @@ export const IPC = {
   /** 清掉已经显示的扩展错误 */
   extensionErrorsDismiss: 'host:extension-errors:dismiss',
   /** 切换某个标签的模型 */
-  modelsSelect: 'host:models:select'
+  modelsSelect: 'host:models:select',
+  /** 调试控制台：列出所有记录 */
+  consoleList: 'host:console:list',
+  /** 调试控制台：取一个字段（一级节点 / 数组元素） */
+  consoleField: 'host:console:field',
+  /** 调试控制台：占用统计 */
+  consoleStats: 'host:console:stats',
+  /** 调试控制台：删一条记录 */
+  consoleDelete: 'host:console:delete',
+  /** 调试控制台：删一个会话的全部记录 */
+  consoleDeleteSession: 'host:console:deleteSession',
+  /** 调试控制台：删一批勾选了的记录 */
+  consoleDeleteRecords: 'host:console:deleteRecords',
+  /** 调试控制台：清空全部记录 */
+  consoleDeleteAll: 'host:console:deleteAll',
+  /** 调试控制台：导出（单条 / 多会话 / 全部） */
+  consoleExport: 'host:console:export',
+  /** 调试控制台：取消正在进行的导出 */
+  consoleExportCancel: 'host:console:exportCancel',
+  /** 调试控制台：在访达中显示存储目录 */
+  consoleReveal: 'host:console:reveal',
+  /** 调试控制台：开一个独立窗口（分离） */
+  consoleWindowOpen: 'host:console:windowOpen',
+  /** 调试控制台：关掉独立窗口（收回面板） */
+  consoleWindowClose: 'host:console:windowClose',
+  /** 设置：取全部取值 */
+  settingsGet: 'host:settings:get',
+  /** 设置：写一个取值 */
+  settingsSet: 'host:settings:set',
+  /** 设置：打开设置窗口 */
+  settingsOpen: 'host:settings:open'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -135,7 +187,9 @@ export const IPC_EVENTS = {
   /** Pi 会话流的增量事件 */
   session: 'host:event:session',
   /** 浏览器标签状态 */
-  browser: 'host:event:browser'
+  browser: 'host:event:browser',
+  /** 调试控制台：有新记录 / 导出进度 */
+  console: 'host:event:console'
 } as const
 
 export type IpcEventChannel = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS]
@@ -168,7 +222,6 @@ export const ATTACHMENT_LIMITS = {
 // ---------------------------------------------------------------------------
 // 领域类型
 // ---------------------------------------------------------------------------
-
 /** 对话区的三种排版模式（PLAN.md D10） */
 export type ConversationMode = 'normal' | 'terminal' | 'html'
 
@@ -180,7 +233,16 @@ export type ConversationMode = 'normal' | 'terminal' | 'html'
  *
  * Git / Agent 也在里面：右侧面板一次只显示一个视图，没有常驻面板。
  */
-export type NavEntry = 'board' | 'memory' | 'code' | 'terminal' | 'git' | 'agent' | 'context' | 'browser'
+export type NavEntry =
+  | 'board'
+  | 'memory'
+  | 'code'
+  | 'terminal'
+  | 'git'
+  | 'agent'
+  | 'context'
+  | 'browser'
+  | 'console'
 
 /** 一个项目 = 一个目录 */
 export interface ProjectInfo {
@@ -919,4 +981,36 @@ export interface CodeletApi {
   onSessionEvent(listener: (events: SessionEvent[]) => void): () => void
   /** 订阅右侧浏览器标签状态 */
   onBrowserState(listener: (state: BrowserState) => void): () => void
+  /** 调试控制台：列出所有记录 */
+  listConsoleRecords(): Promise<ConsoleListResult>
+  /** 调试控制台：取一个字段（一级节点或数组元素） */
+  getConsoleField(recordId: string, path: string): Promise<ConsoleFieldResult | null>
+  /** 调试控制台：占用统计 */
+  getConsoleStats(): Promise<ConsoleStats>
+  /** 调试控制台：删一条记录 */
+  deleteConsoleRecord(recordId: string): Promise<{ deleted: number }>
+  /** 调试控制台：删一个会话的全部记录 */
+  deleteConsoleSession(sessionId: string): Promise<{ deleted: number }>
+  /** 调试控制台：删一批勾选了的记录 */
+  deleteConsoleRecords(recordIds: string[]): Promise<{ deleted: number }>
+  /** 调试控制台：清空全部记录 */
+  clearConsole(): Promise<{ deleted: number }>
+  /** 调试控制台：导出（单条 / 多会话 / 全部） */
+  exportConsole(request: ConsoleExportRequest): Promise<ConsoleExportResult>
+  /** 调试控制台：取消正在进行的导出 */
+  cancelConsoleExport(jobId: string): Promise<void>
+  /** 调试控制台：在访达中显示存储目录 */
+  revealConsoleDir(): Promise<void>
+  /** 调试控制台：把面板分离成独立窗口 */
+  openConsoleWindow(): Promise<void>
+  /** 调试控制台：关掉独立窗口，回到面板 */
+  closeConsoleWindow(): Promise<void>
+  /** 订阅控制台事件（新记录、导出进度） */
+  onConsoleEvent(listener: (event: ConsoleEvent) => void): () => void
+  /** 设置：取全部取值 */
+  getSettings(): Promise<Record<string, unknown>>
+  /** 设置：写一个取值 */
+  setSetting(id: string, value: unknown): Promise<boolean>
+  /** 打开设置窗口 */
+  openSettingsWindow(): Promise<void>
 }

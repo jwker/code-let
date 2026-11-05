@@ -1,8 +1,12 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { IPC_EVENTS } from '@contract/index'
 import { dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { registerIpc } from './ipc'
+import { applySettings, registerConsoleIpc } from './consoleIpc'
+import { refreshDockMenu } from './dockMenu'
+import { SettingsStore } from './settings'
 import { APP_ORIGIN, registerSchemesAsPrivileged, serveRenderer } from './protocol'
 import { HostState } from './state'
 import { BrowserManager } from './browser'
@@ -24,8 +28,14 @@ const currentDir = dirname(fileURLToPath(import.meta.url))
 const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
 const isDev = Boolean(rendererDevUrl)
 
-const state = new HostState({ contextDiffDir: join(app.getPath('userData'), 'context-diff') })
+const state = new HostState({
+  contextDiffDir: join(app.getPath('userData'), 'context-diff'),
+  consoleDir: join(app.getPath('userData'), 'debug-console')
+})
+/** 设置的取值：存在应用数据目录里 */
+const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'))
 let disposeIpc: (() => void) | null = null
+let disposeConsoleIpc: (() => void) | null = null
 let browser: BrowserManager | null = null
 
 function createWindow(): BrowserWindow {
@@ -65,6 +75,16 @@ function createWindow(): BrowserWindow {
    */
   if (process.env.CODELET_USER_DATA) {
     ;(globalThis as unknown as { __codeletBrowser?: BrowserManager }).__codeletBrowser = browser
+    /*
+     * 导出用的保存对话框同理：原生面板 Playwright 点不到，
+     * 测试里换成直接返回路径。默认落到临时目录里。
+     */
+    ;(globalThis as unknown as { __codeletSaveDialog?: unknown }).__codeletSaveDialog = {
+      showSaveDialog: async (options: { defaultPath?: string }) => ({
+        canceled: false,
+        filePath: join(tmpdir(), options.defaultPath ?? 'codelet-console.zip')
+      })
+    }
   }
   // 必须在窗口真正销毁前移除原生 view；窗口关闭后再 removeChildView 可能卡住。
   win.on('close', () => {
@@ -72,7 +92,12 @@ function createWindow(): BrowserWindow {
     browser = null
   })
 
-  win.once('ready-to-show', () => win.show())
+  win.once('ready-to-show', () => {
+    win.setTitle('Codelet')
+    refreshDockMenu()
+    win.show()
+  })
+  win.on('closed', () => refreshDockMenu())
 
   /*
    * 离开够久再切回来，就重读一次会话列表。
@@ -134,6 +159,17 @@ if (!app.requestSingleInstanceLock()) {
     }
 
     disposeIpc = registerIpc(state, () => browser)
+    disposeConsoleIpc = registerConsoleIpc(state, settings)
+    // 设置里的开关和上限要落到存储上 —— 开关是运行时状态，打开就生效
+    applySettings(state, settings)
+    // 老记录补上会话标题（只读一小块，不解压整个容器）
+    setTimeout(() => {
+      try {
+        state.console.backfillTitles()
+      } catch {
+        // 补不上不影响主流程
+      }
+    }, 2000)
     createWindow()
     // 初始化失败不能把窗口晾在这儿 —— 记下来，界面还在，能看到错误
     await state.init().catch((error) => {
@@ -151,6 +187,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     disposeIpc?.()
+    disposeConsoleIpc?.()
     void state.dispose()
   })
 }

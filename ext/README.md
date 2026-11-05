@@ -66,4 +66,12 @@ pi.registerCommand('deploy', {
 压成索引通过 EventBus 交给主进程。它不注册命令，也不修改模型请求；完整文本留在主进程的有限缓存里，
 不是用户扩展，不需要手动调用。
 
+`debug-console.ts` 是 Codelet 的内置观察扩展：监听 `context_with_system`、`before_provider_request`、
+`after_provider_response`、`message_end`，把一次模型请求的完整内容收集起来，
+通过 EventBus 交给主进程落盘。它不注册命令，也不修改模型请求 —— 只是观察。
+
+一次请求记一条，落在应用数据目录的 `debug-console/` 下：一个容器文件（拼接的 gzip 块）
+加一个索引文件。图片抽成 `blobs/` 里的二进制，正文里只留引用。
+删除、导出这些都在右侧检视器的「控制台」面板里做，不在扩展里。
+
 改完 `ext/` 后先跑 `npm run build:ext`，再在输入框执行 `/reload`；它重载的是 `out/ext` 里编译后的 `.js`，不会替你编译源码。现在没有 `tsc --watch`，也不会热重载扩展产物。

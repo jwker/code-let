@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ConversationMode } from '@contract/index'
 import { useStore } from '../store'
+import { host } from '../host'
 import { IconMoon, IconMore, IconPanelLeft, IconPanelRight, IconSettings, IconSun } from './icons'
 import { TabBar } from './TabBar'
 
@@ -176,7 +177,10 @@ export function TitleBar() {
                   <button
                     type="button"
                     role="menuitem"
-                    onClick={closeMenu}
+                    onClick={() => {
+                      closeMenu()
+                      void host.openSettingsWindow()
+                    }}
                     className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken"
                   >
                     <span className="flex-none text-fg-2">
