@@ -25,14 +25,6 @@ export const IconSession = () => (
   </Icon>
 )
 
-export const IconBoard = () => (
-  <Icon>
-    <rect x="3" y="4" width="5" height="16" rx="1" />
-    <rect x="10" y="4" width="4" height="10" rx="1" />
-    <rect x="16" y="4" width="5" height="7" rx="1" />
-  </Icon>
-)
-
 export const IconMemory = () => (
   <Icon>
     <circle cx="12" cy="5" r="2.5" />

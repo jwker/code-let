@@ -280,7 +280,7 @@ interface RendererStore {
 
 export const useStore = create<RendererStore>((set, get) => ({
   snapshot: EMPTY_SNAPSHOT,
-  nav: 'board',
+  nav: 'code',
   mode: 'normal',
   theme: loadTheme(),
   eventCount: 0,

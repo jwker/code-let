@@ -234,7 +234,6 @@ export type ConversationMode = 'normal' | 'terminal' | 'html'
  * Git / Agent 也在里面：右侧面板一次只显示一个视图，没有常驻面板。
  */
 export type NavEntry =
-  | 'board'
   | 'memory'
   | 'code'
   | 'terminal'

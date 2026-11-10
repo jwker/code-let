@@ -17,4 +17,6 @@ blob-report/
 # AI 产物（设计稿、计划、缺陷记录、任务文档）统一放 .ai/，不进仓库。
 # 仓库里只留 README。
 .ai/
+.ai.bak-*/
+.agents/
 docs/

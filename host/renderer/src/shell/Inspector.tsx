@@ -11,7 +11,6 @@ import { ConsolePane } from './ConsolePane'
 
 /** 导航项对应的视图标题 */
 const TITLES: Record<NavEntry, string> = {
-  board: '看板',
   memory: '记忆图谱',
   code: '文件',
   terminal: '终端',
@@ -27,7 +26,6 @@ const PLACEHOLDER: Record<
   Exclude<NavEntry, 'code' | 'context' | 'git' | 'browser' | 'console'>,
   string
 > = {
-  board: '组件放在 ext/ + view/，一个组件一视图',
   memory: '组件放在 ext/ + view/，一个组件一视图',
   terminal: '常驻终端面板（node-pty），跟对话区的终端模式是两件事',
   agent: '面板还没接'
@@ -36,8 +34,8 @@ const PLACEHOLDER: Record<
 /**
  * 右侧检视器 —— 一次只显示一个视图，**没有常驻面板**。
  *
- * 顶部是导航栏（原来在左边的导航轨），6 个入口：看板 / 记忆 / 文件 / 终端 / Git / Agent。
- * 点开的视图占满整块面板 —— 所以看板、文件这些需要空间的能用到全部宽度。
+ * 顶部是导航栏（原来在左边的导航轨），入口是记忆 / 文件 / 终端 / Git / Agent / 上下文 / 浏览器 / 控制台。
+ * 点开的视图占满整块面板 —— 所以文件、上下文这些需要空间的能用到全部宽度。
  *
  * 收起时卡片收成 38px 的窄轨：导航栏留着（竖排图标），面板内容收起来 ——
  * 导航入口不能因为收起面板就没了。
