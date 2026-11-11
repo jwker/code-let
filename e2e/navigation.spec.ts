@@ -36,7 +36,9 @@ test.describe.serial('对话导航', () => {
     process.env.PI_CODING_AGENT_DIR = agentDir
     try {
       const manager = SessionManager.create(projectDir)
-      for (let index = 1; index <= 60; index += 1) {
+      // 轮次要够多才能溢出导航轨道 —— 应用启动时铺满屏幕，轨道跟着变高，
+      // 60 轮在大屏上装得下就不溢出了。这个数要能压过 4K 屏。
+      for (let index = 1; index <= 200; index += 1) {
         manager.appendMessage({
           role: 'user',
           content: [{ type: 'text', text: `第 ${index} 轮用户输入：检查导航定位 ${index}` }],
@@ -73,7 +75,7 @@ test.describe.serial('对话导航', () => {
       timeout: 30_000
     })
     page = await app.firstWindow()
-    await expect(page.locator('.conv-nav-hit')).toHaveCount(60, { timeout: 20_000 })
+    await expect(page.locator('.conv-nav-hit')).toHaveCount(200, { timeout: 20_000 })
   })
 
   test.afterAll(async () => {

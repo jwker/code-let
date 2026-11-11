@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, screen, shell } from 'electron'
 import { IPC_EVENTS } from '@contract/index'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -12,6 +12,13 @@ import { SettingsStore } from './settings'
 import { APP_ORIGIN, registerSchemesAsPrivileged, serveRenderer } from './protocol'
 import { HostState } from './state'
 import { BrowserManager } from './browser'
+import {
+  isOnSomeDisplay,
+  loadWindowState,
+  saveWindowState,
+  windowStateFile,
+  type WindowState
+} from './windowState'
 
 /*
  * 自动化测试用：把 userData 指到临时目录。
@@ -57,6 +64,79 @@ const modelManager = new ModelManager({
     }
   }
 })
+
+/**
+ * 启动时铺满屏幕。
+ *
+ * macOS 的 `maximize()` 靠不住（老版本是空操作），所以自己按显示器的工作区算边界 ——
+ * 工作区已经把菜单栏与 Dock 排除在外，窗口盖满的是能用的那块。
+ *
+ * 多屏时铺**光标所在**的那块 —— 跟人正在看的屏幕一致。
+ */
+function fillScreen(win: BrowserWindow): void {
+  if (process.platform === 'darwin') {
+    const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint())
+    win.setBounds(display.workArea)
+    return
+  }
+  win.maximize()
+}
+
+/** 窗口状态文件的位置 */
+const windowStateFilePath = windowStateFile(app.getPath('userData'))
+
+/** 取当前窗口状态，准备存 */
+function currentWindowState(win: BrowserWindow): WindowState {
+  const bounds = win.getNormalBounds()
+  return {
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    maximized: win.isMaximized()
+  }
+}
+
+/**
+ * 按存下来的状态摆窗口。
+ *
+ * 位置不在任何一块屏幕上了（显示器拔了），或者压根没存过 —— 返回 false，
+ * 交给 `fillScreen` 铺满。
+ */
+function restoreWindow(win: BrowserWindow, state: WindowState | null): boolean {
+  if (!state) return false
+  const workAreas = screen.getAllDisplays().map((display) => display.workArea)
+  if (!isOnSomeDisplay(state, workAreas)) return false
+  win.setBounds({ x: state.x, y: state.y, width: state.width, height: state.height })
+  if (state.maximized) win.maximize()
+  return true
+}
+
+/**
+ * 记下窗口的位置与大小。
+ *
+ * resize / move 在拖动过程中连续触发 —— 拖一下写几十次文件没必要，
+ * 停下来再写。关窗时也写一次，把最后的状态留住。
+ */
+function rememberWindowState(win: BrowserWindow): void {
+  let timer: NodeJS.Timeout | null = null
+  const write = (): void => {
+    if (win.isDestroyed()) return
+    saveWindowState(windowStateFilePath, currentWindowState(win))
+  }
+  const schedule = (): void => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(write, 400)
+  }
+  win.on('resize', schedule)
+  win.on('move', schedule)
+  win.on('maximize', schedule)
+  win.on('unmaximize', schedule)
+  win.on('close', () => {
+    if (timer) clearTimeout(timer)
+    write()
+  })
+}
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -115,6 +195,9 @@ function createWindow(): BrowserWindow {
   win.once('ready-to-show', () => {
     win.setTitle('Codelet')
     refreshDockMenu()
+    // 用户自己调过尺寸就恢复他调过的 —— 恢复不了（没存过、显示器拔了）才铺满屏幕
+    if (!restoreWindow(win, loadWindowState(windowStateFilePath))) fillScreen(win)
+    rememberWindowState(win)
     win.show()
   })
   win.on('closed', () => refreshDockMenu())
