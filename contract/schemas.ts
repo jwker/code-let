@@ -145,23 +145,6 @@ export const gitDiffSchema = z.object({
   scope: z.enum(['staged', 'unstaged', 'untracked', 'conflicts'])
 })
 
-export const contextDiffGetSchema = z.object({
-  tabId: z.string().min(1),
-  baselineId: z.string().min(1).optional()
-})
-
-export const contextDiffTurnSchema = z.object({
-  tabId: z.string().min(1),
-  turn: z.number().int().positive(),
-  baselineId: z.string().min(1).optional()
-})
-
-export const contextDiffDetailSchema = z.object({
-  tabId: z.string().min(1),
-  snapshotId: z.string().min(1),
-  key: z.string().min(1)
-})
-
 export const clipboardWriteSchema = z.object({
   text: z.string()
 })

@@ -214,8 +214,6 @@ interface TabRecord {
   bus: EventBus
   runtime: AgentSessionRuntime | null
   unbind: (() => void) | null
-  /** 内置 context-diff 扩展通过 EventBus 发来的快照 */
-  contextDiffUnsub: (() => void) | null
   /** 内置 debug-console 扩展通过 EventBus 发来的请求记录 */
   consoleUnsub: (() => void) | null
   /** 浏览器工具请求的 EventBus 监听 */
@@ -291,14 +289,10 @@ export class PiRuntime implements PiRuntimePort {
       bus: createEventBus(),
       runtime: null,
       unbind: null,
-      contextDiffUnsub: null,
       consoleUnsub: null,
       browserUnsub: null,
       sessionManager: null
     }
-    record.contextDiffUnsub = record.bus.on('context-diff:snapshot', (data) => {
-      this.emit({ type: 'context_diff_snapshot', data, tabId })
-    })
     record.consoleUnsub = record.bus.on('debug-console:record', (data) => {
       // 正文很大 —— 只在主进程里转给存储，不往渲染进程送
       this.emit({ type: 'debug_console_record', data, tabId })
@@ -539,8 +533,6 @@ export class PiRuntime implements PiRuntimePort {
     this.tabs.delete(tabId)
     record.unbind?.()
     record.unbind = null
-    record.contextDiffUnsub?.()
-    record.contextDiffUnsub = null
     record.consoleUnsub?.()
     record.consoleUnsub = null
     record.browserUnsub?.()

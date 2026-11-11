@@ -4,7 +4,6 @@ import { host } from '../host'
 import { useStore } from '../store'
 import { FileBrowser } from './FileBrowser'
 import { NavBar } from './NavBar'
-import { ContextDiffPane } from './ContextDiffPane'
 import { GitPane } from './GitPane'
 import { BrowserPane } from './BrowserPane'
 import { ConsolePane } from './ConsolePane'
@@ -16,14 +15,13 @@ const TITLES: Record<NavEntry, string> = {
   terminal: '终端',
   git: 'Git',
   agent: 'Agent',
-  context: '上下文',
   browser: '浏览器',
   console: '控制台'
 }
 
 /** 还没接的视图 —— 先给一句占位说明 */
 const PLACEHOLDER: Record<
-  Exclude<NavEntry, 'code' | 'context' | 'git' | 'browser' | 'console'>,
+  Exclude<NavEntry, 'code' | 'git' | 'browser' | 'console'>,
   string
 > = {
   memory: '组件放在 ext/ + view/，一个组件一视图',
@@ -48,13 +46,11 @@ export function Inspector() {
     <aside className="shell-card insp">
       <NavBar compact={!open} />
       {open && nav === 'code' && <FilePane />}
-      {open && nav === 'context' && <ContextDiffPane />}
       {open && nav === 'git' && <GitPane />}
       {open && nav === 'browser' && <BrowserPane />}
       {open && nav === 'console' && <ConsolePane />}
       {open &&
         nav !== 'code' &&
-        nav !== 'context' &&
         nav !== 'git' &&
         nav !== 'browser' &&
         nav !== 'console' && (

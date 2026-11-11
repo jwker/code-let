@@ -3,9 +3,6 @@ import type {
   ConsoleStats,
   CodeletApi,
   CommandOption,
-  ContextDiffSession,
-  ContextDiffView,
-  ContextSnapshotRef,
   ConversationInfo,
   FileEntry,
   FileSearchResult,
@@ -97,7 +94,7 @@ const FAKE_GIT_DIFF: GitDiff = {
     '   return (',
     '@@ -32,7 +34,9 @@ export function Inspector() {',
     '       {open && nav === "code" && <FilePane />}',
-    '       {open && nav === "context" && <ContextDiffPane />}',
+    '       {open && nav === "browser" && <BrowserPane />}',
     '+      {open && nav === "git" && <GitPane />}',
     '-      {open && nav === "git" && <GitPlaceholder />}',
     '     </aside>'
@@ -106,59 +103,6 @@ const FAKE_GIT_DIFF: GitDiff = {
   truncated: false,
   error: null
 }
-
-const FAKE_CONTEXT_BASELINE: ContextSnapshotRef = {
-  id: 'fake-session:1',
-  sessionId: 'fake-session',
-  sessionPath: '/fake/session.jsonl',
-  sessionName: '上一次请求',
-  turn: 3,
-  request: 1,
-  capturedAt: Date.now() - 60_000,
-  totalTokens: 12_400
-}
-
-const FAKE_CONTEXT_CURRENT: ContextSnapshotRef = {
-  id: 'fake-session:2',
-  sessionId: 'fake-session',
-  sessionPath: '/fake/session.jsonl',
-  sessionName: '本会话',
-  turn: 3,
-  request: 2,
-  capturedAt: Date.now(),
-  totalTokens: 13_100
-}
-
-const FAKE_CONTEXT_DIFF: ContextDiffView = {
-  current: FAKE_CONTEXT_CURRENT,
-  baseline: FAKE_CONTEXT_BASELINE,
-  tokens: { before: 12_400, after: 13_100 },
-  system: 'same',
-  tools: 'same',
-  toolsApproximate: true,
-  counts: { added: 3, removed: 0, modified: 0, shared: 42 },
-  groups: [
-    {
-      kind: 'added',
-      label: '新增',
-      messages: [
-        { key: 'u1', role: 'user', hash: 'u1', tokens: 34, preview: '我补充一下：这里应该按游标增量读，不要每次全量扫描。' },
-        { key: 't1', role: 'toolResult', hash: 't1', tokens: 412, preview: 'read · src/memory/index.ts · 已返回 212 行' },
-        { key: 'a1', role: 'assistant', hash: 'a1', tokens: 254, preview: '已改为按 updatedAt 游标读取，补了游标回退的边界。' }
-      ]
-    }
-  ]
-}
-
-const FAKE_CONTEXT_SESSIONS: ContextDiffSession[] = [
-  {
-    sessionId: 'fake-session',
-    sessionName: '本会话',
-    sessionPath: '/fake/session.jsonl',
-    first: FAKE_CONTEXT_BASELINE,
-    last: FAKE_CONTEXT_CURRENT
-  }
-]
 
 const FAKE_PROJECTS: ProjectInfo[] = [
   { path: '/Users/demo/Projects/codelet', name: 'codelet' },
@@ -547,7 +491,6 @@ export function createMockApi(): CodeletApi {
       activeFileId: activeFileId,
       extensionErrors: [],
       temporaryChat: temporary ? { ...temporary, error: null } : null,
-      contextDiff: FAKE_CONTEXT_DIFF,
       session: {
         ready: Boolean(active),
         cwd: active?.cwd ?? null,
@@ -888,16 +831,6 @@ export function createMockApi(): CodeletApi {
     onModelAuthEvent: () => () => undefined,
     getGitStatus: async () => FAKE_GIT_STATUS,
     getGitDiff: async (_tabId, path, scope) => ({ ...FAKE_GIT_DIFF, path, scope }),
-    getContextDiff: async () => FAKE_CONTEXT_DIFF,
-    getContextDiffForTurn: async () => FAKE_CONTEXT_DIFF,
-    listContextDiffSessions: async () => FAKE_CONTEXT_SESSIONS,
-    listContextDiffSnapshots: async () => [FAKE_CONTEXT_BASELINE, FAKE_CONTEXT_CURRENT],
-    getContextDiffDetail: async (_tabId, _snapshotId, key) => {
-      const message = FAKE_CONTEXT_DIFF.groups
-        .flatMap((group) => group.messages)
-        .find((item) => item.key === key)
-      return message ? { text: message.preview, truncated: false } : null
-    },
 
     openTemporaryChat: async () => {
       if (!temporary) {

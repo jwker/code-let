@@ -70,14 +70,6 @@ export const IconAgent = () => (
   </Icon>
 )
 
-export const IconContext = () => (
-  <Icon>
-    <path d="M4 7h16M4 12h10M4 17h7" />
-    <circle cx="18" cy="12" r="1.4" fill="currentColor" stroke="none" />
-    <circle cx="14" cy="17" r="1.4" fill="currentColor" stroke="none" />
-  </Icon>
-)
-
 export const IconTerminal = () => (
   <Icon>
     <path d="m4 17 6-6-6-6M12 19h8" />

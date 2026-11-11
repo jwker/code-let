@@ -38,7 +38,6 @@ const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
 const isDev = Boolean(rendererDevUrl)
 
 const state = new HostState({
-  contextDiffDir: join(app.getPath('userData'), 'context-diff'),
   consoleDir: join(app.getPath('userData'), 'debug-console')
 })
 /** 设置的取值：存在应用数据目录里 */

@@ -143,16 +143,6 @@ export const IPC = {
   browserBounds: 'host:browser:bounds',
   /** 浏览器：显示 / 隐藏原生页面 */
   browserVisible: 'host:browser:visible',
-  /** 上下文 Diff：取当前对比摘要 */
-  contextDiffGet: 'host:context-diff:get',
-  /** 上下文 Diff：取截至某一轮的最后两次请求 */
-  contextDiffTurn: 'host:context-diff:turn',
-  /** 上下文 Diff：列出可比较的会话快照 */
-  contextDiffSessions: 'host:context-diff:sessions',
-  /** 上下文 Diff：列出某个标签的请求快照 */
-  contextDiffSnapshots: 'host:context-diff:snapshots',
-  /** 上下文 Diff：取一条消息详情 */
-  contextDiffDetail: 'host:context-diff:detail',
   /** 列当前模型可用的思考等级 */
   thinkingLevels: 'host:thinking:levels',
   /** 设置某个标签的思考等级 */
@@ -280,7 +270,6 @@ export type NavEntry =
   | 'terminal'
   | 'git'
   | 'agent'
-  | 'context'
   | 'browser'
   | 'console'
 
@@ -515,31 +504,6 @@ export interface PickAttachmentsResult {
   errors: string[]
 }
 
-/** 一条上下文消息的摘要（不含全文） */
-export interface ContextMessageSummary {
-  key: string
-  role: string
-  hash: string
-  tokens: number
-  preview: string
-  /** 修改项在基线快照里的对应消息；新增/删除没有 */
-  previousKey?: string
-  /** 基线消息的 preview，详情不可用时兜底 */
-  previousPreview?: string
-}
-
-/** 一次模型请求的上下文快照引用 */
-export interface ContextSnapshotRef {
-  id: string
-  sessionId: string
-  sessionPath: string | null
-  sessionName?: string
-  turn: number
-  request: number
-  capturedAt: number
-  totalTokens: number
-}
-
 /** 右侧浏览器的一个标签 */
 export interface BrowserTabState {
   id: string
@@ -637,36 +601,6 @@ export interface GitDiff {
   error: string | null
 }
 
-/** 上下文 diff 的分组 */
-export interface ContextDiffGroup {
-  kind: 'system' | 'tools' | 'added' | 'removed' | 'modified' | 'shared' | 'compacted'
-  label: string
-  messages: ContextMessageSummary[]
-  tokens?: number
-}
-
-/** 右侧栏当前的上下文对比 */
-export interface ContextDiffView {
-  current: ContextSnapshotRef
-  baseline: ContextSnapshotRef | null
-  tokens: { before: number; after: number }
-  system: 'same' | 'changed' | 'only-current' | 'only-baseline' | 'unknown'
-  tools: 'same' | 'changed' | 'unknown'
-  /** toolsHash 是近似信号，不是最终声明文本 */
-  toolsApproximate: boolean
-  counts: { added: number; removed: number; modified: number; shared: number }
-  groups: ContextDiffGroup[]
-}
-
-/** 跨会话基线选择器用 */
-export interface ContextDiffSession {
-  sessionId: string
-  sessionName?: string
-  sessionPath: string | null
-  first: ContextSnapshotRef | null
-  last: ContextSnapshotRef | null
-}
-
 /** 弹窗式临时对话；不写 session 文件，不进标签/侧栏 */
 export interface TemporaryChatState {
   id: string
@@ -732,8 +666,6 @@ export interface HostSnapshot {
   extensionErrors: ExtensionErrorInfo[]
   /** 当前临时对话；null 表示没有打开过，或已经彻底关闭 */
   temporaryChat: TemporaryChatState | null
-  /** 活动标签的上下文对比；没有快照时为 null */
-  contextDiff: ContextDiffView | null
   /**
    * **活动标签**的会话状态。
    *
@@ -961,24 +893,6 @@ export interface CodeletApi {
   getGitStatus(tabId: string): Promise<GitStatus>
   /** 单个文件的 Git diff */
   getGitDiff(tabId: string, path: string, scope: GitDiffScope): Promise<GitDiff>
-  /** 取活动标签的上下文对比；baselineId 为空时用上一次请求 */
-  getContextDiff(tabId: string, baselineId?: string): Promise<ContextDiffView | null>
-  /** 取截至某一用户轮次的最后两次请求对比 */
-  getContextDiffForTurn(
-    tabId: string,
-    turn: number,
-    baselineId?: string
-  ): Promise<ContextDiffView | null>
-  /** 列出有快照可比较的会话 */
-  listContextDiffSessions(): Promise<ContextDiffSession[]>
-  /** 列出某个标签属于当前会话的请求快照 */
-  listContextDiffSnapshots(tabId: string): Promise<ContextSnapshotRef[]>
-  /** 取某个快照里一条消息的全文；缓存/会话不可用时返回 null */
-  getContextDiffDetail(
-    tabId: string,
-    snapshotId: string,
-    key: string
-  ): Promise<{ text: string; truncated: boolean } | null>
   /** 列某个扩展命令的参数候选 */
   completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]>
   /** 列当前模型可用的思考等级 */

@@ -15,10 +15,7 @@ import {
   browserVisibleSchema,
   clipboardWriteSchema,
   commandCompleteSchema,
-  contextDiffDetailSchema,
-  contextDiffGetSchema,
   gitDiffSchema,
-  contextDiffTurnSchema,
   conversationRenameSchema,
   conversationsDeleteSchema,
   fileIdSchema,
@@ -309,28 +306,6 @@ export function registerIpc(
     return state.getGitDiff(tabId, path, scope)
   })
 
-  ipcMain.handle(IPC.contextDiffGet, async (_event, payload: unknown) => {
-    const { tabId, baselineId } = contextDiffGetSchema.parse(payload)
-    return state.getContextDiff(tabId, baselineId)
-  })
-
-  ipcMain.handle(IPC.contextDiffTurn, async (_event, payload: unknown) => {
-    const { tabId, turn, baselineId } = contextDiffTurnSchema.parse(payload)
-    return state.getContextDiffForTurn(tabId, turn, baselineId)
-  })
-
-  ipcMain.handle(IPC.contextDiffSessions, () => state.listContextDiffSessions())
-
-  ipcMain.handle(IPC.contextDiffSnapshots, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
-    return state.listContextDiffSnapshots(tabId)
-  })
-
-  ipcMain.handle(IPC.contextDiffDetail, async (_event, payload: unknown) => {
-    const { tabId, snapshotId, key } = contextDiffDetailSchema.parse(payload)
-    return state.getContextDiffDetail(tabId, snapshotId, key)
-  })
-
   ipcMain.handle(IPC.temporaryOpen, () => state.openTemporaryChat())
   ipcMain.handle(IPC.temporaryClose, () => state.closeTemporaryChat())
   ipcMain.handle(IPC.temporaryPrompt, async (_event, payload: unknown) => {
@@ -421,11 +396,6 @@ export function registerIpc(
     ipcMain.removeHandler(IPC.browserVisible)
     ipcMain.removeHandler(IPC.gitStatus)
     ipcMain.removeHandler(IPC.gitDiff)
-    ipcMain.removeHandler(IPC.contextDiffGet)
-    ipcMain.removeHandler(IPC.contextDiffTurn)
-    ipcMain.removeHandler(IPC.contextDiffSessions)
-    ipcMain.removeHandler(IPC.contextDiffSnapshots)
-    ipcMain.removeHandler(IPC.contextDiffDetail)
     ipcMain.removeHandler(IPC.temporaryOpen)
     ipcMain.removeHandler(IPC.temporaryClose)
     ipcMain.removeHandler(IPC.temporaryPrompt)

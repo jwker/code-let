@@ -62,10 +62,6 @@ pi.registerCommand('deploy', {
 结果包在 `text` 代码块里，用 `pi.sendMessage()` 发成 custom 消息。
 它验证了「编译 → 加载 → `/` 菜单 → 执行 → custom 消息」整条链路，也验证了扩展命令在流式期间执行。
 
-`context-diff.ts` 是 Codelet 的内置观察扩展：监听 `context_with_system`，把请求前的 transcript
-压成索引通过 EventBus 交给主进程。它不注册命令，也不修改模型请求；完整文本留在主进程的有限缓存里，
-不是用户扩展，不需要手动调用。
-
 `debug-console.ts` 是 Codelet 的内置观察扩展：监听 `context_with_system`、`before_provider_request`、
 `after_provider_response`、`message_end`，把一次模型请求的完整内容收集起来，
 通过 EventBus 交给主进程落盘。它不注册命令，也不修改模型请求 —— 只是观察。
