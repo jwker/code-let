@@ -59,6 +59,7 @@ class FakePi implements PiRuntimePort {
   async listModels(): Promise<ModelOption[]> {
     return [MODEL]
   }
+  async refreshModelAvailability(): Promise<void> {}
   async selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void> {
     this.models.push({ tabId, provider, id, persist })
     const tab = this.tabs.get(tabId)

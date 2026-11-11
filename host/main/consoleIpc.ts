@@ -315,8 +315,10 @@ export async function openSettingsWindow(): Promise<void> {
     return
   }
   const win = new BrowserWindow({
-    width: 720,
-    height: 520,
+    width: 1000,
+    height: 800,
+    minWidth: 560,
+    minHeight: 420,
     title: '设置',
     show: false,
     webPreferences: {

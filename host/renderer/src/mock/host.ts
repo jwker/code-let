@@ -14,8 +14,10 @@ import type {
   GitDiff,
   GitStatus,
   HostSnapshot,
+  ModelEntry,
   ModelOption,
   ProjectInfo,
+  ProviderInfo,
   SessionEvent,
   StreamItem,
   ThinkingLevel
@@ -398,6 +400,45 @@ const FAKE_MODELS: ModelOption[] = [
   { provider: 'deepseek', id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', contextWindow: 128_000, reasoning: true, cost: { input: 0.8, output: 3.2 } },
   { provider: 'siliconflow', id: 'Qwen/Qwen3-8B', name: 'Qwen/Qwen3-8B', contextWindow: 32_000, reasoning: false, cost: { input: 0, output: 0 } }
 ]
+
+/** 大模型管理页的假 provider */
+const FAKE_PROVIDERS: ProviderInfo[] = [
+  {
+    providerId: 'anthropic',
+    name: 'Anthropic',
+    methods: ['oauth', 'api_key'],
+    configured: true,
+    source: 'stored',
+    subscription: true
+  },
+  {
+    providerId: 'minimax-cn',
+    name: 'MiniMax CN',
+    methods: ['api_key'],
+    configured: false,
+    subscription: false
+  },
+  {
+    providerId: 'deepseek',
+    name: 'DeepSeek',
+    methods: ['api_key'],
+    configured: true,
+    source: 'environment',
+    label: 'DEEPSEEK_API_KEY',
+    subscription: false
+  }
+]
+
+/** 大模型管理页的假模型 */
+const FAKE_MODEL_ENTRIES: ModelEntry[] = FAKE_MODELS.map((model) => ({
+  provider: model.provider,
+  id: model.id,
+  name: model.name,
+  contextWindow: model.contextWindow,
+  reasoning: model.reasoning,
+  cost: model.cost,
+  available: model.provider !== 'siliconflow'
+}))
 
 /** 假回复：一段带格式的文字，一段段吐出来 */
 const FAKE_REPLY = [
@@ -817,6 +858,26 @@ export function createMockApi(): CodeletApi {
     setSetting: async () => true,
     openSettingsWindow: async () => undefined,
     onConsoleEvent: () => () => undefined,
+
+    // —— 大模型管理（预览模式的假数据）——
+    listProviders: async () => FAKE_PROVIDERS,
+    listAllModels: async () => FAKE_MODEL_ENTRIES,
+    getModelSettings: async () => ({
+      defaultProvider: FAKE_MODELS[0]?.provider ?? null,
+      defaultModel: FAKE_MODELS[0]?.id ?? null,
+      defaultThinkingLevel: 'medium',
+      modelThinkingLevels: {},
+      enabledModels: null
+    }),
+    setModelSetting: async () => true,
+    loginProvider: async () => undefined,
+    answerAuthPrompt: async () => true,
+    cancelLogin: async () => undefined,
+    logoutProvider: async () => true,
+    refreshModels: async () => FAKE_MODEL_ENTRIES,
+    getModelsConfig: async () => '',
+    setModelsConfig: async () => true,
+    onModelAuthEvent: () => () => undefined,
     getGitStatus: async () => FAKE_GIT_STATUS,
     getGitDiff: async (_tabId, path, scope) => ({ ...FAKE_GIT_DIFF, path, scope }),
     getContextDiff: async () => FAKE_CONTEXT_DIFF,

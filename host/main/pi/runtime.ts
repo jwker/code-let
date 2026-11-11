@@ -4,11 +4,15 @@ import {
   createAgentSessionServices,
   createEventBus,
   getAgentDir,
+  resolveModelScopeWithDiagnostics,
   SessionManager,
   type AgentSession,
   type AgentSessionRuntime,
   type CreateAgentSessionRuntimeFactory,
   type EventBus,
+  type ModelRuntime as PiModelRuntime,
+  type ScopedModel,
+  type SettingsManager as PiSettingsManager,
   type ToolInfo
 } from '@earendil-works/pi-coding-agent'
 import { existsSync, readdirSync } from 'node:fs'
@@ -97,6 +101,13 @@ export interface PiRuntimePort {
   setBrowserToolHandler?(handler: (tabId: string, request: unknown) => Promise<unknown>): void
   /** 某个标签的可用模型清单 */
   listModels(tabId: string): Promise<ModelOption[]>
+  /**
+   * 重新查一遍每个标签的可用模型。
+   *
+   * 登录/登出发生在设置窗口里，而每个标签的 runtime 各自缓存着「哪些模型可用」。
+   * 不叫它们重查，它们就看不见新登录的 provider 的模型。
+   */
+  refreshModelAvailability(): Promise<void>
   /** 切某个标签的模型（persist 时同时设为新会话默认） */
   selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void>
   /**
@@ -351,9 +362,19 @@ export class PiRuntime implements PiRuntimePort {
           at: Date.now()
         })
       }
+      /*
+       * 「可用模型」清单（pi 的 enabledModels）决定新会话的初始模型。
+       *
+       * pi 的 createAgentSession 把 scopedModels 写死成空了 —— 初始模型得这里显式给。
+       * 有旧消息的会话不碰：那种会话按自己记录里的模型恢复。
+       */
+      const scopedModels = await this.resolveScopedModels(services)
+      const hasExistingSession = sessionManager.buildSessionContext().messages.length > 0
       const { session, extensionsResult, modelFallbackMessage } = await createAgentSessionFromServices({
         services,
-        sessionManager
+        sessionManager,
+        scopedModels,
+        model: !hasExistingSession && scopedModels.length > 0 ? scopedModels[0].model : undefined
       })
       record.unbind = this.bind(record.tabId, session)
 
@@ -598,16 +619,67 @@ export class PiRuntime implements PiRuntimePort {
     return this.tabs.get(tabId)?.runtime?.modelFallbackMessage ?? null
   }
 
-  /** 已配置凭据的模型清单（没凭据的选了也是报错，不列） */
+  /**
+   * 已配置凭据的模型清单（没凭据的选了也是报错，不列）
+   *
+   * 设置里的「可用模型」清单会在这里生效：清单里没有的模型不列出来。
+   * 清单没设过（undefined）就是全部可用；存成空数组是一个都不列。
+   */
   async listModels(tabId: string): Promise<ModelOption[]> {
-    const modelRuntime = this.tabs.get(tabId)?.runtime?.session.modelRuntime
-    if (!modelRuntime) return []
+    const session = this.tabs.get(tabId)?.runtime?.session
+    if (!session) return []
+    const modelRuntime = session.modelRuntime
     try {
-      return (await modelRuntime.getAvailable()).map(toOption)
+      const available = await modelRuntime.getAvailable()
+      const patterns = session.settingsManager.getEnabledModels()
+      if (patterns === undefined) return available.map(toOption)
+      // 清单是 pi 的模型模式（可以带通配符）—— 用 pi 自己的解析器解，别自己写一套
+      const { scopedModels } = await resolveModelScopeWithDiagnostics(patterns, modelRuntime)
+      return scopedModels.map((scoped) => toOption(scoped.model))
     } catch {
       // 取不到就退回上一次的快照，总比空白强
       return modelRuntime.getAvailableSnapshot().map(toOption)
     }
+  }
+
+  /**
+   * 设置里的「可用模型」清单 → 会话的作用域模型。
+   *
+   * pi 的语义：清单（`enabledModels`）决定启动时选哪个模型，也决定轮换序列。
+   * 清单没设过就是「不限制」，返回空数组。
+   */
+  private async resolveScopedModels(
+    services: { modelRuntime: PiModelRuntime; settingsManager: PiSettingsManager }
+  ): Promise<ScopedModel[]> {
+    const patterns = services.settingsManager.getEnabledModels()
+    if (patterns === undefined) return []
+    try {
+      const { scopedModels } = await resolveModelScopeWithDiagnostics(patterns, services.modelRuntime)
+      return scopedModels
+    } catch {
+      // 解不出来就不限 —— 总比让会话建不起来强
+      return []
+    }
+  }
+
+  /**
+   * 重新查一遍每个标签的可用模型。
+   *
+   * `getAvailable()` 会重跑一遍可用性检查 —— 凭据是落在 auth.json 里的，
+   * 磁盘上的新凭据它读得到。
+   */
+  async refreshModelAvailability(): Promise<void> {
+    await Promise.all(
+      [...this.tabs.values()].map(async (record) => {
+        const modelRuntime = record.runtime?.session.modelRuntime
+        if (!modelRuntime) return
+        try {
+          await modelRuntime.getAvailable()
+        } catch {
+          // 查不到就留着旧快照 —— 下一轮请求会再试
+        }
+      })
+    )
   }
 
   /** 切某个标签的模型 */

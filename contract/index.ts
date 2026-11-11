@@ -23,6 +23,14 @@ export type {
   ConsoleShell,
   ConsoleStats
 } from './console'
+export type {
+  AuthPromptRequest,
+  ModelAuthEvent,
+  ModelEntry,
+  ModelSettings,
+  ModelSettingsChange,
+  ProviderInfo
+} from './models'
 import type {
   ConsoleEvent,
   ConsoleExportRequest,
@@ -31,6 +39,13 @@ import type {
   ConsoleListResult,
   ConsoleStats
 } from './console'
+import type {
+  ModelAuthEvent,
+  ModelEntry,
+  ModelSettings,
+  ModelSettingsChange,
+  ProviderInfo
+} from './models'
 
 // ---------------------------------------------------------------------------
 // IPC 通道
@@ -175,7 +190,29 @@ export const IPC = {
   /** 设置：写一个取值 */
   settingsSet: 'host:settings:set',
   /** 设置：打开设置窗口 */
-  settingsOpen: 'host:settings:open'
+  settingsOpen: 'host:settings:open',
+  /** 大模型：provider 清单（带凭据状态） */
+  modelProviders: 'host:model:providers',
+  /** 大模型：模型清单 */
+  modelList: 'host:model:list',
+  /** 大模型：读模型设置 */
+  modelSettingsGet: 'host:model:settings:get',
+  /** 大模型：写一项模型设置 */
+  modelSettingsSet: 'host:model:settings:set',
+  /** 大模型：登录（过程走事件） */
+  modelLogin: 'host:model:login',
+  /** 大模型：回答登录过程中的提问 */
+  modelLoginAnswer: 'host:model:login:answer',
+  /** 大模型：取消登录 */
+  modelLoginCancel: 'host:model:login:cancel',
+  /** 大模型：登出 */
+  modelLogout: 'host:model:logout',
+  /** 大模型：重新查一遍可用模型 */
+  modelRefresh: 'host:model:refresh',
+  /** 大模型：读 models.json */
+  modelConfigGet: 'host:model:config:get',
+  /** 大模型：写 models.json */
+  modelConfigSet: 'host:model:config:set'
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
@@ -189,7 +226,9 @@ export const IPC_EVENTS = {
   /** 浏览器标签状态 */
   browser: 'host:event:browser',
   /** 调试控制台：有新记录 / 导出进度 */
-  console: 'host:event:console'
+  console: 'host:event:console',
+  /** 大模型：登录过程中的事件 */
+  model: 'host:event:model'
 } as const
 
 export type IpcEventChannel = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS]
@@ -1012,4 +1051,28 @@ export interface CodeletApi {
   setSetting(id: string, value: unknown): Promise<boolean>
   /** 打开设置窗口 */
   openSettingsWindow(): Promise<void>
+  /** 大模型：provider 清单（带凭据状态） */
+  listProviders(): Promise<ProviderInfo[]>
+  /** 大模型：模型清单 */
+  listAllModels(): Promise<ModelEntry[]>
+  /** 大模型：读模型设置 */
+  getModelSettings(): Promise<ModelSettings>
+  /** 大模型：写一项模型设置 */
+  setModelSetting(change: ModelSettingsChange): Promise<boolean>
+  /** 大模型：开始登录（过程走 onModelAuthEvent） */
+  loginProvider(providerId: string, method: 'oauth' | 'api_key'): Promise<void>
+  /** 大模型：回答登录过程中的提问 */
+  answerAuthPrompt(promptId: string, value: string): Promise<boolean>
+  /** 大模型：取消登录 */
+  cancelLogin(): Promise<void>
+  /** 大模型：登出 */
+  logoutProvider(providerId: string): Promise<boolean>
+  /** 大模型：重新查一遍可用模型 */
+  refreshModels(): Promise<ModelEntry[]>
+  /** 大模型：读 models.json */
+  getModelsConfig(): Promise<string>
+  /** 大模型：写 models.json */
+  setModelsConfig(content: string): Promise<boolean>
+  /** 订阅登录过程中的事件 */
+  onModelAuthEvent(listener: (event: ModelAuthEvent) => void): () => void
 }

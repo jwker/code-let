@@ -61,7 +61,7 @@ export class SettingsStore {
     } else if (item.control === 'text') {
       if (typeof value !== 'string') return false
     } else {
-      // info / action 不是可写的设置项
+      // info / action / panel 不是可写的设置项
       return false
     }
     this.values[id] = next

@@ -3,6 +3,7 @@ import { SETTINGS_CATEGORIES, SETTINGS_ITEMS, type SettingItem } from '@contract
 import type { ConsoleStats } from '@contract/index'
 import { host } from '../host'
 import { ConfirmDialog } from './ConfirmDialog'
+import { ModelManagement } from './ModelManagement'
 import { WindowHeader } from './WindowHeader'
 
 /**
@@ -115,7 +116,12 @@ export function SettingsApp() {
             <div className="text-[12.5px] text-fg-3">这一类还没有设置项。</div>
           )}
 
-          {items.map((item) => (
+          {/* panel 项：这一类由专门的面板渲染（标题与说明已经在上面了） */}
+          {items.some((item) => item.control === 'panel') && <ModelManagement />}
+
+          {items
+            .filter((item) => item.control !== 'panel')
+            .map((item) => (
             <div key={item.id} className="border-b border-hairline py-3 last:border-b-0">
               <div className="flex items-start gap-4">
                 <div className="min-w-0 flex-1">

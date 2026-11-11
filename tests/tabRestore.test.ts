@@ -65,6 +65,7 @@ class FakePi implements PiRuntimePort {
   async listModels(): Promise<ModelOption[]> {
     return []
   }
+  async refreshModelAvailability(): Promise<void> {}
 
   async selectModel(): Promise<void> {
     // 不参与

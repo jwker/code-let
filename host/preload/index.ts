@@ -23,6 +23,11 @@ import {
   type GitStatus,
   type HostSnapshot,
   type ModelOption,
+  type ModelAuthEvent,
+  type ModelEntry,
+  type ModelSettings,
+  type ModelSettingsChange,
+  type ProviderInfo,
   type PickAttachmentsResult,
   type SessionEvent,
   type StreamItem,
@@ -160,6 +165,31 @@ const api: CodeletApi = {
   getSettings: () => ipcRenderer.invoke(IPC.settingsGet) as Promise<Record<string, unknown>>,
   setSetting: (id, value) => ipcRenderer.invoke(IPC.settingsSet, { id, value }) as Promise<boolean>,
   openSettingsWindow: () => ipcRenderer.invoke(IPC.settingsOpen) as Promise<void>,
+
+  listProviders: () => ipcRenderer.invoke(IPC.modelProviders) as Promise<ProviderInfo[]>,
+  listAllModels: () => ipcRenderer.invoke(IPC.modelList) as Promise<ModelEntry[]>,
+  getModelSettings: () => ipcRenderer.invoke(IPC.modelSettingsGet) as Promise<ModelSettings>,
+  setModelSetting: (change: ModelSettingsChange) =>
+    ipcRenderer.invoke(IPC.modelSettingsSet, change) as Promise<boolean>,
+  loginProvider: (providerId, method) =>
+    ipcRenderer.invoke(IPC.modelLogin, { providerId, method }) as Promise<void>,
+  answerAuthPrompt: (promptId, value) =>
+    ipcRenderer.invoke(IPC.modelLoginAnswer, { promptId, value }) as Promise<boolean>,
+  cancelLogin: () => ipcRenderer.invoke(IPC.modelLoginCancel) as Promise<void>,
+  logoutProvider: (providerId) =>
+    ipcRenderer.invoke(IPC.modelLogout, { providerId }) as Promise<boolean>,
+  refreshModels: () => ipcRenderer.invoke(IPC.modelRefresh) as Promise<ModelEntry[]>,
+  getModelsConfig: () => ipcRenderer.invoke(IPC.modelConfigGet) as Promise<string>,
+  setModelsConfig: (content) =>
+    ipcRenderer.invoke(IPC.modelConfigSet, { content }) as Promise<boolean>,
+
+  onModelAuthEvent: (listener) => {
+    const handler = (_event: unknown, payload: ModelAuthEvent): void => listener(payload)
+    ipcRenderer.on(IPC_EVENTS.model, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_EVENTS.model, handler)
+    }
+  },
 
   onConsoleEvent: (listener) => {
     const handler = (_event: unknown, payload: ConsoleEvent): void => listener(payload)

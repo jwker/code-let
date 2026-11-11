@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { registerIpc } from './ipc'
 import { applySettings, registerConsoleIpc } from './consoleIpc'
+import { broadcastModelEvent, openAuthUrl, registerModelIpc } from './modelIpc'
+import { ModelManager } from './modelManager'
 import { refreshDockMenu } from './dockMenu'
 import { SettingsStore } from './settings'
 import { APP_ORIGIN, registerSchemesAsPrivileged, serveRenderer } from './protocol'
@@ -36,7 +38,25 @@ const state = new HostState({
 const settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'))
 let disposeIpc: (() => void) | null = null
 let disposeConsoleIpc: (() => void) | null = null
+let disposeModelIpc: (() => void) | null = null
 let browser: BrowserManager | null = null
+
+/**
+ * 大模型管理。
+ *
+ * 登录事件发给所有窗口；授权链接顺手在浏览器里打开 ——
+ * OAuth 的那一步在浏览器里完成，界面上留一份链接是给人手工兜底的。
+ */
+const modelManager = new ModelManager({
+  emit: (event) => {
+    broadcastModelEvent(event)
+    if (event.type === 'auth_url') {
+      void openAuthUrl(event.url)
+    } else if (event.type === 'device_code') {
+      void openAuthUrl(event.verificationUri)
+    }
+  }
+})
 
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -160,6 +180,7 @@ if (!app.requestSingleInstanceLock()) {
 
     disposeIpc = registerIpc(state, () => browser)
     disposeConsoleIpc = registerConsoleIpc(state, settings)
+    disposeModelIpc = registerModelIpc(state, modelManager)
     // 设置里的开关和上限要落到存储上 —— 开关是运行时状态，打开就生效
     applySettings(state, settings)
     // 老记录补上会话标题（只读一小块，不解压整个容器）
@@ -188,6 +209,7 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     disposeIpc?.()
     disposeConsoleIpc?.()
+    disposeModelIpc?.()
     void state.dispose()
   })
 }

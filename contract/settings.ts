@@ -9,7 +9,7 @@
  */
 
 /** 控件类型 */
-export type SettingControl = 'switch' | 'number' | 'text' | 'info' | 'action'
+export type SettingControl = 'switch' | 'number' | 'text' | 'info' | 'action' | 'panel'
 
 export interface SettingCategory {
   id: string
@@ -33,6 +33,8 @@ export interface SettingItem {
   info?: 'consoleStats'
   /** action 项：渲染进程按这个 id 找对应的处理函数 */
   action?: 'consoleClear'
+  /** panel 项：这一类交给一个专门的面板渲染 */
+  panel?: 'modelManagement'
   /** 危险操作 —— 按钮用危险色 */
   danger?: boolean
   /** 操作前要确认 */
@@ -41,10 +43,19 @@ export interface SettingItem {
 
 export const SETTINGS_CATEGORIES: SettingCategory[] = [
   { id: 'general', title: '通用', order: 1 },
-  { id: 'debug', title: '调试', order: 2 }
+  { id: 'debug', title: '调试', order: 2 },
+  { id: 'models', title: '大模型', order: 3 }
 ]
 
 export const SETTINGS_ITEMS: SettingItem[] = [
+  {
+    id: 'models.panel',
+    category: 'models',
+    label: '大模型管理',
+    description: '凭据、可用模型、默认模型与思考等级、自定义端点。',
+    control: 'panel',
+    panel: 'modelManagement'
+  },
   {
     id: 'console.record',
     category: 'debug',
