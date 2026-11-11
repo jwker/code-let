@@ -16,7 +16,9 @@ import { gzip } from 'node:zlib'
 import type {
   ConsoleFieldResult,
   ConsoleItemSkeleton,
+  ConsoleLimits,
   ConsoleListResult,
+  ConsolePruneResult,
   ConsoleRecordMeta,
   ConsoleShell,
   ConsoleStats
@@ -105,6 +107,21 @@ const MAX_FIELD_BYTES = 200 * 1024
 const DEFAULT_MAX_RECORD_BYTES = 32 * 1024 * 1024
 /** 队列里最多攒多少条待写记录 */
 const MAX_QUEUE = 64
+
+/** 总占用上限的默认值 —— 512MB */
+const DEFAULT_MAX_TOTAL_BYTES = 512 * 1024 * 1024
+/** 至少保留最近多少条（按时间清理时这几条不动） */
+const DEFAULT_KEEP_RECENT = 50
+/**
+ * 保留时长 —— 超过这个天数的记录会被清掉。
+ *
+ * 这是**写死的规则，不是设置项**：按「哪个限制先触达就清哪个」的做法，
+ * 时长跟占用上限一起构成触发条件，但时长本身不给用户调 ——
+ * 要留更久就把占用上限调大。
+ */
+const RETENTION_DAYS = 7
+/** 两次自动清理之间至少隔多久 —— 写一条就扫一遍目录太浪费 */
+const PRUNE_INTERVAL_MS = 60_000
 
 const gzipAsync = promisify(gzip)
 
@@ -267,6 +284,17 @@ export class DebugConsoleStore {
   private failed = 0
   private maxRecordBytes: number
   private enabled = true
+  /** 自动清理：超上限或过期的记录自动删 */
+  private autoDelete = true
+  /** 总占用上限（字节）。0 = 不限制 */
+  private maxTotalBytes = DEFAULT_MAX_TOTAL_BYTES
+  /** 至少保留最近多少条（按时间清理时不动这几条） */
+  private keepRecent = DEFAULT_KEEP_RECENT
+  /** 正在详情里看的那条 —— 清理时跳过它 */
+  private protectedId: string | null = null
+  /** 上次自动清理是什么时候 */
+  private lastPrune: ConsolePruneResult | null = null
+  private lastPruneAt = 0
   /** 写完一条就通知一下 —— 界面据此刷新列表 */
   private changeListener: (() => void) | null = null
 
@@ -300,6 +328,31 @@ export class DebugConsoleStore {
   /** 单条记录的上限（字节）。0 = 不限制 */
   setMaxRecordBytes(bytes: number): void {
     this.maxRecordBytes = bytes
+  }
+
+  /** 自动清理开关 */
+  setAutoDelete(enabled: boolean): void {
+    this.autoDelete = enabled
+  }
+
+  /** 总占用上限（字节）。0 = 不限制 */
+  setMaxTotalBytes(bytes: number): void {
+    this.maxTotalBytes = bytes
+  }
+
+  /** 至少保留最近多少条 */
+  setKeepRecent(count: number): void {
+    this.keepRecent = Math.max(0, Math.floor(count))
+  }
+
+  /**
+   * 记下正在看的那条 —— 清理时跳过它。
+   *
+   * 不跳过的话，用户点开一条记录正看着，下一个请求写进来就把它清掉了，
+   * 点下一个节点就报错。
+   */
+  protect(id: string | null): void {
+    this.protectedId = id
   }
 
   /** 正在写盘的条数、失败的条数 —— 界面上显示 */
@@ -345,6 +398,8 @@ export class DebugConsoleStore {
       } catch {
         // 通知失败不影响存储
       }
+      // 写完一轮看看要不要清理（内部有节流）
+      this.maybePrune()
     }
   }
 
@@ -490,7 +545,9 @@ export class DebugConsoleStore {
         blobBytes: 0,
         totalBytes: 0,
         writing: 0,
-        failed: 0
+        failed: 0,
+        limits: this.limits(),
+        lastPrune: this.lastPrune
       }
     }
     let count = 0
@@ -518,7 +575,9 @@ export class DebugConsoleStore {
       blobBytes,
       totalBytes: contentBytes + indexBytes + blobBytes,
       writing: status.writing,
-      failed: status.failed
+      failed: status.failed,
+      limits: this.limits(),
+      lastPrune: this.lastPrune
     }
   }
 
@@ -660,6 +719,130 @@ export class DebugConsoleStore {
     rmSync(join(this.requestsDir, `${id}.cgz`), { force: true })
     this.pruneBlobs()
     return true
+  }
+
+  /**
+   * 自动清理。
+   *
+   * 两条规则，哪条先触达就执行哪条：
+   * 1. **保留时长** —— 超过 RETENTION_DAYS 天的记录删掉，但最近 keepRecent 条不动。
+   * 2. **占用上限** —— 总占用超了 maxTotalBytes，就按最老优先删到降下来为止。
+   *    这一条**不受**上一条的保底约束 —— 磁盘不爆比「留着最近 50 条」更要紧。
+   *
+   * 两种情况都不碰正在看的那条。
+   */
+  prune(): ConsolePruneResult {
+    const empty: ConsolePruneResult = { deleted: 0, freedBytes: 0, at: Date.now() }
+    if (!this.dir || !this.autoDelete) return empty
+
+    const indexes = this.readIndexes()
+    if (indexes.length === 0) return empty
+
+    // 每条在磁盘上占多少（索引 + 内容容器）
+    const sizes = new Map<string, number>()
+    let total = 0
+    for (const index of indexes) {
+      const size =
+        fileSize(join(this.requestsDir, `${index.id}.idx.json`)) +
+        fileSize(join(this.requestsDir, `${index.id}.cgz`))
+      sizes.set(index.id, size)
+      total += size
+    }
+
+    // 从老到新
+    const ordered = [...indexes].sort((a, b) => a.meta.capturedAt - b.meta.capturedAt)
+    const doomed = new Set<string>()
+
+    // 规则 1：太老的
+    const cutoff = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000
+    const keepFrom = Math.max(0, ordered.length - this.keepRecent)
+    for (let i = 0; i < keepFrom; i += 1) {
+      const index = ordered[i]
+      if (index.meta.capturedAt < cutoff) doomed.add(index.id)
+    }
+
+    // 规则 2：超量的 —— 从最老开始删
+    if (this.maxTotalBytes > 0) {
+      let freed = 0
+      for (const id of doomed) freed += sizes.get(id) ?? 0
+      let remaining = total - freed
+      for (const index of ordered) {
+        if (remaining <= this.maxTotalBytes) break
+        if (doomed.has(index.id)) continue
+        if (index.id === this.protectedId) continue
+        doomed.add(index.id)
+        remaining -= sizes.get(index.id) ?? 0
+      }
+    }
+
+    // 正在看的那条永远不删
+    if (this.protectedId) doomed.delete(this.protectedId)
+    if (doomed.size === 0) {
+      this.lastPruneAt = Date.now()
+      return empty
+    }
+
+    // 图片 blob 是多个记录共用的 —— 删完记录再清一遍没人引用的
+    const blobsBefore = this.blobBytes()
+    let freedBytes = 0
+    for (const id of doomed) {
+      freedBytes += sizes.get(id) ?? 0
+      rmSync(join(this.requestsDir, `${id}.idx.json`), { force: true })
+      rmSync(join(this.requestsDir, `${id}.cgz`), { force: true })
+    }
+    this.pruneBlobs()
+    const freed = freedBytes + Math.max(0, blobsBefore - this.blobBytes())
+
+    const result: ConsolePruneResult = { deleted: doomed.size, freedBytes: freed, at: Date.now() }
+    this.lastPrune = result
+    this.lastPruneAt = result.at
+    return result
+  }
+
+  /** 上次清理的结果 —— 界面上要出声，不能静默删 */
+  lastPruneResult(): ConsolePruneResult | null {
+    return this.lastPrune
+  }
+
+  /** 当前的清理规则 —— 界面上要把上限显示出来 */
+  limits(): ConsoleLimits {
+    return {
+      autoDelete: this.autoDelete,
+      maxTotalBytes: this.maxTotalBytes,
+      keepRecent: this.keepRecent,
+      retentionDays: RETENTION_DAYS
+    }
+  }
+
+  /** 图片目录占多少 */
+  private blobBytes(): number {
+    let sum = 0
+    try {
+      for (const name of readdirSync(this.blobsDir)) sum += fileSize(join(this.blobsDir, name))
+    } catch {
+      // 没有 blobs 目录就是还没有图片
+    }
+    return sum
+  }
+
+  /**
+   * 写完一轮之后看看要不要清 —— 节流，最多每分钟一次。
+   *
+   * 每写一条就扫一遍目录太浪费：记录一多，目录扫描本身就是负担。
+   */
+  private maybePrune(): void {
+    if (!this.autoDelete) return
+    const now = Date.now()
+    if (now - this.lastPruneAt < PRUNE_INTERVAL_MS) return
+    this.lastPruneAt = now
+    const result = this.prune()
+    if (result.deleted > 0) {
+      try {
+        this.changeListener?.()
+      } catch {
+        // 通知失败不影响存储
+      }
+    }
   }
 
   /** 删一个会话的全部记录，返回删了几条 */

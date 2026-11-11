@@ -76,10 +76,40 @@ export const SETTINGS_ITEMS: SettingItem[] = [
     unit: 'MB'
   },
   {
+    id: 'console.maxTotalBytes',
+    category: 'debug',
+    label: '总占用上限',
+    description: '记录超过这个占用就按最老的删。填 0 表示不限制。',
+    control: 'number',
+    default: 512 * 1024 * 1024,
+    min: 0,
+    unit: 'MB'
+  },
+  {
+    id: 'console.keepRecent',
+    category: 'debug',
+    label: '至少保留',
+    description: '最近这么多条永远不按时间删 —— 应用很久没开时也留着。',
+    control: 'number',
+    default: 50,
+    min: 0,
+    unit: '条'
+  },
+  {
+    id: 'console.autoDelete',
+    category: 'debug',
+    label: '自动清理',
+    description:
+      '打开后，超出上限或超过保留时长的记录会被自动删掉。删的是诊断副本 —— 对话的原本还在会话文件里。',
+    control: 'switch',
+    default: true
+  },
+  {
     id: 'console.usage',
     category: 'debug',
     label: '当前存储占用',
-    description: '记录只增不减，不自动删除。删不删由你决定。',
+    description:
+      '超出总占用上限或超过 7 天的老记录会被自动清掉（最近「至少保留」条不动）。删的是诊断副本 —— 对话的原本还在会话文件里。',
     control: 'info',
     info: 'consoleStats'
   },

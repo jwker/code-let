@@ -155,6 +155,7 @@ const api: CodeletApi = {
   deleteConsoleRecords: (recordIds) =>
     ipcRenderer.invoke(IPC.consoleDeleteRecords, { recordIds }) as Promise<{ deleted: number }>,
   clearConsole: () => ipcRenderer.invoke(IPC.consoleDeleteAll) as Promise<{ deleted: number }>,
+  protectConsoleRecord: (id) => ipcRenderer.invoke(IPC.consoleProtect, { id }) as Promise<void>,
   exportConsole: (request: ConsoleExportRequest) =>
     ipcRenderer.invoke(IPC.consoleExport, request) as Promise<ConsoleExportResult>,
   cancelConsoleExport: (jobId) =>

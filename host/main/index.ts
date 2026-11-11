@@ -279,6 +279,17 @@ if (!app.requestSingleInstanceLock()) {
     await state.init().catch((error) => {
       console.error('宿主状态初始化失败:', error)
     })
+    // 启动时清一次 —— 应用关着的时候磁盘不会自己变干净
+    try {
+      const result = state.console.prune()
+      if (result.deleted > 0) {
+        console.log(
+          `调试记录自动清理：删了 ${result.deleted} 条，释放 ${Math.round(result.freedBytes / 1024 / 1024)}MB`
+        )
+      }
+    } catch (error) {
+      console.error('调试记录清理失败:', error)
+    }
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow()

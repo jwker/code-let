@@ -87,11 +87,17 @@ test.describe.serial('调试控制台', () => {
     const row = pane.getByRole('button', { name: /这段内容要能搜到/ })
     await expect(row).toBeVisible()
 
+    // 列表页在「请求」这个标签下
+    await expect(page.getByRole('button', { name: '请求', exact: true })).toBeVisible()
+
     // 点开记录 → 抽屉
     await row.click()
     const drawer = page.locator('.insp-body')
     await expect(drawer.getByRole('button', { name: /transcript/ })).toBeVisible()
     await expect(drawer.getByText('claude-e2e').first()).toBeVisible()
+
+    // 详情是「请求」这一页里的下钻 —— 标签栏还在
+    await expect(page.getByRole('button', { name: '请求', exact: true })).toBeVisible()
 
     // transcript 页签：骨架里能看到两条消息
     await expect(drawer.getByText('messages', { exact: false }).first()).toBeVisible()

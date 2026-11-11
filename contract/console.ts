@@ -69,6 +69,32 @@ export interface ConsoleStats {
   writing: number
   /** 写盘失败的条数 */
   failed: number
+  /** 当前生效的清理规则 —— 界面上要把上限显示出来 */
+  limits: ConsoleLimits
+  /** 上次自动清理的结果 —— 清理要出声，不能静默删 */
+  lastPrune: ConsolePruneResult | null
+}
+
+/** 自动清理的规则 */
+export interface ConsoleLimits {
+  /** 自动清理开没开 */
+  autoDelete: boolean
+  /** 总占用上限（字节）。0 = 不限制 */
+  maxTotalBytes: number
+  /** 至少保留最近多少条 */
+  keepRecent: number
+  /** 保留时长（天）—— 写死的规则，不是设置项 */
+  retentionDays: number
+}
+
+/** 一次清理的结果 */
+export interface ConsolePruneResult {
+  /** 删了几条 */
+  deleted: number
+  /** 释放了多少字节 */
+  freedBytes: number
+  /** 什么时候清的（毫秒时间戳） */
+  at: number
 }
 
 /** 数组里一项的骨架 —— 不含正文，点开才去取 */

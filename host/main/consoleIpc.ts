@@ -108,6 +108,11 @@ export function registerConsoleIpc(state: HostState, settings: SettingsStore): (
     return { deleted }
   })
 
+  ipcMain.handle(IPC.consoleProtect, (_event, payload: unknown) => {
+    const { id } = payload as { id?: unknown }
+    state.console.protect(typeof id === 'string' ? id : null)
+  })
+
   ipcMain.handle(IPC.consoleDeleteAll, () => {
     const deleted = state.console.deleteAll()
     broadcast({ type: 'updated', stats: state.console.stats() })
@@ -229,8 +234,19 @@ export function registerConsoleIpc(state: HostState, settings: SettingsStore): (
     const { id, value } = payload as { id?: unknown; value?: unknown }
     if (typeof id !== 'string') return false
     const ok = settings.set(id, value)
-    if (ok) applySettings(state, settings)
-    return ok
+    if (!ok) return false
+    applySettings(state, settings)
+    /*
+     * 清理相关的设置改了 → 立刻按新规则清一次。
+     *
+     * 不然把上限从 512MB 调到 50MB 之后什么都没发生，要等到下一次请求落盘才生效 ——
+     * 看着像没生效。prune() 自己是幂等的，没东西可删就什么也不做。
+     */
+    if (id.startsWith('console.')) {
+      const result = state.console.prune()
+      if (result.deleted > 0) state.emit('console-updated')
+    }
+    return true
   })
 
   ipcMain.handle(IPC.settingsOpen, async () => {
@@ -246,6 +262,7 @@ export function registerConsoleIpc(state: HostState, settings: SettingsStore): (
     ipcMain.removeHandler(IPC.consoleDeleteSession)
     ipcMain.removeHandler(IPC.consoleDeleteRecords)
     ipcMain.removeHandler(IPC.consoleDeleteAll)
+    ipcMain.removeHandler(IPC.consoleProtect)
     ipcMain.removeHandler(IPC.consoleReveal)
     ipcMain.removeHandler(IPC.consoleWindowOpen)
     ipcMain.removeHandler(IPC.consoleWindowClose)
@@ -264,6 +281,12 @@ export function applySettings(state: HostState, settings: SettingsStore): void {
   state.console.setEnabled(record !== false)
   const max = settings.get('console.maxRecordBytes')
   if (typeof max === 'number') state.console.setMaxRecordBytes(max)
+  const maxTotal = settings.get('console.maxTotalBytes')
+  if (typeof maxTotal === 'number') state.console.setMaxTotalBytes(maxTotal)
+  const keepRecent = settings.get('console.keepRecent')
+  if (typeof keepRecent === 'number') state.console.setKeepRecent(keepRecent)
+  const autoDelete = settings.get('console.autoDelete')
+  state.console.setAutoDelete(autoDelete !== false)
 }
 
 /** 设置窗口 —— 复用同一个渲染页面，靠查询参数区分 */

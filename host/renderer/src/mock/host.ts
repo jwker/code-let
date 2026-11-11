@@ -210,7 +210,14 @@ const FAKE_CONSOLE_STATS: ConsoleStats = {
   blobBytes: 0,
   totalBytes: 432_400,
   writing: 0,
-  failed: 0
+  failed: 0,
+  limits: {
+    autoDelete: true,
+    maxTotalBytes: 512 * 1024 * 1024,
+    keepRecent: 50,
+    retentionDays: 7
+  },
+  lastPrune: null
 }
 
 const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
@@ -849,6 +856,7 @@ export function createMockApi(): CodeletApi {
     deleteConsoleSession: async () => ({ deleted: 0 }),
     deleteConsoleRecords: async () => ({ deleted: 0 }),
     clearConsole: async () => ({ deleted: 0 }),
+    protectConsoleRecord: async () => undefined,
     exportConsole: async () => ({ ok: false, jobId: 'preview', message: '预览模式不能导出' }),
     cancelConsoleExport: async () => undefined,
     revealConsoleDir: async () => undefined,

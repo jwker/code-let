@@ -175,6 +175,8 @@ export const IPC = {
   consoleDeleteRecords: 'host:console:deleteRecords',
   /** 调试控制台：清空全部记录 */
   consoleDeleteAll: 'host:console:deleteAll',
+  /** 调试控制台：记下正在看的那条（自动清理时跳过它） */
+  consoleProtect: 'host:console:protect',
   /** 调试控制台：导出（单条 / 多会话 / 全部） */
   consoleExport: 'host:console:export',
   /** 调试控制台：取消正在进行的导出 */
@@ -1033,6 +1035,11 @@ export interface CodeletApi {
   deleteConsoleRecords(recordIds: string[]): Promise<{ deleted: number }>
   /** 调试控制台：清空全部记录 */
   clearConsole(): Promise<{ deleted: number }>
+  /**
+   * 调试控制台：记下正在看的那条记录（自动清理时跳过它）。
+   * 传 null 表示没有正在看的。
+   */
+  protectConsoleRecord(id: string | null): Promise<void>
   /** 调试控制台：导出（单条 / 多会话 / 全部） */
   exportConsole(request: ConsoleExportRequest): Promise<ConsoleExportResult>
   /** 调试控制台：取消正在进行的导出 */

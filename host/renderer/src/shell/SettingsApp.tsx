@@ -244,8 +244,26 @@ function Usage({ stats }: { stats: ConsoleStats | null }) {
     ['索引', stats.indexBytes],
     ['图片', stats.blobBytes]
   ]
+  const limit = stats.limits.autoDelete ? stats.limits.maxTotalBytes : 0
+  const ratio = limit > 0 ? Math.min(1, stats.totalBytes / limit) : 0
   return (
     <div className="w-64">
+      {limit > 0 && (
+        <div className="mb-1">
+          {/* 离上限还有多远 —— 比一对数字好读 */}
+          <div className="h-1 overflow-hidden rounded-full bg-sunken">
+            <div
+              className={`h-full rounded-full ${ratio >= 0.9 ? 'bg-warn' : 'bg-fg-3'}`}
+              style={{ width: `${Math.round(ratio * 100)}%` }}
+            />
+          </div>
+          <div className="mt-0.5 text-[11px] text-fg-3">
+            {stats.totalBytes >= limit
+              ? '已到上限，下次写入后会清理'
+              : `离上限还有 ${formatBytes(limit - stats.totalBytes)}`}
+          </div>
+        </div>
+      )}
       {rows.map(([label, value]) => (
         <div key={label} className="flex items-center text-[11.5px] text-fg-3">
           <span>{label}</span>
@@ -258,6 +276,11 @@ function Usage({ stats }: { stats: ConsoleStats | null }) {
         <span>合计</span>
         <span className="ml-auto font-mono text-fg-1">{formatBytes(stats.totalBytes)}</span>
       </div>
+      {stats.limits.autoDelete && stats.lastPrune && stats.lastPrune.deleted > 0 && (
+        <div className="mt-1 text-[11px] leading-relaxed text-fg-3">
+          上次清理：{formatWhen(stats.lastPrune.at)}，删了 {stats.lastPrune.deleted} 条
+        </div>
+      )}
       <button
         type="button"
         onClick={() => void host.revealConsoleDir()}
@@ -267,6 +290,15 @@ function Usage({ stats }: { stats: ConsoleStats | null }) {
       </button>
     </div>
   )
+}
+
+/** 什么时候 —— 近的用相对时间，远的用日期 */
+function formatWhen(at: number): string {
+  const diff = Date.now() - at
+  if (diff < 60_000) return '刚刚'
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`
+  return `${Math.floor(diff / 86_400_000)} 天前`
 }
 
 function formatBytes(bytes: number): string {

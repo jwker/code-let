@@ -95,7 +95,76 @@ interface LoadedField {
   error?: string
 }
 
+/**
+ * 控制台的顶层标签。
+ *
+ * 现在只有「请求」—— 一条条模型请求的记录。以后控制台会有别的内容
+ * （比如连接状态、扩展日志），各自一页。
+ *
+ * 标签栏常驻：打开一条请求的详情时它也还在 —— 详情是「请求」这一页里的
+ * 下钻，不是另一个顶层页面。
+ */
+const TABS = [{ key: 'requests', label: '请求' }] as const
+
+type ConsoleTabKey = (typeof TABS)[number]['key']
+
 export function ConsolePane({ detached = false }: { detached?: boolean }) {
+  const [tab, setTab] = useState<ConsoleTabKey>('requests')
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex h-9 flex-none items-end gap-1 border-b border-hairline bg-panel px-2">
+        {TABS.map((entry) => (
+          <button
+            key={entry.key}
+            type="button"
+            onClick={() => setTab(entry.key)}
+            className={[
+              'flex h-7 flex-none items-center rounded-t-md border-b-2 px-2 text-[11.5px]',
+              tab === entry.key
+                ? 'border-fg-1 font-semibold text-fg-1'
+                : 'border-transparent text-fg-2 hover:text-fg-1'
+            ].join(' ')}
+          >
+            {entry.label}
+          </button>
+        ))}
+        <ConsoleActions detached={detached} />
+      </div>
+
+      {tab === 'requests' && <ConsoleRequests />}
+    </div>
+  )
+}
+
+/** 标签栏右侧的控制台级操作 —— 跟当前页无关的那几个 */
+function ConsoleActions({ detached }: { detached: boolean }) {
+  return (
+    <div className="ml-auto flex items-center gap-1 self-center">
+      <button
+        type="button"
+        title="打开存储目录"
+        className="rounded-md px-1.5 py-0.5 text-[11px] text-fg-3 hover:bg-sunken hover:text-fg-1"
+        onClick={() => void host.revealConsoleDir()}
+      >
+        目录
+      </button>
+      {!detached && (
+        <button
+          type="button"
+          title="分离成独立窗口"
+          className="rounded-md px-1.5 py-0.5 text-[11px] text-fg-3 hover:bg-sunken hover:text-fg-1"
+          onClick={() => void host.openConsoleWindow()}
+        >
+          分离
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** 「请求」这一页 —— 列表与详情 */
+function ConsoleRequests() {
   const [records, setRecords] = useState<ConsoleRecordMeta[]>([])
   const [stats, setStats] = useState<ConsoleStats | null>(null)
   const [sessionFilter, setSessionFilter] = useState<string>('')
@@ -112,6 +181,8 @@ export function ConsolePane({ detached = false }: { detached?: boolean }) {
   const [exportProgress, setExportProgress] = useState<ConsoleExportProgress | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const listSeq = useRef(0)
+  /** 已经报过的清理结果的时间戳 —— 同一次清理只报一次 */
+  const seenPruneAt = useRef(0)
 
   const load = useCallback(async (): Promise<void> => {
     const seq = ++listSeq.current
@@ -123,6 +194,17 @@ export function ConsolePane({ detached = false }: { detached?: boolean }) {
       if (seq !== listSeq.current) return
       setRecords(list.records)
       setStats(nextStats)
+      /*
+       * 自动清理要出声。
+       *
+       * 静默删会让人不敢用这个功能 —— 不知道什么时候少了几条，就不敢信它。
+       * 按清理时间戳去重：同一次清理在列表刷新几次后不重复报。
+       */
+      const pruned = nextStats.lastPrune
+      if (pruned && pruned.deleted > 0 && pruned.at > seenPruneAt.current) {
+        seenPruneAt.current = pruned.at
+        setMessage(`已自动清理 ${pruned.deleted} 条记录，释放 ${formatBytes(pruned.freedBytes)}`)
+      }
     } catch (error) {
       if (seq === listSeq.current) {
         setMessage(error instanceof Error ? error.message : String(error))
@@ -133,6 +215,23 @@ export function ConsolePane({ detached = false }: { detached?: boolean }) {
   useEffect(() => {
     void load()
   }, [load])
+
+  /**
+   * 正在详情里看的那条告诉存储层「别删」。
+   *
+   * 不告诉的话，用户点开一条记录正看着，下一个请求写进来触发了清理，
+   * 它就被删了 —— 点下一个节点直接报错。
+   */
+  useEffect(() => {
+    void host.protectConsoleRecord(selected?.id ?? null)
+  }, [selected?.id])
+
+  // 关掉面板时解掉保护 —— 留着会让那条永远不被清理
+  useEffect(() => {
+    return () => {
+      void host.protectConsoleRecord(null)
+    }
+  }, [])
 
   // 有新记录落盘就刷新列表 —— 存储那边会推事件过来
   useEffect(() => {
@@ -271,61 +370,38 @@ export function ConsolePane({ detached = false }: { detached?: boolean }) {
   const selectedSession = selected ? sessions.find(([id]) => id === selected.sessionId) : null
 
   return (
-    <div className="insp-body">
+    <div className="insp-body min-h-0 flex-1">
       {!selected && (
       <div className="flex min-h-0 flex-1 flex-col">
-        <header
-          className={[
-            'flex flex-none items-center px-3 text-[13px] font-medium text-fg-1',
-            detached ? 'h-8' : 'h-10 border-b border-hairline'
-          ].join(' ')}
-        >
-          {detached ? null : '控制台'}
-          <div className="ml-auto flex items-center gap-1">
-            <button
-              type="button"
-              title="全选当前列出的记录"
-              className="rounded-md px-1.5 py-0.5 text-[11px] text-fg-3 hover:bg-sunken hover:text-fg-1"
-              onClick={() => {
-                const ids = visible.map((record) => record.id)
-                setSelectedIds((previous) =>
-                  ids.length > 0 && ids.every((id) => previous.includes(id)) ? [] : ids
-                )
-              }}
-            >
-              {visible.length > 0 && visible.every((record) => checkedIds.includes(record.id))
-                ? '取消全选'
-                : '全选'}
-            </button>
-            <button
-              type="button"
-              title="打开存储目录"
-              className="rounded-md px-1.5 py-0.5 text-[11px] text-fg-3 hover:bg-sunken hover:text-fg-1"
-              onClick={() => void host.revealConsoleDir()}
-            >
-              目录
-            </button>
-            {!detached && (
+        <div className="flex flex-none items-center px-3 text-[11px] text-fg-3">
+          {stats ? (
+            <>
+              <span>
+                <span className="text-fg-2">{stats.count}</span> 条 ·{' '}
+                <span className="text-fg-2">{formatBytes(stats.totalBytes)}</span>
+                {/* 开了自动清理并且设了上限就把上限带上 —— 不然不知道离满还有多远 */}
+                {stats.limits.autoDelete && stats.limits.maxTotalBytes > 0
+                  ? ` / ${formatBytes(stats.limits.maxTotalBytes)}`
+                  : ''}
+                {stats.writing > 0 ? ' · 写入中…' : ''}
+                {stats.failed > 0 ? ` · 失败 ${stats.failed} 条` : ''}
+              </span>
               <button
                 type="button"
-                title="分离成独立窗口"
-                className="rounded-md px-1.5 py-0.5 text-[11px] text-fg-3 hover:bg-sunken hover:text-fg-1"
-                onClick={() => void host.openConsoleWindow()}
+                title="全选当前列出的记录"
+                className="ml-auto rounded-md px-1.5 py-0.5 text-[11px] text-fg-3 hover:bg-sunken hover:text-fg-1"
+                onClick={() => {
+                  const ids = visible.map((record) => record.id)
+                  setSelectedIds((previous) =>
+                    ids.length > 0 && ids.every((id) => previous.includes(id)) ? [] : ids
+                  )
+                }}
               >
-                分离
+                {visible.length > 0 && visible.every((record) => checkedIds.includes(record.id))
+                  ? '取消全选'
+                  : '全选'}
               </button>
-            )}
-          </div>
-        </header>
-
-        <div className="flex-none px-3 pb-2 text-[11px] text-fg-3">
-          {stats ? (
-            <span>
-              <span className="text-fg-2">{stats.count}</span> 条 ·{' '}
-              <span className="text-fg-2">{formatBytes(stats.totalBytes)}</span>
-              {stats.writing > 0 ? ' · 写入中…' : ''}
-              {stats.failed > 0 ? ` · 失败 ${stats.failed} 条` : ''}
-            </span>
+            </>
           ) : (
             '读取中…'
           )}
