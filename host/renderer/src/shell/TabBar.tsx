@@ -156,15 +156,21 @@ function Tab({ tab, active, clipped }: { tab: TabInfo; active: boolean; clipped:
           <span className="h-1.5 w-1.5 flex-none animate-pulse rounded-full bg-info" />
         ) : null}
         <span className="min-w-0 truncate">{tab.title}</span>
-        {/* 项目标识：药丸里用圆点分隔，不用竖线（竖线跟药丸边框会读成双线） */}
-        <span aria-hidden="true" className="flex-none text-[11px] leading-none text-fg-3 opacity-70">
+        {/*
+          项目标识：药丸里用圆点分隔，不用竖线（竖线跟药丸边框会读成双线）。
+          未激活时整颗标签都降到 fg-3，激活后这两处跟着提到 fg-2，跟标题（fg-1）保持一级差。
+        */}
+        <span
+          aria-hidden="true"
+          className="flex-none text-[11px] leading-none text-fg-3 opacity-70 group-aria-[current=page]/tab:text-fg-2"
+        >
           ·
         </span>
         <span
           className={[
             'max-w-[72px] flex-none truncate text-[9.5px]',
-            // 项目已经从清单里移走了 —— 用告警色标出来
-            tab.removed ? 'text-warn' : 'text-fg-3'
+            // 项目已经从清单里移走了 —— 用告警色标出来，不随激活态变化
+            tab.removed ? 'text-warn' : 'text-fg-3 group-aria-[current=page]/tab:text-fg-2'
           ].join(' ')}
         >
           {tab.projectName}

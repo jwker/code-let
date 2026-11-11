@@ -452,6 +452,10 @@
   top: 0;
   visibility: hidden;
 }
+/*
+ * 未激活：退进标题栏 —— 透明底、透明描边，文字降一档。
+ * 描边是透明的而不是没有：去掉那 1px，激活那颗就比旁边的宽 2px，切换时整排跟着跳。
+ */
 .shell-tabs .tab {
   display: flex;
   align-items: center;
@@ -460,22 +464,29 @@
   max-width: 190px;
   flex: none;
   padding: 0 6px 0 8px;
-  border: 1px solid var(--hairline-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
-  background: var(--sunken);
-  color: var(--fg-2);
+  background: transparent;
+  color: var(--fg-3);
   font-size: 11.5px;
   white-space: nowrap;
 }
+/* 悬停：薄洗一层前景色 —— 暗色里变亮、亮色里变暗，方向自动对，且压不过激活卡片 */
 .shell-tabs .tab:hover {
-  background: var(--panel);
-  color: var(--fg-1);
+  background: color-mix(in srgb, var(--fg-1) 7%, transparent);
+  color: var(--fg-2);
 }
-/* 活动标签：面板色 + 深一点的描边 */
-.shell-tabs .tab[aria-current='page'] {
-  background: var(--surface);
-  border-color: var(--accent-line);
+/*
+ * 激活：浮成卡片 —— raised 底 + 描边 + 微阴影。
+ * --raised 在两个主题里都是「比标题栏明显亮」的那一档面板色（暗 #242423 / 亮 #ffffff）。
+ * 激活后悬停不再变化，所以 :hover 也写进选择器，盖住上面那条。
+ */
+.shell-tabs .tab[aria-current='page'],
+.shell-tabs .tab[aria-current='page']:hover {
+  background: var(--raised);
+  border-color: var(--hairline-strong);
   color: var(--fg-1);
+  box-shadow: var(--sh-sm);
 }
 
 .shell-main {
