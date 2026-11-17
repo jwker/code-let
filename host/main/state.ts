@@ -1,7 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { existsSync, statSync } from 'node:fs'
-import { basename, normalize, relative } from 'node:path'
+import { basename, dirname, join, normalize, relative } from 'node:path'
 import type {
+  AgentInfo,
+  AgentType,
   CommandArgumentOption,
   GitDiff,
   GitDiffScope,
@@ -11,12 +13,14 @@ import type {
   DeleteConversationsResult,
   ExtensionErrorInfo,
   FileContent,
-  FileEntry,
+  FileListResult,
   FileSearchResult,
   FileTab,
   HostSnapshot,
   ModelOption,
   PickAttachmentsResult,
+  ProjectPaneView,
+  ProjectTabInfo,
   SessionState,
   ThinkingLevel,
   StreamItem,
@@ -32,32 +36,44 @@ import {
 } from './attachments'
 import { DebugConsoleStore, type ConsoleRecordInput } from './debugConsole'
 import type { BrowserManager } from './browser'
+import { agentBrowserHost } from '@contract/browser'
 import { emptyGitStatus, readGitDiff, readGitStatus } from './git'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
 import { pickFiles } from './filePicker'
 import { shell } from 'electron'
-import { listDirectory, readFileContent, resolveInsideCwd, searchFiles as searchProjectFiles } from './files'
+import {
+  PathOutsideCwdError,
+  listDirectory,
+  readFileContent,
+  resolveInsideCwd,
+  searchFiles as searchProjectFiles
+} from './files'
 import { PiRuntime, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
+import {
+  AgentStore,
+  dueForArchive,
+  migrateLegacyTabs,
+  newAgentRecord,
+  restoreRecord,
+  type AgentRecord
+} from './agents'
 import { moveSessionFilesToTrash } from './sessionFiles'
-import { TabStore, type StoredFile, type StoredTab } from './tabs'
+import { TabStore, type StoredFile, type StoredProjectTab } from './tabs'
 
 
-/** 宿主这边记的一个标签 */
-interface HostTab {
-  /** 标签自己的 id —— 宿主发的，稳定的身份 */
-  id: string
-  /** 会话所在目录 */
-  cwd: string
-  /** 会话文件路径 */
-  path: string | null
-  /** 标签显示的标题 */
-  title: string
-  /** 创建失败时的原因 */
+/**
+ * agent 的运行时附加状态 —— **不落盘**。
+ *
+ * 落盘的那部分在 `AgentRecord`（`agents.json`）。这里只放跟这个进程绑定的东西：
+ * 建 runtime 失败的原因、会话文件的 mtime 水位、stale 标记。
+ */
+interface AgentLiveState {
+  /** 创建 / 恢复失败时的原因 */
   error: string | null
   /**
-   * 这个标签「已经看到」的会话文件修改时间（ms）。
+   * 这个 agent「已经看到」的会话文件修改时间（ms）。
    *
    * 比它新 = 文件在别处被改过。**我们自己写文件之后要把它推上去** ——
    * 不然自己发一条消息就会把自己标成「有外部更新」。
@@ -96,10 +112,14 @@ export class HostState extends EventEmitter {
   /** 用户选的项目清单 —— 侧栏只列这些项目的会话 */
   private readonly projects: ProjectStore
   private readonly tabStore: TabStore
+  private readonly agentStore: AgentStore
   private readonly pickDirectory: () => Promise<string | null>
   private readonly pickFiles: () => Promise<string[] | null>
-  private tabs: HostTab[] = []
+  /** 项目标签（一个项目一条，PLAN.md D50） */
+  private tabs: StoredProjectTab[] = []
   private activeTabId: string | null = null
+  /** agent 的运行时附加状态，键是 agent id */
+  private live = new Map<string, AgentLiveState>()
   private conversations: ConversationInfo[] = []
   /** 扩展加载 / 执行错误 —— 最多留 20 条，界面顶部提示 */
   private extensionErrors: ExtensionErrorInfo[] = []
@@ -142,6 +162,7 @@ export class HostState extends EventEmitter {
   private refreshToken = 0
   /** 标签 id 的序号 —— 宿主自己发，与会话 id 解耦 */
   private tabSeq = 0
+  private agentSeq = 0
   /**
    * 正在进行的重读操作数。
    *
@@ -168,6 +189,7 @@ export class HostState extends EventEmitter {
   constructor(options?: {
     pi?: PiRuntimePort
     tabStore?: TabStore
+    agentStore?: AgentStore
     projects?: ProjectStore
     pickDirectory?: () => Promise<string | null>
     pickFiles?: () => Promise<string[] | null>
@@ -179,6 +201,8 @@ export class HostState extends EventEmitter {
     this.pi = options?.pi ?? new PiRuntime()
     this.projects = options?.projects ?? new ProjectStore()
     this.tabStore = options?.tabStore ?? new TabStore()
+    // 默认跟 tabs.json 放同一个目录（生产的 userData、测试的临时目录都是这个规则）
+    this.agentStore = options?.agentStore ?? new AgentStore(join(dirname(this.tabStore.path), 'agents.json'))
     this.pickDirectory = options?.pickDirectory ?? pickDirectory
     this.pickFiles = options?.pickFiles ?? pickFiles
     this.console = new DebugConsoleStore(options?.consoleDir ?? null)
@@ -190,16 +214,23 @@ export class HostState extends EventEmitter {
     this.conversationsRefresh = new DebouncedRefresh(() => this.refreshConversations())
   }
 
-  /** 把右侧浏览器接到 Pi 的 browser_* 工具 */
+  /**
+   * 把浏览器接到 Pi 的 `browser_*` 工具。
+   *
+   * **宿主由 agent id 决定**：每个 agent 只能操作自己那套标签（D57）。
+   * 这条不是便利性，是安全边界 —— 共用一个池的话，agent 点一下就把
+   * 用户正在看的那一页换掉了。
+   */
   attachBrowser(browser: BrowserManager): void {
-    this.pi.setBrowserToolHandler?.((_tabId, request) => {
+    this.pi.setBrowserToolHandler?.((agentId, request) => {
       const payload = request as { tool?: unknown; args?: unknown }
       const tool = typeof payload.tool === 'string' ? payload.tool : ''
       const args =
         payload.args && typeof payload.args === 'object'
           ? (payload.args as Record<string, unknown>)
           : {}
-      return browser.tool(tool, args)
+      // 宿主由 agent id 决定 —— agent 碰不到项目浏览器的标签（D57）
+      return browser.tool(tool, args, agentBrowserHost(agentId))
     })
   }
 
@@ -209,8 +240,12 @@ export class HostState extends EventEmitter {
 
   snapshot(): HostSnapshot {
     return {
-      tabs: this.tabs.map((tab) => this.tabInfo(tab)),
-      activeTabId: this.activeTabId,
+      tabs: this.projectionTabs(),
+      // 兼容投影里这个是**活动 agent 的 id**，不是项目标签 id —— 旧界面拿它跟 tabs[].id 比
+      activeTabId: this.activeTab()?.activeAgentId ?? null,
+      projectTabs: this.tabs.map((tab) => this.projectTabInfo(tab)),
+      activeProjectTabId: this.activeTabId,
+      agents: this.agentStore.list().map((agent) => this.agentInfo(agent)),
       projects: this.projects.list(),
       conversations: this.conversations,
       refreshing: this.pendingRefreshes > 0,
@@ -224,23 +259,67 @@ export class HostState extends EventEmitter {
     }
   }
 
-  private tabInfo(tab: HostTab): TabInfo {
-    const state = this.pi.tabState(tab.id)
+  /**
+   * 兼容投影：每个项目标签把当前活动 agent 装成一条旧形状的标签。
+   *
+   * 改造期间旧界面还按它渲染（一个项目一条）。新界面改用 `projectTabs` + `agents`，
+   * 那时这个方法删掉 —— 见 `contract/index.ts` 里 `HostSnapshot.tabs` 的注释。
+   */
+  private projectionTabs(): TabInfo[] {
+    // 未归档的 agent 一条一个 —— 旧界面把「一个对话 = 一个标签」当契约，
+    // 只投影每项目一条的话，同一项目的第二个对话会把第一个挤掉
+    return this.agentStore.visible().map((agent) => this.agentAsTab(agent))
+  }
+
+  private agentAsTab(agent: AgentRecord): TabInfo {
+    const state = this.pi.agentState(agent.id)
+    const live = this.liveOf(agent.id)
     return {
-      id: tab.id,
+      id: agent.id,
       sessionId: state.sessionId,
-      path: tab.path,
-      cwd: tab.cwd,
-      title: tab.title,
-      projectName: basename(tab.cwd) || tab.cwd,
+      path: agent.sessionPath,
+      cwd: agent.cwd,
+      title: agent.name,
+      projectName: basename(agent.cwd) || agent.cwd,
       streaming: state.streaming,
       ready: state.ready,
-      // 项目从清单里移走了 —— 标签还能用，但它不再「在清单里」
-      removed: !this.projects.has(tab.cwd),
-      stale: tab.stale,
+      // 项目从清单里移走了 —— 还能用，但它不再「在清单里」
+      removed: !this.projects.has(agent.cwd),
+      stale: live.stale,
       model: state.model,
       modelFallback: state.modelFallback,
-      error: tab.error
+      error: live.error
+    }
+  }
+
+  private projectTabInfo(tab: StoredProjectTab): ProjectTabInfo {
+    return {
+      id: tab.id,
+      cwd: tab.cwd,
+      title: tab.title,
+      pane: tab.pane,
+      activeAgentId: tab.activeAgentId
+    }
+  }
+
+  private agentInfo(agent: AgentRecord): AgentInfo {
+    const state = this.pi.agentState(agent.id)
+    const conversation = agent.sessionPath
+      ? this.conversations.find((item) => item.path === agent.sessionPath)
+      : undefined
+    return {
+      id: agent.id,
+      name: agent.name,
+      sessionTitle: conversation?.title ?? null,
+      type: agent.type,
+      instance: agent.instance,
+      cwd: agent.cwd,
+      sessionPath: agent.sessionPath,
+      lastActiveAt: agent.lastActiveAt,
+      archivedAt: agent.archivedAt,
+      turns: agent.turns,
+      streaming: state.streaming,
+      ready: state.ready
     }
   }
 
@@ -257,7 +336,7 @@ export class HostState extends EventEmitter {
     this.pi.onEvent((event) => {
       // 扩展错误走快照，不混进会话事件流
       if (event.type === 'extension_error') {
-        this.recordExtensionError(event.tabId, event.data as Omit<ExtensionErrorInfo, 'tabId'>)
+        this.recordExtensionError(event.agentId, event.data as Omit<ExtensionErrorInfo, 'agentId'>)
         return
       }
       // 调试控制台的记录：进存储，**不进会话事件流** —— 正文太大，不能发给渲染进程
@@ -279,7 +358,7 @@ export class HostState extends EventEmitter {
       }
       // 一轮结束 —— 这一轮我们自己写了不少东西，把「已看到」的时间推上去，
       // 免得紧接着的检查把自己标成「有外部更新」
-      if (event.type === 'agent_settled') this.markWritten(event.tabId)
+      if (event.type === 'agent_settled') this.markWritten(event.agentId)
     })
 
     // 先把会话列表读出来 —— 首次启动没有标签时，要靠它找「接着上次那个会话跑」
@@ -295,81 +374,115 @@ export class HostState extends EventEmitter {
   }
 
   /**
-   * 首次启动（没有存过标签）时的退路：接着最近的那个会话跑。
+   * 恢复项目标签；v1 的旧标签先迁成 agent（PLAN.md D59）。
    *
-   * 一个会话都没有的话，就在当前目录下开一个新会话。
-   */
-  private async openFallbackTab(): Promise<void> {
-    const projects = this.projects.list()
-    // 一个项目都没选 —— 不开标签，侧栏显示空态，等用户「打开项目」
-    if (projects.length === 0) return
-    const latest = this.conversations[0]
-    if (latest) {
-      await this.openTab({ cwd: latest.cwd, path: latest.path, title: latest.title })
-      return
-    }
-    await this.openTab({ cwd: projects[0].path })
-  }
-
-  /**
-   * 恢复上次的标签。
-   *
-   * **会话文件没了的标签直接丢掉** —— 内容就在会话文件里，文件没了内容也没了。
-   * **项目目录被删的**标签留着但标为出错 —— 它还能被看到、能被关掉。
+   * **迁移只在 `agents.json` 还空着的时候跑** —— 迁移完但写盘前崩了的话，
+   * 第二次启动不会再建一遍。
    */
   private async restoreTabs(): Promise<boolean> {
-    for (const stored of this.tabStore.list()) {
-      /*
-       * 会话文件还在 → 打开它，内容都在。
-       * 文件不在 → 在同一个目录里当**新会话**开，标签留着。
-       *
-       * 为什么不是「丢掉这个标签」：Pi 创建会话时就把路径算出来了，
-       * 但文件要等第一条用户消息才建 —— 所以「有路径、没文件」的标签
-       * 绝大多数是**从没说过话的空标签**，它们本来就没有内容可丢。
-       * 把「开着的标签」当工作区的一部分保住，比因为没内容就扔掉更合理。
-       */
-      const hasFile = Boolean(stored.path && existsSync(stored.path))
-      try {
-        await this.pi.openTab(stored.id, {
-          cwd: stored.cwd,
-          path: hasFile ? (stored.path ?? undefined) : undefined,
-          lazy: true
-        })
-        this.tabs.push({
-          id: stored.id,
-          cwd: stored.cwd,
-          // 重开的是新会话，路径要换成它的（此刻文件还没建，先记着）
-          path: hasFile ? stored.path : null,
-          title: stored.title,
-          error: null,
-          seenMtime: hasFile ? mtimeOf(stored.path) : 0,
-          stale: false
-        })
-      } catch (error) {
-        // 目录被删之类 —— 标签留着，但标出来
-        this.tabs.push({
-          id: stored.id,
-          cwd: stored.cwd,
-          path: stored.path,
-          title: stored.title,
-          error: error instanceof Error ? error.message : String(error),
-          seenMtime: 0,
-          stale: false
-        })
-      }
-    }
+    await this.migrateLegacyTabsOnce()
+
+    this.tabs.push(...this.tabStore.list())
     if (this.tabs.length === 0) return false
-    // 恢复出来的第一个标签成为活动标签
+
+    /*
+     * 登记**所有**未归档的 agent，不是只登记每个项目标签的活动那个。
+     *
+     * 一个项目里可以有好几个 agent，而项目标签只记一个「活动」的。
+     * 只登记活动那个的话，点其它 agent 的头像会「标签不存在」——
+     * 这条是跑真机时才暴露的（migration 之后一个项目里有 4 个 agent）。
+     */
+    for (const agent of this.agentStore.visible()) {
+      await this.registerAgent(agent)
+    }
+    // 恢复出来的第一个标签成为活动标签；它的 agent 这时才建 runtime
     this.activeTabId = this.tabs[0].id
-    await this.pi.activateTab(this.tabs[0].id)
+    const first = this.tabs[0].activeAgentId
+    if (first) await this.pi.activateAgent(first)
     this.readSession()
     this.persistTabs()
     this.push()
     return true
   }
 
+  /**
+   * 给一个 agent 登记 runtime（懒加载：不建，只登记）。
+   *
+   * 会话文件还在 → 打开它，内容都在；文件不在 → 在同一个目录里当**新会话**开，agent 留着。
+   * 「有路径、没文件」的 agent 绝大多数是从没说过话的空 agent —— Pi 创建会话时就给了路径，
+   * 文件要等第一条消息才建。它们本来就没有内容可丢，不该因为「没文件」被扔掉。
+   */
+  private async registerAgent(agent: AgentRecord): Promise<void> {
+    const hasFile = Boolean(agent.sessionPath && existsSync(agent.sessionPath))
+    try {
+      await this.pi.openAgent(agent.id, {
+        cwd: agent.cwd,
+        path: hasFile ? (agent.sessionPath ?? undefined) : undefined,
+        lazy: true
+      })
+      // 文件已经不在了 —— 上面重开了一条新会话，旧路径留着只会误导
+      if (!hasFile) this.agentStore.update(agent.id, { sessionPath: null })
+    } catch (error) {
+      // 目录被删之类 —— agent 留着，但标出来
+      this.liveOf(agent.id).error = error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  /**
+   * 把 v1 的会话标签迁成 agent + 项目标签（D59）。
+   *
+   * 同一个项目下的多条旧标签合成**一条**项目标签，活动 agent 取第一个 ——
+   * 新外壳一个项目一条标签，其余 agent 都进窄轨。
+   */
+  private async migrateLegacyTabsOnce(): Promise<void> {
+    const legacy = this.tabStore.legacyTabs()
+    if (legacy.length === 0) return
+    this.tabStore.backupLegacy()
+    if (this.agentStore.list().length === 0) {
+      const now = Date.now()
+      const { agents } = migrateLegacyTabs(
+        legacy.map((tab) => ({ id: tab.id, cwd: tab.cwd, path: tab.path, title: tab.title })),
+        now
+      )
+      this.agentStore.replaceAll(agents)
+
+      const tabs: StoredProjectTab[] = []
+      for (const agent of agents) {
+        if (tabs.some((item) => item.cwd === agent.cwd)) continue
+        tabs.push({
+          id: this.nextTabId(),
+          cwd: agent.cwd,
+          title: basename(agent.cwd) || agent.cwd,
+          pane: 'agent',
+          activeAgentId: agent.id
+        })
+      }
+      this.tabStore.saveTabs(tabs)
+      return
+    }
+    // agent 清单已经有内容 —— 上次迁到一半就崩了。丢掉旧数据，不重复建 agent
+    this.tabStore.saveTabs([])
+  }
+
+  /**
+   * 首次启动（没有任何标签）时的退路：接着最近的那个会话跑。
+   *
+   * 一条会话都没有的话，就在第一个项目里新建一个 agent。
+   */
+  private async openFallbackTab(): Promise<void> {
+    const projects = this.projects.list()
+    // 一个项目都没选 —— 不开标签，等用户「打开项目」
+    if (projects.length === 0) return
+    const latest = this.conversations[0]
+    if (latest) {
+      await this.openConversation(latest.path, latest.cwd)
+      return
+    }
+    await this.createAgent({ cwd: projects[0].path })
+  }
+
   // ---------------------------------------------------------------------
-  // 标签
+  // 项目标签与 agent（PLAN.md D50 / D53 / D58）
   // ---------------------------------------------------------------------
 
   private nextTabId(): string {
@@ -377,31 +490,162 @@ export class HostState extends EventEmitter {
     return `tab-${Date.now().toString(36)}-${this.tabSeq}`
   }
 
+  private nextAgentId(): string {
+    this.agentSeq += 1
+    return `agent-${Date.now().toString(36)}-${this.agentSeq}`
+  }
+
+  private tabById(id: string): StoredProjectTab | null {
+    return this.tabs.find((tab) => tab.id === id) ?? null
+  }
+
+  private activeTab(): StoredProjectTab | null {
+    return this.activeTabId ? this.tabById(this.activeTabId) : null
+  }
+
+  /** 当前活动 agent —— 项目标签里记的那个 */
+  private activeAgent(): AgentRecord | null {
+    const tab = this.activeTab()
+    return tab?.activeAgentId ? this.agentStore.get(tab.activeAgentId) : null
+  }
+
+  private agentById(id: string): AgentRecord | null {
+    return this.agentStore.get(id)
+  }
+
+  /** 惰性建一条 live 状态：没有就按会话文件当前的 mtime 起一条 */
   /**
-   * 开一个新标签：给会话路径就打开已有会话，不给就在这个目录里新建。
+   * 这个 agent 真的干了活 —— 把最后活动时间推到当下。
+   *
+   * 窄轨按它排序：点开一个 agent 不该让它跳到最前面，发消息才该（D53）。
    */
-  private async openTab(options: { cwd: string; path?: string; title?: string }): Promise<string> {
-    const id = this.nextTabId()
-    await this.pi.openTab(id, { cwd: options.cwd, path: options.path })
-    const title = options.title ?? (options.path ? '对话' : '新对话')
-    // 会话文件路径必须记下来 —— 重启时按它找回会话。
-    // 新建的会话在 Pi 里立刻就有路径了（只是文件还没建），所以这里读得到。
-    const path = options.path ?? this.pi.tabState(id).sessionFile
-    this.tabs.push({ id, cwd: options.cwd, path, title, error: null, seenMtime: mtimeOf(path), stale: false })
-    this.activeTabId = id
+  private noteActivity(agentId: string): void {
+    this.agentStore.update(agentId, { lastActiveAt: Date.now() })
+  }
+
+  private liveOf(agentId: string): AgentLiveState {
+    const found = this.live.get(agentId)
+    if (found) return found
+    const agent = this.agentStore.get(agentId)
+    const value: AgentLiveState = {
+      error: null,
+      seenMtime: mtimeOf(agent?.sessionPath ?? null),
+      stale: false
+    }
+    this.live.set(agentId, value)
+    return value
+  }
+
+  /** agent 属于哪个项目标签 */
+  private tabOfAgent(agentId: string): StoredProjectTab | null {
+    return this.tabs.find((tab) => tab.activeAgentId === agentId) ?? null
+  }
+
+  /** 找一个项目的标签；没有就建一条 */
+  private ensureProjectTab(cwd: string): StoredProjectTab {
+    const found = this.tabs.find((tab) => tab.cwd === cwd)
+    if (found) return found
+    const tab: StoredProjectTab = {
+      id: this.nextTabId(),
+      cwd,
+      title: basename(cwd) || cwd,
+      pane: 'agent',
+      activeAgentId: null
+    }
+    this.tabs.push(tab)
+    return tab
+  }
+
+  /**
+   * 被归档 / 删除的那个 agent，位置该由谁来接。
+   *
+   * 取**相邻**的那一个（先看后面，没有再看前面）—— 跟旧界面「关掉标签，活动标签
+   * 落到相邻一个」一致。不看相邻的话，关掉第三个会跳回第一个，眼睛会跟丢。
+   *
+   * **必须在归档之前调用** —— 归档之后它就查不到自己了，也就不知道邻居是谁。
+   */
+  private neighborAgentFor(cwd: string, agentId: string): string | null {
+    return this.successorAfterRemoval(cwd, new Set([agentId]), agentId)
+  }
+
+  /**
+   * 一批 agent 要被拿掉时，`fromId` 这个位置该由谁接。
+   *
+   * 从后往前找第一个**没在 `removedIds` 里**的 —— 批量删会话时，
+   * 相邻的那个可能也在这批里，直接取邻居会得到一个马上要消失的 id。
+   */
+  private successorAfterRemoval(cwd: string, removedIds: Set<string>, fromId: string | null): string | null {
+    const list = this.agentStore.visible().filter((agent) => agent.cwd === cwd)
+    const scan = (start: number, step: number): string | null => {
+      for (let i = start; i >= 0 && i < list.length; i += step) {
+        if (!removedIds.has(list[i].id)) return list[i].id
+      }
+      return null
+    }
+    const index = fromId ? list.findIndex((agent) => agent.id === fromId) : -1
+    if (index < 0) return scan(0, 1)
+    return scan(index + 1, 1) ?? scan(index - 1, -1)
+  }
+
+  /**
+   * 建一个 agent：一套独立的 runtime + 一条会话。
+   *
+   * `from` 给了就按它的类型建（右键「以此 agent 新建实例」），实例序号自动取下一个。
+   * 建完立刻把 Pi 算出来的会话路径记下来，不然重启时它会变回「没路径的空 agent」。
+   */
+  private async createAgent(options: {
+    cwd: string
+    type?: AgentType
+    name?: string
+    sessionPath?: string | null
+    from?: AgentRecord | null
+    activate?: boolean
+  }): Promise<AgentRecord> {
+    const type = options.type ?? options.from?.type ?? 'general'
+    const id = this.nextAgentId()
+    await this.pi.openAgent(id, {
+      cwd: options.cwd,
+      ...(options.sessionPath ? { path: options.sessionPath } : {})
+    })
+    const sessionPath = options.sessionPath ?? this.pi.agentState(id).sessionFile
+    const record = newAgentRecord({
+      id,
+      type,
+      instance: this.agentStore.nextInstance(type, options.cwd),
+      cwd: options.cwd,
+      sessionPath,
+      now: Date.now(),
+      ...(options.name ? { name: options.name } : {})
+    })
+    this.agentStore.add(record)
+    this.live.set(id, { error: null, seenMtime: mtimeOf(sessionPath), stale: false })
+
+    const tab = this.ensureProjectTab(options.cwd)
+    if (options.activate !== false) {
+      tab.activeAgentId = id
+      tab.pane = 'agent'
+      this.activeTabId = tab.id
+    }
     this.persistTabs()
     this.readSession()
     this.push()
-    return id
+    return record
   }
 
-  /** 打开项目（系统目录选择器）→ 加进项目清单 → 在那儿开一个新标签 */
+  /** 打开项目（系统目录选择器）→ 加进清单 → 建项目标签 + 一个 agent */
   async openProject(): Promise<string | null> {
     const picked = await this.pickDirectory()
     if (!picked) return null
     const dir = normalize(picked)
     await this.addProject(dir)
-    await this.openTab({ cwd: dir })
+    const tab = this.ensureProjectTab(dir)
+    const existing = tab.activeAgentId ? this.agentById(tab.activeAgentId) : null
+    if (existing) {
+      // 这个项目已经有 agent 了 —— 激活它，不新开一条会话
+      await this.activateAgent(existing.id)
+      return dir
+    }
+    await this.createAgent({ cwd: dir })
     return dir
   }
 
@@ -409,8 +653,6 @@ export class HostState extends EventEmitter {
    * 把一个项目加进清单，并重读它的会话。
    *
    * **必须重读** —— 会话清单只列清单里的项目，而清单是刚变的。
-   * 不重读的话，新加的项目在侧栏里就是个空组，
-   * 之前跟它聊过的会话要等到下一次事件触发刷新才出现。
    */
   async addProject(path: string): Promise<void> {
     this.projects.add(path)
@@ -421,8 +663,8 @@ export class HostState extends EventEmitter {
   /**
    * 从清单里移除一个项目。
    *
-   * **Pi 存的对话一个字都不动** —— 只是这个目录不再出现在 Codelet 的清单里，
-   * 侧栏不列它了。已经打开的标签留着照常用，只是标记成「已移除」。
+   * **Pi 存的对话一个字都不动** —— 只是这个目录不再出现在 Codelet 的清单里。
+   * 已经打开的标签留着照常用，只是标记成「已移除」。
    */
   async removeProject(path: string): Promise<void> {
     this.projects.remove(path)
@@ -430,85 +672,238 @@ export class HostState extends EventEmitter {
     this.push()
   }
 
-  /** 打开一个已有会话 → 开成新标签 */
-  async openConversation(path: string, cwd: string): Promise<void> {
-    const conversation = this.conversations.find((c) => c.path === path)
-    await this.openTab({ cwd, path, title: conversation?.title })
+  /** 把一条已有会话导入成通用 agent —— 会话文件不动，只是给它一个 agent */
+  async importConversation(path: string): Promise<void> {
+    const conversation = this.conversations.find((item) => item.path === path)
+    if (!conversation) throw new Error(`不在当前会话列表里：${path}`)
+    await this.openConversation(conversation.path, conversation.cwd)
   }
 
-  /** 在某个目录里新建会话 → 开成新标签 */
+  /** 打开一条已有会话 —— 已经有 agent 管着它就激活那个 agent */
+  async openConversation(path: string, cwd: string): Promise<void> {
+    const existing = this.agentStore.list().find((agent) => agent.sessionPath === path)
+    if (existing) {
+      await this.activateAgent(existing.id)
+      return
+    }
+    const conversation = this.conversations.find((c) => c.path === path)
+    await this.createAgent({
+      cwd,
+      sessionPath: path,
+      ...(conversation?.title ? { name: conversation.title } : {})
+    })
+  }
+
   /**
-   * 在某个目录里新建会话。
+   * 在某个目录里新建会话 —— 一个会话就是一个 agent（D53）。
    *
    * name 是新建对话框里定的名字：写进 Pi 的会话文件（`session_info` 条目），
-   * 也当标签标题。名字在会话文件还没建的时候只存在内存里，
+   * 也当 agent 名。名字在会话文件还没建的时候只存在内存里，
    * 等第一条消息落盘时一并写出去 —— Pi 就是这么设计的，不用额外处理。
    */
   async newConversation(cwd: string, name?: string): Promise<void> {
     const trimmed = name?.trim() ?? ''
-    const id = await this.openTab({ cwd, ...(trimmed ? { title: trimmed } : {}) })
+    const agent = await this.createAgent({ cwd, ...(trimmed ? { name: trimmed } : {}) })
     if (!trimmed) return
-    await this.pi.setSessionName(id, trimmed)
+    await this.pi.setSessionName(agent.id, trimmed)
     this.readSession()
     this.push()
   }
 
-  /** 切到某个标签 */
-  async activateTab(tabId: string): Promise<void> {
-    const tab = this.tabs.find((t) => t.id === tabId)
-    if (!tab) throw new Error(`标签不存在：${tabId}`)
-    this.activeTabId = tabId
-    // runtime 还没建就建（懒加载）
-    await this.pi.activateTab(tabId)
-    // 懒加载的标签这时候才真的有会话 —— 把它的文件路径补上，
-    // 不然下次重启它又变回「没路径的空标签」。
-    if (!tab.path) {
-      const path = this.pi.tabState(tabId).sessionFile
-      if (path) {
-        tab.path = path
-        this.persistTabs()
-      }
+  /** 新建一个 agent（默认通用） */
+  async newAgent(cwd: string, type: AgentType = 'general', name?: string): Promise<AgentRecord> {
+    return this.createAgent({ cwd, type, ...(name ? { name } : {}) })
+  }
+
+  /** 以此 agent 新建实例：配置照搬，会话是新的 */
+  async newAgentFrom(agentId: string): Promise<AgentRecord> {
+    const source = this.agentById(agentId)
+    if (!source) throw new Error(`agent 不存在：${agentId}`)
+    return this.createAgent({ cwd: source.cwd, from: source })
+  }
+
+  /**
+   * 激活一个 agent：切到它的项目标签 → 记成活动 agent → 建 runtime。
+   *
+   * **不动 lastActiveAt** —— 那会让头像每点一次就跳到最前面，
+   * 排序应该跟着「真正干了活」走（见 `prompt()`）。
+   */
+  async activateAgent(agentId: string): Promise<void> {
+    const agent = this.agentById(agentId)
+    if (!agent) throw new Error(`agent 不存在：${agentId}`)
+    const tab = this.ensureProjectTab(agent.cwd)
+    tab.activeAgentId = agentId
+    tab.pane = 'agent'
+    this.activeTabId = tab.id
+    // 没登记过就先登记 —— 启动只登记未归档的，归档后恢复、或者中途新建的都走这条
+    if (!this.pi.hasAgent(agentId)) await this.registerAgent(agent)
+    await this.pi.activateAgent(agentId)
+    // 懒加载的 agent 这时候才真的有会话 —— 把文件路径补上
+    if (!agent.sessionPath) {
+      const path = this.pi.agentState(agentId).sessionFile
+      if (path) this.agentStore.update(agentId, { sessionPath: path })
     }
+    this.persistTabs()
     this.readSession()
     this.push()
   }
 
   /**
-   * 从宿主的标签列表里摘掉一批标签（同步，不碰 runtime、不推快照）。
+   * 给 agent 改名 —— **只改 agents.json 里的名字**，不碰会话文件。
    *
-   * 关单个标签和批量删会话共用这段：都先把「哪些标签还在」定下来，再动 runtime。
-   * 返回活动标签有没有变、新的活动标签是谁 —— 变了的话调用方要把新的 runtime
-   * 建起来（懒加载的标签点开才建）。
+   * agent 名是窄轨里的本地名字；会话名在会话文件的 `session_info` 里，由 `/rename`
+   * 或裸 pi 改。两个名字分开维护（D53 的补充），理由：
+   * - 它们是两个所有者不同的东西：一个属于应用，一个属于 Pi 会话文件；
+   * - 改会话文件会动 mtime，而 mtime 是「在别处被改过」的判据 —— 改完名字输入框反而被禁用。
+   *
+   * 所以这里没有「文件在不在」的分支，也不需要往 Pi 的内存会话里塞名字。
    */
-  private detachTabs(tabIds: string[]): { activeChanged: boolean; nextActiveId: string | null } {
-    const ids = new Set(tabIds)
-    if (ids.size === 0) return { activeChanged: false, nextActiveId: this.activeTabId }
-    let activeChanged = false
-    for (const id of ids) {
-      const index = this.tabs.findIndex((t) => t.id === id)
-      if (index < 0) continue
-      const wasActive = this.activeTabId === id
-      this.tabs.splice(index, 1)
-      // 关掉的正好是活动标签 —— 活动标签落到相邻的一个
-      if (wasActive) {
-        activeChanged = true
-        const next = this.tabs[Math.min(index, this.tabs.length - 1)]
-        this.activeTabId = next ? next.id : null
-      }
-    }
-    this.persistTabs()
-    return { activeChanged, nextActiveId: this.activeTabId }
+  async renameAgent(agentId: string, name: string): Promise<void> {
+    const agent = this.agentById(agentId)
+    if (!agent) throw new Error(`agent 不存在：${agentId}`)
+    const trimmed = name.trim()
+    if (!trimmed) throw new Error('名字不能为空')
+    this.agentStore.update(agentId, { name: trimmed })
+    this.push()
   }
 
-  /** 关掉某个标签 */
-  async closeTab(tabId: string): Promise<void> {
-    if (!this.tabs.some((t) => t.id === tabId)) return
-    const { activeChanged, nextActiveId } = this.detachTabs([tabId])
-    await this.pi.closeTab(tabId)
-    // 新的活动标签如果是懒加载的，把它建起来
-    if (activeChanged && nextActiveId) await this.pi.activateTab(nextActiveId)
+  /**
+   * 归档：**只改状态**，会话文件原地不动。正在跑的不许归档（D53）。
+   *
+   * 归档完把项目标签指向同目录的下一个 agent；一条都不剩就退回「代码」入口。
+   */
+  async archiveAgent(agentId: string): Promise<void> {
+    const agent = this.agentById(agentId)
+    if (!agent) return
+    if (this.pi.agentState(agentId).streaming) throw new Error('这个 agent 正在跑，先停下来再归档')
+    await this.doArchive(agent, this.neighborAgentFor(agent.cwd, agentId))
+  }
+
+  /** 归档的落地部分 —— 调用方已经确认过「没在跑」，也把邻居算好了 */
+  private async doArchive(agent: AgentRecord, successor: string | null): Promise<void> {
+    const agentId = agent.id
+    await this.pi.closeAgent(agentId)
+    this.agentStore.update(agentId, { archivedAt: Date.now() })
+    this.live.delete(agentId)
+    const tab = this.tabOfAgent(agentId)
+    if (tab) {
+      tab.activeAgentId = successor
+      if (!tab.activeAgentId) tab.pane = 'code'
+      this.persistTabs()
+      // 活动标签换了人 —— 懒加载的这时才建 runtime，跟旧界面关标签的行为一致
+      if (successor && tab.id === this.activeTabId) await this.pi.activateAgent(successor)
+    }
     this.readSession()
     this.push()
+  }
+
+  /** 从归档里恢复：挂回窄轨，并激活它 */
+  async restoreAgent(agentId: string): Promise<void> {
+    const agent = this.agentById(agentId)
+    if (!agent) return
+    this.agentStore.update(agentId, { ...restoreRecord(agent), lastActiveAt: Date.now() })
+    await this.activateAgent(agentId)
+  }
+
+  /** 删除一个 agent：会话文件移入系统废纸篓（底线 2），runtime 先关 */
+  async deleteAgent(agentId: string): Promise<void> {
+    const agent = this.agentById(agentId)
+    if (!agent) return
+    await this.pi.closeAgent(agentId)
+    if (agent.sessionPath && existsSync(agent.sessionPath)) {
+      await moveSessionFilesToTrash([agent.sessionPath], this.trashFile)
+    }
+    const successor = this.neighborAgentFor(agent.cwd, agentId)
+    this.agentStore.remove(agentId)
+    this.live.delete(agentId)
+    const tab = this.tabOfAgent(agentId)
+    if (tab) {
+      tab.activeAgentId = successor
+      this.persistTabs()
+    }
+    await this.refreshConversations()
+    this.readSession()
+    this.push()
+  }
+
+  /**
+   * 自动归档（D55）：把超过天数没活动的**通用** agent 归档。
+   *
+   * 天数由调用方给（应用级设置），这里只做判定和落地。
+   * 正在跑的跳过 —— 它显然还有活动。
+   */
+  async runAutoArchive(days: number): Promise<number> {
+    const due = dueForArchive(this.agentStore.list(), Date.now(), days)
+    let archived = 0
+    for (const agent of due) {
+      if (this.pi.agentState(agent.id).streaming) continue
+      await this.archiveAgent(agent.id)
+      archived += 1
+    }
+    return archived
+  }
+
+  /**
+   * 切到某个项目标签（旧界面按标签切项目用）。
+   */
+  async activateTab(tabId: string): Promise<void> {
+    // 旧界面按投影标签切（id 是 agent id）；新界面按项目标签切
+    if (this.agentById(tabId)) {
+      await this.activateAgent(tabId)
+      return
+    }
+    const tab = this.tabById(tabId)
+    if (!tab) throw new Error(`标签不存在：${tabId}`)
+    this.activeTabId = tabId
+    if (tab.activeAgentId) await this.pi.activateAgent(tab.activeAgentId)
+    this.readSession()
+    this.push()
+  }
+
+  /** 切某个项目标签的入口（代码 / 文档 / 浏览器 / 设置 / 某个 agent） */
+  async setPane(tabId: string, pane: ProjectPaneView): Promise<void> {
+    const tab = this.tabById(tabId)
+    if (!tab) return
+    tab.pane = pane
+    this.persistTabs()
+    if (pane === 'agent' && tab.activeAgentId) await this.pi.activateAgent(tab.activeAgentId)
+    this.readSession()
+    this.push()
+  }
+
+  /** 关一条项目标签：只收起页面，**不碰任何 agent**（R44） */
+  async closeProjectTab(tabId: string): Promise<void> {
+    const index = this.tabs.findIndex((tab) => tab.id === tabId)
+    if (index < 0) return
+    const wasActive = this.activeTabId === tabId
+    this.tabs.splice(index, 1)
+    if (wasActive) {
+      const next = this.tabs[Math.min(index, this.tabs.length - 1)]
+      this.activeTabId = next ? next.id : null
+    }
+    this.persistTabs()
+    const tab = this.activeTab()
+    if (tab?.activeAgentId) await this.pi.activateAgent(tab.activeAgentId)
+    this.readSession()
+    this.push()
+  }
+
+  /**
+   * 旧界面的「关标签」。改造期间 id 有两种可能：
+   * - 一个 agent id → 归档它（会话文件留着，设置里能找回）
+   * - 一个项目标签 id → 只收起页面
+   *
+   * S7 新界面接上之后，agent 那条路径删掉 —— 关标签不该顺手归档一个 agent。
+   */
+  async closeTab(id: string): Promise<void> {
+    const agent = this.agentById(id)
+    if (agent) {
+      // 旧界面的「关标签」= 关掉这个对话：先停稳，再归档（会话文件留着）
+      if (this.pi.agentState(id).streaming) await this.pi.abortAgent(id)
+      await this.doArchive(agent, this.neighborAgentFor(agent.cwd, id))
+      return
+    }
+    await this.closeProjectTab(id)
   }
 
   /**
@@ -516,9 +911,9 @@ export class HostState extends EventEmitter {
    *
    * 顺序是硬约束：
    * 1. 先确认路径都在当前会话列表里 —— 会话文件在 `~/.pi/agent/sessions/` 下，
-   *    不在项目目录里，`resolveInsideCwd()` 那套校验用不上，白名单是唯一可靠的校验。
-   * 2. 摘掉引用它们的标签与文件标签。
-   * 3. 关掉标签的 runtime（`closeTab` 内部先 abort 等结算，再 dispose）。
+   *    不在项目目录里，白名单是唯一可靠的校验。
+   * 2. 摘掉引用它们的文件标签。
+   * 3. 关掉管着这些会话的 agent 的 runtime（`closeAgent` 内部先 abort 等结算，再 dispose）。
    *    文件删了而 runtime 还活着的话，下一条消息会用 `appendFileSync`
    *    重建一个没有头部的会话文件。
    * 4. 最后才把文件移入废纸篓。
@@ -540,27 +935,34 @@ export class HostState extends EventEmitter {
       for (const fileId of fileIds) this.removeFileTab(fileId)
       if (fileIds.length > 0) this.persistFiles()
 
-      const tabIds = this.tabs
-        .filter((tab) => tab.path && targetSet.has(normalize(tab.path)))
-        .map((tab) => tab.id)
-      const previousActiveTabId = this.activeTabId
-      const { nextActiveId } = this.detachTabs(tabIds)
+      const agents = this.agentStore
+        .list()
+        .filter((agent) => agent.sessionPath && targetSet.has(normalize(agent.sessionPath)))
+      const removedIds = new Set(agents.map((agent) => agent.id))
 
-      // 先关 runtime 再动文件 —— runtime 里还拿着这个会话文件路径。
-      // 用 allSettled 等所有标签都停稳：一条失败也要等其他的关完，
-      // 否则 deleting 已经放开了、别的 runtime 还在写。
-      const closeResults = await Promise.allSettled(tabIds.map((tabId) => this.pi.closeTab(tabId)))
-      const closeFailure = closeResults.find(
-        (result): result is PromiseRejectedResult => result.status === 'rejected'
-      )
-      if (closeFailure) {
-        throw closeFailure.reason instanceof Error ? closeFailure.reason : new Error(String(closeFailure.reason))
+      // 先算好「每个标签的活动 agent 被删之后由谁接」——必须在这批 agent 还在的时候算
+      const successors = new Map<string, string | null>()
+      for (const tab of this.tabs) {
+        if (tab.activeAgentId && removedIds.has(tab.activeAgentId)) {
+          successors.set(tab.id, this.successorAfterRemoval(tab.cwd, removedIds, tab.activeAgentId))
+        }
       }
 
-      // 活动标签被删了的话，把新的活动标签建起来（懒加载的这时才建）
-      if (this.activeTabId !== previousActiveTabId && nextActiveId) {
-        await this.pi.activateTab(nextActiveId)
+      // 先关 runtime 再动文件 —— runtime 里还拿着这个会话文件路径
+      for (const agent of agents) await this.pi.closeAgent(agent.id)
+      for (const agent of agents) {
+        this.agentStore.remove(agent.id)
+        this.live.delete(agent.id)
       }
+
+      let tabsChanged = false
+      for (const tab of this.tabs) {
+        if (!successors.has(tab.id)) continue
+        tab.activeAgentId = successors.get(tab.id) ?? null
+        if (!tab.activeAgentId && tab.pane === 'agent') tab.pane = 'code'
+        tabsChanged = true
+      }
+      if (tabsChanged) this.persistTabs()
 
       const outcome = await moveSessionFilesToTrash(targets, this.trashFile)
       await this.refreshConversations()
@@ -572,15 +974,9 @@ export class HostState extends EventEmitter {
     }
   }
 
-  /** 把当前的标签列表落盘（顺序即标签栏的顺序） */
+  /** 把当前的项目标签落盘（顺序即标签栏的顺序） */
   private persistTabs(): void {
-    const stored: StoredTab[] = this.tabs.map((tab) => ({
-      id: tab.id,
-      cwd: tab.cwd,
-      path: tab.path,
-      title: tab.title
-    }))
-    this.tabStore.saveTabs(stored)
+    this.tabStore.saveTabs(this.tabs)
   }
 
   // ---------------------------------------------------------------------
@@ -624,19 +1020,22 @@ export class HostState extends EventEmitter {
       if (token !== this.refreshToken) return
       this.conversations = list
       // 会话标题变了（第一条用户消息落盘后，标题从「新对话」变成消息内容）——
-      // 标签上的标题要跟着变，不然标签一直写着「新对话」
-      let titleChanged = false
-      for (const tab of this.tabs) {
-        if (!tab.path) continue
-        const conversation = list.find((c) => c.path === tab.path)
-        if (conversation && conversation.title !== tab.title) {
-          tab.title = conversation.title
-          titleChanged = true
-        }
+      // agent 的名字要跟着变，不然窄轨上一直写着「通用 1」
+      /*
+       * 只更新轮数 —— **agent 名不跟着会话标题走**（两个名字分开维护）。
+       *
+       * 以前这里是「没起过名的 agent 跟着会话标题变」，结果是同一个会话有两个名字
+       * 互相打架：应用里改的叫 agent 名，终端里改的叫会话名，谁赢取决于同步规则。
+       * 现在 agent 名只由「新建时的默认名 / 你手动改名」决定，会话标题只用来显示。
+       */
+      for (const agent of this.agentStore.list()) {
+        if (!agent.sessionPath) continue
+        const conversation = list.find((c) => c.path === agent.sessionPath)
+        if (!conversation) continue
+        if (conversation.messageCount === agent.turns) continue
+        this.agentStore.update(agent.id, { turns: conversation.messageCount })
       }
-      // 标题变了要落盘 —— 不然重启后标签还写着「新对话」
-      if (titleChanged) this.persistTabs()
-      // 顺便看看有没有标签的会话文件在别处被改过
+      // 顺便看看有没有 agent 的会话文件在别处被改过
       this.checkStale()
     } catch {
       if (token !== this.refreshToken) return
@@ -657,19 +1056,20 @@ export class HostState extends EventEmitter {
    */
   private checkStale(): void {
     let changed = false
-    for (const tab of this.tabs) {
-      if (!tab.path) continue
+    for (const agent of this.agentStore.list()) {
+      if (!agent.sessionPath) continue
       /*
-       * 这个标签的 agent 正在跑 —— 文件是我们自己在写，不算「别处改过」。
+       * 这个 agent 正在跑 —— 文件是我们自己在写，不算「别处改过」。
        *
        * 不跳过会误报：用户消息落盘之后 mtime 就变了，而 `markWritten` 要等
-       * `agent_settled` 才更新 seenMtime。这一整轮里标签都会被标成 stale，
+       * `agent_settled` 才更新 seenMtime。这一整轮里 agent 都会被标成 stale，
        * 输入框跟着被禁用 —— AI 回复期间用户就打不了字了。
        */
-      if (this.pi.tabState(tab.id).streaming) continue
-      const stale = mtimeOf(tab.path) > tab.seenMtime
-      if (stale !== tab.stale) {
-        tab.stale = stale
+      if (this.pi.agentState(agent.id).streaming) continue
+      const live = this.liveOf(agent.id)
+      const stale = mtimeOf(agent.sessionPath) > live.seenMtime
+      if (stale !== live.stale) {
+        live.stale = stale
         changed = true
       }
     }
@@ -681,11 +1081,12 @@ export class HostState extends EventEmitter {
    *
    * 不推的话，自己发一条消息就会把自己标成「有外部更新」。
    */
-  private markWritten(tabId: string): void {
-    const tab = this.tabs.find((t) => t.id === tabId)
-    if (!tab?.path) return
-    tab.seenMtime = mtimeOf(tab.path)
-    tab.stale = false
+  private markWritten(agentId: string): void {
+    const agent = this.agentStore.get(agentId)
+    if (!agent?.sessionPath) return
+    const live = this.liveOf(agentId)
+    live.seenMtime = mtimeOf(agent.sessionPath)
+    live.stale = false
   }
 
   /**
@@ -693,15 +1094,17 @@ export class HostState extends EventEmitter {
    *
    * 用于「这个会话在别处被改过」（stale）之后。
    */
-  async reloadTab(tabId: string): Promise<void> {
-    const tab = this.tabs.find((t) => t.id === tabId)
-    if (!tab) return
-    await this.trackRefresh(() => this.pi.reloadTab(tabId))
-    // 重建后路径可能变了（原来是「没说过话的空标签」的话）
-    const state = this.pi.tabState(tabId)
-    if (state.sessionFile) tab.path = state.sessionFile
-    tab.seenMtime = mtimeOf(tab.path)
-    tab.stale = false
+  async reloadTab(agentId: string): Promise<void> {
+    const agent = this.agentStore.get(agentId)
+    if (!agent) return
+    if (!this.pi.hasAgent(agentId)) await this.registerAgent(agent)
+    await this.trackRefresh(() => this.pi.reloadAgent(agentId))
+    // 重建后路径可能变了（原来是「没说过话的空 agent」的话）
+    const state = this.pi.agentState(agentId)
+    if (state.sessionFile) this.agentStore.update(agentId, { sessionPath: state.sessionFile })
+    const live = this.liveOf(agentId)
+    live.seenMtime = mtimeOf(state.sessionFile ?? agent.sessionPath)
+    live.stale = false
     this.readSession()
     this.push()
   }
@@ -710,9 +1113,25 @@ export class HostState extends EventEmitter {
   // 文件（PLAN.md D20 / D22）
   // ---------------------------------------------------------------------
 
-  /** 列一个目录下的条目 */
-  listFiles(cwd: string, dir: string): Promise<FileEntry[]> {
-    return listDirectory(cwd, dir)
+  /**
+   * 列一个目录下的条目。
+   *
+   * **越界的符号链接不当异常处理**：`node_modules` 里 link 依赖指向项目外很常见
+   * （Pi 自己的 install 目录就是这样）。主进程拒绝读它，是守住「渲染进程不能点名
+   * 读项目外的路径」这条；但界面要能说清为什么没展开。
+   */
+  async listFiles(cwd: string, dir: string): Promise<FileListResult> {
+    try {
+      return { entries: await listDirectory(cwd, dir), error: null }
+    } catch (caught) {
+      if (caught instanceof PathOutsideCwdError) {
+        return { entries: [], error: '这个目录指向项目外（符号链接），没有展开' }
+      }
+      return {
+        entries: [],
+        error: caught instanceof Error ? caught.message : String(caught)
+      }
+    }
   }
 
   /** 读一个文件 */
@@ -924,16 +1343,16 @@ export class HostState extends EventEmitter {
       }
       return
     }
-    const tab = this.tabs.find((t) => t.id === tabId)
-    const state = this.pi.tabState(tabId)
+    const agent = this.activeAgent()
+    const state = this.pi.agentState(agent?.id ?? '')
     this.session = {
       ready: state.ready,
-      cwd: tab?.cwd ?? null,
+      cwd: agent?.cwd ?? this.activeTab()?.cwd ?? null,
       sessionId: state.sessionId,
       model: state.model,
       thinkingLevel: state.thinkingLevel,
       modelFallback: state.modelFallback,
-      error: tab?.error ?? null
+      error: agent ? this.liveOf(agent.id).error : null
     }
   }
 
@@ -947,27 +1366,30 @@ export class HostState extends EventEmitter {
   }
 
   /** 已配置凭据的模型清单（选择器用） */
-  /** 当前活动标签的 Git 状态；只读 */
-  async getGitStatus(tabId: string): Promise<GitStatus> {
-    const tab = this.tabs.find((item) => item.id === tabId)
-    if (!tab) return emptyGitStatus('没有活动标签')
-    return readGitStatus(tab.cwd)
+  /**
+   * 某个目录的 Git 状态；只读。
+   *
+   * 按 **cwd** 取而不是按 agent —— Git 是项目级的东西，同一个目录里的 agent 看的是
+   * 同一个仓库。以前按标签取，改造后标签和 agent 不是一回事了，再按 id 查会查不到。
+   */
+  async getGitStatus(cwd: string): Promise<GitStatus> {
+    if (!cwd) return emptyGitStatus('没有活动项目')
+    return readGitStatus(cwd)
   }
 
   /** 单个文件的 Git diff；路径必须由 Git 面板传来 */
-  async getGitDiff(tabId: string, path: string, scope: GitDiffScope): Promise<GitDiff> {
-    const tab = this.tabs.find((item) => item.id === tabId)
-    if (!tab) {
+  async getGitDiff(cwd: string, path: string, scope: GitDiffScope): Promise<GitDiff> {
+    if (!cwd) {
       return {
         path,
         scope,
         patch: '',
         binary: false,
         truncated: false,
-        error: '没有活动标签'
+        error: '没有活动项目'
       }
     }
-    return readGitDiff(tab.cwd, path, scope)
+    return readGitDiff(cwd, path, scope)
   }
 
   /** 某个标签可用模型清单 */
@@ -1031,12 +1453,12 @@ export class HostState extends EventEmitter {
   async openTemporaryChat(): Promise<HostSnapshot> {
     if (this.temporaryChat) return this.snapshot()
 
-    const active = this.tabs.find((tab) => tab.id === this.activeTabId)
+    const active = this.activeAgent()
     if (!active) throw new Error('先打开一个项目再使用临时对话')
-    const activeModel = this.activeTabId ? this.pi.tabState(this.activeTabId).model : null
+    const activeModel = this.pi.agentState(active.id).model
     const id = `temp-${++this.temporarySeq}`
 
-    await this.pi.openTab(id, { cwd: active.cwd, inMemory: true })
+    await this.pi.openAgent(id, { cwd: active.cwd, inMemory: true })
     this.temporaryChat = { id, cwd: active.cwd, model: null, error: null }
 
     if (activeModel) {
@@ -1057,7 +1479,7 @@ export class HostState extends EventEmitter {
   async closeTemporaryChat(): Promise<HostSnapshot> {
     const temp = this.temporaryChat
     if (!temp) return this.snapshot()
-    await this.pi.closeTab(temp.id)
+    await this.pi.closeAgent(temp.id)
     this.temporaryChat = null
     this.push()
     return this.snapshot()
@@ -1077,7 +1499,7 @@ export class HostState extends EventEmitter {
   /** 中止临时对话当前轮 */
   async abortTemporary(id: string): Promise<void> {
     if (!this.temporaryChat || this.temporaryChat.id !== id) return
-    await this.pi.abortTab(id)
+    await this.pi.abortAgent(id)
   }
 
   /** 临时对话可用模型 */
@@ -1097,7 +1519,7 @@ export class HostState extends EventEmitter {
 
   private refreshTemporary(): void {
     if (!this.temporaryChat) return
-    const state = this.pi.tabState(this.temporaryChat.id)
+    const state = this.pi.agentState(this.temporaryChat.id)
     this.temporaryChat.model = state.model
     if (state.modelFallback) this.temporaryChat.error = state.modelFallback
   }
@@ -1112,9 +1534,9 @@ export class HostState extends EventEmitter {
     return external
   }
 
-  /** 压缩某个标签的上下文 */
-  async compactTab(tabId: string): Promise<void> {
-    await this.pi.compactTab(tabId)
+  /** 压缩某个 agent 的上下文 */
+  async compactAgent(agentId: string): Promise<void> {
+    await this.pi.compactAgent(agentId)
   }
 
   /** 切某个标签的模型 */
@@ -1137,7 +1559,14 @@ export class HostState extends EventEmitter {
     const conversation = this.conversations.find((item) => normalize(item.path) === target)
     if (!conversation) throw new Error(`不在当前对话列表里：${path}`)
     await this.pi.renameSession(conversation.path, name.trim())
-    // 不等去抖：改名要立刻反映到侧栏标题和标签标题上
+    /*
+     * **不顺手改 agent 名**（两个名字分开维护）。
+     *
+     * 这里改的是会话名 —— 写进会话文件、裸 pi 也看得到。agent 名是窄轨里的本地名字，
+     * 由「重命名 agent」改。混在一起改的后果是：改一次会话名就动了会话文件的 mtime，
+     * 而 mtime 是「在别处被改过」的判据 —— 改完名字输入框反而被禁用了。
+     */
+    // 不等去抖：改名要立刻反映到侧栏标题上
     await this.refreshConversations()
     this.readSession()
     this.push()
@@ -1150,24 +1579,26 @@ export class HostState extends EventEmitter {
    * 只有这里能把 id 解析成绝对路径，渲染进程拿不到这个映射。
    */
   async prompt(
-    tabId: string,
+    agentId: string,
     text: string,
     attachments?: string[],
     uploadIds?: string[]
   ): Promise<void> {
-    const tab = this.tabs.find((item) => item.id === tabId)
-    if (!tab) throw new Error(`标签不存在：${tabId}`)
+    const agent = this.agentById(agentId)
+    if (!agent) throw new Error(`agent 不存在：${agentId}`)
 
     const external = this.resolveUploads(uploadIds)
 
     if ((!attachments || attachments.length === 0) && external.length === 0) {
-      await this.pi.prompt(tabId, text)
+      await this.pi.prompt(agentId, text)
+      this.noteActivity(agentId)
       return
     }
 
-    const prepared = await prepareAttachments(tab.cwd, attachments ?? [], external)
+    const prepared = await prepareAttachments(agent.cwd, attachments ?? [], external)
     const merged = prepared.text ? `${text}\n\n${prepared.text}` : text
-    await this.pi.prompt(tabId, merged, prepared.images)
+    await this.pi.prompt(agentId, merged, prepared.images)
+    this.noteActivity(agentId)
 
     // 发送成功才丢弃上传映射；失败时保留，用户可以直接重试
     for (const upload of external) this.uploads.delete(upload.id)
@@ -1215,7 +1646,7 @@ export class HostState extends EventEmitter {
     this.aborting.add(tabId)
     this.emit('snapshot', this.snapshot())
     try {
-      await this.pi.abortTab(tabId)
+      await this.pi.abortAgent(tabId)
     } finally {
       this.aborting.delete(tabId)
       this.emit('snapshot', this.snapshot())
@@ -1226,10 +1657,10 @@ export class HostState extends EventEmitter {
    * 记一条扩展错误。同一个错误（同标签、同类型、同路径、同事件、同正文）只保留一条，
    * 重复发生时把它挪到末尾；最多留 20 条，避免刷屏。
    */
-  private recordExtensionError(tabId: string, error: Omit<ExtensionErrorInfo, 'tabId'>): void {
-    const entry: ExtensionErrorInfo = { ...error, tabId }
+  private recordExtensionError(agentId: string, error: Omit<ExtensionErrorInfo, 'agentId'>): void {
+    const entry: ExtensionErrorInfo = { ...error, agentId }
     const keyOf = (item: ExtensionErrorInfo): string =>
-      `${item.tabId}|${item.kind}|${item.path}|${item.event ?? ''}|${item.message}`
+      `${item.agentId}|${item.kind}|${item.path}|${item.event ?? ''}|${item.message}`
     const key = keyOf(entry)
     const index = this.extensionErrors.findIndex((item) => keyOf(item) === key)
     if (index >= 0) this.extensionErrors.splice(index, 1)

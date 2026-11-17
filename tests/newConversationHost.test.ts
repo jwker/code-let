@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { HostState } from '../host/main/state'
 import { TabStore } from '../host/main/tabs'
 import { ProjectStore } from '../host/main/projects'
-import type { PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 
 /**
  * 新建对话时定的名字要落到两处：标签标题，以及 Pi 的会话名。
@@ -15,11 +15,17 @@ import type { PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
  */
 
 class FakePi implements PiRuntimePort {
-  tabs = new Map<string, TabRuntimeState>()
-  named: Array<{ tabId: string; name: string }> = []
+  tabs = new Map<string, AgentRuntimeState>()
+  named: Array<{ agentId: string; name: string }> = []
   private seq = 0
 
-  async openTab(tabId: string): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string): Promise<void> {
     this.seq += 1
     this.tabs.set(tabId, {
       ready: true,
@@ -32,7 +38,7 @@ class FakePi implements PiRuntimePort {
     })
   }
 
-  tabState(tabId: string): TabRuntimeState {
+  agentState(tabId: string): AgentRuntimeState {
     return (
       this.tabs.get(tabId) ?? {
         ready: false,
@@ -46,14 +52,14 @@ class FakePi implements PiRuntimePort {
     )
   }
 
-  async setSessionName(tabId: string, name: string): Promise<void> {
-    this.named.push({ tabId, name })
+  async setSessionName(agentId: string, name: string): Promise<void> {
+    this.named.push({ agentId, name })
   }
 
   onEvent = () => () => {}
-  async closeTab(): Promise<void> {}
-  async activateTab(): Promise<void> {}
-  async reloadTab(): Promise<void> {}
+  async closeAgent(): Promise<void> {}
+  async activateAgent(): Promise<void> {}
+  async reloadAgent(): Promise<void> {}
   readEntries = () => []
   async listModels() {
     return []
@@ -69,9 +75,9 @@ class FakePi implements PiRuntimePort {
   }
   thinkingLevels = () => []
   setThinkingLevel(): void {}
-  async compactTab(): Promise<void> {}
+  async compactAgent(): Promise<void> {}
   async prompt(): Promise<void> {}
-  async abortTab(): Promise<void> {}
+  async abortAgent(): Promise<void> {}
   async stop(): Promise<void> {}
 }
 
@@ -93,7 +99,7 @@ describe('新建对话的名字', () => {
     await state.newConversation('/tmp/project', '会话123')
     const snapshot = state.snapshot()
     expect(snapshot.tabs[0]!.title).toBe('会话123')
-    expect(pi.named).toEqual([{ tabId: snapshot.tabs[0]!.id, name: '会话123' }])
+    expect(pi.named).toEqual([{ agentId: snapshot.tabs[0]!.id, name: '会话123' }])
   })
 
   it('名字两头的空格会去掉', async () => {
@@ -106,7 +112,8 @@ describe('新建对话的名字', () => {
   it('没有名字就不去动 Pi 的会话名（标题退回首条消息）', async () => {
     const { state, pi } = makeState()
     await state.newConversation('/tmp/project')
-    expect(state.snapshot().tabs[0]!.title).toBe('新对话')
+    // 没填名字的 agent 先用默认名（D53）；第一条消息落盘后由会话标题接管
+    expect(state.snapshot().tabs[0]!.title).toBe('通用 1')
     expect(pi.named).toHaveLength(0)
   })
 

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
-import type { PiEvent, PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEvent, PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { CommandOption, ModelOption, StreamItem } from '@contract/index'
 
 /** 临时对话的宿主生命周期（D40）：内存会话、不写标签、关闭即释放。 */
@@ -22,26 +22,32 @@ const MODEL: ModelOption = {
 class FakePi implements PiRuntimePort {
   readonly tabs = new Map<string, { cwd: string; inMemory: boolean; model: ModelOption | null }>()
   readonly prompts: Array<{
-    tabId: string
+    agentId: string
     text: string
     options?: { expandPromptTemplates?: boolean }
   }> = []
   readonly closes: string[] = []
-  readonly models: Array<{ tabId: string; provider: string; id: string; persist: boolean }> = []
+  readonly models: Array<{ agentId: string; provider: string; id: string; persist: boolean }> = []
 
   onEvent(_listener: PiEventListener): () => void {
     return () => {}
   }
-  async openTab(tabId: string, options: { cwd: string; inMemory?: boolean }): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string, options: { cwd: string; inMemory?: boolean }): Promise<void> {
     this.tabs.set(tabId, { cwd: options.cwd, inMemory: options.inMemory === true, model: MODEL })
   }
-  async closeTab(tabId: string): Promise<void> {
+  async closeAgent(tabId: string): Promise<void> {
     this.closes.push(tabId)
     this.tabs.delete(tabId)
   }
-  async activateTab(): Promise<void> {}
-  async reloadTab(): Promise<void> {}
-  tabState(tabId: string): TabRuntimeState {
+  async activateAgent(): Promise<void> {}
+  async reloadAgent(): Promise<void> {}
+  agentState(tabId: string): AgentRuntimeState {
     const tab = this.tabs.get(tabId)
     return {
       ready: Boolean(tab),
@@ -60,9 +66,9 @@ class FakePi implements PiRuntimePort {
     return [MODEL]
   }
   async refreshModelAvailability(): Promise<void> {}
-  async selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void> {
-    this.models.push({ tabId, provider, id, persist })
-    const tab = this.tabs.get(tabId)
+  async selectModel(agentId: string, provider: string, id: string, persist: boolean): Promise<void> {
+    this.models.push({ agentId, provider, id, persist })
+    const tab = this.tabs.get(agentId)
     if (tab) tab.model = MODEL
   }
   async renameSession(): Promise<void> {}
@@ -77,16 +83,16 @@ class FakePi implements PiRuntimePort {
     return []
   }
   setThinkingLevel(): void {}
-  async compactTab(): Promise<void> {}
+  async compactAgent(): Promise<void> {}
   async prompt(
-    tabId: string,
+    agentId: string,
     text: string,
     _images?: unknown,
     options?: { expandPromptTemplates?: boolean }
   ): Promise<void> {
-    this.prompts.push({ tabId, text, options })
+    this.prompts.push({ agentId, text, options })
   }
-  async abortTab(): Promise<void> {}
+  async abortAgent(): Promise<void> {}
   async stop(): Promise<void> {}
 
   emit(_event: PiEvent): void {}
@@ -130,12 +136,12 @@ describe('临时对话宿主', () => {
     expect(pi.tabs.get(temp!.id)?.inMemory).toBe(true)
     expect(state!.snapshot().tabs.map((tab) => tab.id)).toEqual(tabsBefore)
     expect(pi.models).toEqual([
-      { tabId: temp!.id, provider: MODEL.provider, id: MODEL.id, persist: false }
+      { agentId: temp!.id, provider: MODEL.provider, id: MODEL.id, persist: false }
     ])
 
     await state!.promptTemporary(temp!.id, '你好')
     expect(pi.prompts).toEqual([
-      { tabId: temp!.id, text: '你好', options: { expandPromptTemplates: false } }
+      { agentId: temp!.id, text: '你好', options: { expandPromptTemplates: false } }
     ])
 
     await state!.closeTemporaryChat()
@@ -174,7 +180,7 @@ describe('临时对话宿主', () => {
     const snapshot = await state!.selectTemporaryModel(temp.id, MODEL.provider, MODEL.id)
     expect(snapshot.temporaryChat?.model).toEqual(MODEL)
     expect(pi.models).toEqual([
-      { tabId: temp.id, provider: MODEL.provider, id: MODEL.id, persist: false }
+      { agentId: temp.id, provider: MODEL.provider, id: MODEL.id, persist: false }
     ])
   })
 })

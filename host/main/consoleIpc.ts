@@ -246,6 +246,20 @@ export function registerConsoleIpc(state: HostState, settings: SettingsStore): (
       const result = state.console.prune()
       if (result.deleted > 0) state.emit('console-updated')
     }
+    /*
+     * 归档天数改了 → 立刻按新规则跑一次（D55）。
+     *
+     * 不跑的话，把 30 改成 7 之后要等下次启动才生效 —— 看着像没生效。
+     * `runAutoArchive` 自己是幂等的：没有该归档的就什么也不做。
+     */
+    if (id === 'agents.archiveAfterDays') {
+      const days = settings.get('agents.archiveAfterDays')
+      if (typeof days === 'number') {
+        void state.runAutoArchive(days).catch((error) => {
+          console.error('自动归档失败:', error)
+        })
+      }
+    }
     return true
   })
 

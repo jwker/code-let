@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
-import type { PiEvent, PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEvent, PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { CommandOption, ModelOption, StreamItem } from '@contract/index'
 
 /**
@@ -27,11 +27,17 @@ class FakePi implements PiRuntimePort {
     for (const listener of this.listeners) listener(event)
   }
 
-  async openTab(): Promise<void> {}
-  async closeTab(): Promise<void> {}
-  async activateTab(): Promise<void> {}
-  async reloadTab(): Promise<void> {}
-  tabState(): TabRuntimeState {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(): Promise<void> {}
+  async closeAgent(): Promise<void> {}
+  async activateAgent(): Promise<void> {}
+  async reloadAgent(): Promise<void> {}
+  agentState(): AgentRuntimeState {
     return {
       ready: false,
       sessionId: null,
@@ -55,9 +61,9 @@ class FakePi implements PiRuntimePort {
   async listCommands(): Promise<CommandOption[]> {
     return []
   }
-  async compactTab(): Promise<void> {}
+  async compactAgent(): Promise<void> {}
   async prompt(): Promise<void> {}
-  async abortTab(): Promise<void> {}
+  async abortAgent(): Promise<void> {}
   async completeCommand(): Promise<never[]> {
     return []
   }
@@ -104,12 +110,12 @@ describe('扩展错误', () => {
 
     pi.emit({
       type: 'extension_error',
-      tabId: 'tab-1',
+      agentId: 'tab-1',
       data: { kind: 'load', path: '/ext/x.js', message: 'boom', at: 1 }
     })
 
     expect(host.snapshot().extensionErrors).toEqual([
-      { kind: 'load', path: '/ext/x.js', message: 'boom', at: 1, tabId: 'tab-1' }
+      { kind: 'load', path: '/ext/x.js', message: 'boom', at: 1, agentId: 'tab-1' }
     ])
     expect(sessionEvents).toEqual([])
   })
@@ -119,14 +125,14 @@ describe('扩展错误', () => {
     await host.init()
 
     const load = { kind: 'load', path: '/ext/x.js', message: 'boom', at: 1 }
-    pi.emit({ type: 'extension_error', tabId: 'tab-1', data: load })
-    pi.emit({ type: 'extension_error', tabId: 'tab-1', data: { ...load, at: 2 } })
+    pi.emit({ type: 'extension_error', agentId: 'tab-1', data: load })
+    pi.emit({ type: 'extension_error', agentId: 'tab-1', data: { ...load, at: 2 } })
     expect(host.snapshot().extensionErrors).toHaveLength(1)
     expect(host.snapshot().extensionErrors[0].at).toBe(2)
 
     pi.emit({
       type: 'extension_error',
-      tabId: 'tab-1',
+      agentId: 'tab-1',
       data: { kind: 'runtime', path: '/ext/x.js', event: 'command', message: 'bad', at: 3 }
     })
     expect(host.snapshot().extensionErrors).toHaveLength(2)
@@ -138,7 +144,7 @@ describe('扩展错误', () => {
     await host.init()
     pi.emit({
       type: 'extension_error',
-      tabId: 'tab-1',
+      agentId: 'tab-1',
       data: { kind: 'load', path: '/ext/x.js', message: 'boom', at: 1 }
     })
     host.dismissExtensionErrors()

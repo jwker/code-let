@@ -6,7 +6,7 @@ import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
-import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { ModelOption, StreamItem } from '@contract/index'
 
 /**
@@ -43,12 +43,18 @@ class FakePi implements PiRuntimePort {
     return () => this.listeners.delete(listener)
   }
 
-  async openTab(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void> {
     const manager = options.path ? SessionManager.open(options.path) : SessionManager.create(options.cwd)
     this.managers.set(tabId, manager)
   }
 
-  async closeTab(tabId: string): Promise<void> {
+  async closeAgent(tabId: string): Promise<void> {
     this.order.push(`close:${tabId}`)
     if (this.streaming.has(tabId)) this.closedWhileStreaming.push(tabId)
     if (this.failClose) throw new Error('关标签失败')
@@ -56,15 +62,15 @@ class FakePi implements PiRuntimePort {
     this.streaming.delete(tabId)
   }
 
-  async activateTab(tabId: string): Promise<void> {
+  async activateAgent(tabId: string): Promise<void> {
     this.order.push(`activate:${tabId}`)
   }
 
-  async reloadTab(): Promise<void> {
+  async reloadAgent(): Promise<void> {
     // 不参与
   }
 
-  tabState(tabId: string): TabRuntimeState {
+  agentState(tabId: string): AgentRuntimeState {
     const manager = this.managers.get(tabId)
     return {
       ready: Boolean(manager),
@@ -95,7 +101,7 @@ class FakePi implements PiRuntimePort {
     // 不参与
   }
 
-  async abortTab(): Promise<void> {
+  async abortAgent(): Promise<void> {
     // 不参与
   }
 
@@ -110,7 +116,7 @@ class FakePi implements PiRuntimePort {
     return []
   }
 
-  async compactTab(): Promise<void> {
+  async compactAgent(): Promise<void> {
     // 不参与
   }
 
@@ -192,15 +198,16 @@ async function seed(
   pi: FakePi,
   cwd: string,
   text: string
-): Promise<{ tabId: string; path: string }> {
+): Promise<{ agentId: string; path: string }> {
   await host.newConversation(cwd)
+  // 活动标签的 id 就是 agent id（投影里 activeTabId 指向活动 agent）
   const tabId = host.snapshot().activeTabId
   if (!tabId) throw new Error('新标签没建出来')
   await pi.prompt(tabId, text)
   await host.refreshConversations()
   const conversation = host.snapshot().conversations.find((c) => c.title === text)
   if (!conversation) throw new Error('会话没有落盘')
-  return { tabId, path: conversation.path }
+  return { agentId: tabId, path: conversation.path }
 }
 
 afterEach(async () => {
@@ -227,7 +234,7 @@ describe('删除会话', () => {
 
   it('先关标签、再移文件；文件不在了，列表里也没了', async () => {
     const { env, state: host, pi, trash } = await boot()
-    const { tabId, path } = await seed(host, pi, env.cwd, '要被删掉的会话')
+    const { agentId: tabId, path } = await seed(host, pi, env.cwd, '要被删掉的会话')
 
     const result = await host.deleteConversations([path])
 
@@ -248,8 +255,8 @@ describe('删除会话', () => {
     await host.deleteConversations([first.path])
 
     const tabs = host.snapshot().tabs
-    expect(tabs.some((tab) => tab.id === first.tabId)).toBe(false)
-    expect(tabs.some((tab) => tab.id === second.tabId)).toBe(true)
+    expect(tabs.some((tab) => tab.id === first.agentId)).toBe(false)
+    expect(tabs.some((tab) => tab.id === second.agentId)).toBe(true)
     expect(host.snapshot().conversations.map((c) => c.path)).toEqual([second.path])
   })
 
@@ -258,10 +265,10 @@ describe('删除会话', () => {
     const first = await seed(host, pi, env.cwd, '第一个会话')
     const second = await seed(host, pi, env.cwd, '第二个会话')
 
-    await host.activateTab(first.tabId)
+    await host.activateTab(first.agentId)
     await host.deleteConversations([first.path])
 
-    expect(host.snapshot().activeTabId).toBe(second.tabId)
+    expect(host.snapshot().activeTabId).toBe(second.agentId)
   })
 
   it('同路径的文件标签也一起关掉', async () => {
@@ -304,7 +311,7 @@ describe('删除会话', () => {
 
   it('正在跑的标签在关标签时被记下来（abort 走同一条路径）', async () => {
     const { env, state: host, pi } = await boot()
-    const { tabId, path } = await seed(host, pi, env.cwd, '正在跑的会话')
+    const { agentId: tabId, path } = await seed(host, pi, env.cwd, '正在跑的会话')
     pi.setStreaming(tabId, true)
 
     await host.deleteConversations([path])

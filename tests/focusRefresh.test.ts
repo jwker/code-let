@@ -6,7 +6,7 @@ import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
-import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { ModelOption, StreamItem } from '@contract/index'
 
 /**
@@ -31,15 +31,21 @@ class FakePi implements PiRuntimePort {
     return () => this.listeners.delete(listener)
   }
 
-  async openTab(tabId: string, options: { cwd: string; path?: string }): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string, options: { cwd: string; path?: string }): Promise<void> {
     this.managers.set(tabId, options.path ? SessionManager.open(options.path) : SessionManager.create(options.cwd))
   }
-  async closeTab(tabId: string): Promise<void> {
+  async closeAgent(tabId: string): Promise<void> {
     this.managers.delete(tabId)
   }
-  async activateTab(): Promise<void> {}
-  async reloadTab(): Promise<void> {}
-  tabState(tabId: string): TabRuntimeState {
+  async activateAgent(): Promise<void> {}
+  async reloadAgent(): Promise<void> {}
+  agentState(tabId: string): AgentRuntimeState {
     const manager = this.managers.get(tabId)
     return {
       ready: Boolean(manager),
@@ -60,7 +66,7 @@ class FakePi implements PiRuntimePort {
   async refreshModelAvailability(): Promise<void> {}
   async selectModel(): Promise<void> {}
   async prompt(): Promise<void> {}
-  async abortTab(): Promise<void> {
+  async abortAgent(): Promise<void> {
     // 测试里没有真 agent，中止是空操作
   }
   async renameSession(): Promise<void> {
@@ -73,7 +79,7 @@ class FakePi implements PiRuntimePort {
     return []
   }
 
-  async compactTab(): Promise<void> {
+  async compactAgent(): Promise<void> {
     // 不参与
   }
 

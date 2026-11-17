@@ -1,32 +1,39 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { host } from './host'
-import { Inspector } from './shell/Inspector'
-import { StatusBar } from './shell/StatusBar'
-import { MainArea } from './shell/MainArea'
 import { ModelPicker } from './shell/ModelPicker'
-import { TemporaryChat } from './shell/TemporaryChat'
 import { PaneResizer } from './shell/PaneResizer'
+import { Rail } from './shell/Rail'
+import { Sidebar } from './shell/Sidebar'
+import { StatusBar } from './shell/StatusBar'
+import { TemporaryChat } from './shell/TemporaryChat'
+import { TitleBar } from './shell/TitleBar'
+import { Zone5 } from './shell/Zone5'
+import { Zone6 } from './shell/Zone6'
 import { createBrowserFocusController } from './shell/browserFocus'
 import { NewConversationDialog, randomConversationName } from './shell/NewConversationDialog'
-import { Sidebar } from './shell/Sidebar'
-import { TitleBar } from './shell/TitleBar'
 import {
-  FILE_VIEW_MIN,
-  INSPECTOR_DEFAULT,
-  INSPECTOR_MIN,
   SIDEBAR_DEFAULT,
   SIDEBAR_MIN,
-  clampInspector,
   clampSidebar,
-  inspectorCeiling,
-  loadInspectorWidth,
   loadSidebarWidth,
-  saveInspectorWidth,
   saveSidebarWidth,
   sidebarCeiling
 } from './shell/paneSizes'
+import { ZONE5_MAX, ZONE5_MIN, paneLayoutFor } from '@contract/index'
 import { useStore } from './store'
 
+/**
+ * 应用外壳（PLAN.md D51）。
+ *
+ * ```
+ * 标题栏
+ * 侧栏(可选) │ 窄轨(56) │ 区域 5(可选) │ 区域 6
+ * 状态栏
+ * ```
+ *
+ * 右侧检视器已经退场：它原来的东西分别进了区域 5/6（代码、文档）和独立窗口（控制台）。
+ * 侧栏在 S7 之前还留着（「按项目列会话」），默认收起，⌘B 打开。
+ */
 export function App() {
   const setSnapshot = useStore((s) => s.setSnapshot)
   const applySessionEvents = useStore((s) => s.applySessionEvents)
@@ -34,10 +41,12 @@ export function App() {
   const theme = useStore((s) => s.theme)
   const activeTabId = useStore((s) => s.snapshot.activeTabId)
   const sessionReady = useStore((s) => s.snapshot.session.ready)
-  const nav = useStore((s) => s.nav)
-  const inspectorOpen = useStore((s) => s.inspectorOpen)
+  const pane = useStore((s) => s.pane)
+  const agents = useStore((s) => s.snapshot.agents)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
+  const zone5Widths = useStore((s) => s.zone5Widths)
+  const setZone5Width = useStore((s) => s.setZone5Width)
   const pickerAnchor = useStore((s) => s.modelPickerAnchor)
   const models = useStore((s) => s.models)
   const selectModel = useStore((s) => s.selectModel)
@@ -55,27 +64,20 @@ export function App() {
 
   const shellRef = useRef<HTMLDivElement>(null)
   const [sideWidth, setSideWidth] = useState(loadSidebarWidth)
-  const [inspWidth, setInspWidth] = useState(loadInspectorWidth)
-  /*
-   * 检视器宽度的最新值 —— 给「切到文件视图时检查宽度」那个 effect 用。
-   *
-   * 它**不能进那个 effect 的依赖**：用户拖动提交后 `inspWidth` 会变，
-   * effect 重跑就会把宽度又拉回 FILE_VIEW_MIN —— 拖动等于被撤销。
-   * 用 ref 读最新值、只依赖 `nav`，才是「只在切进来那一刻检查一次」。
-   */
-  const inspWidthRef = useRef(inspWidth)
-  inspWidthRef.current = inspWidth
+
+  // 区域 5 的宽度按入口各记一份，没记过就用分派表的默认值
+  const activeAgent = agents.find((agent) => agent.id === activeTabId) ?? null
+  const layout = paneLayoutFor(pane, activeAgent?.type ?? null)
+  const zone5 = layout.zone5 !== null
+  const zone5Width = zone5Widths[pane] ?? layout.zone5 ?? ZONE5_MIN
+  const zone5Min = layout.zone5Min ?? ZONE5_MIN
 
   // 拖拽时宽度只写 DOM、不动 state，所以窗口 resize 的回调要从这里读最新值
-  const layoutRef = useRef({
-    side: sideWidth,
-    insp: inspWidth,
-    sideOpen: sidebarOpen,
-    inspOpen: inspectorOpen
-  })
+  const layoutRef = useRef({ side: sideWidth, sideOpen: sidebarOpen })
+  layoutRef.current = { side: sideWidth, sideOpen: sidebarOpen }
 
   useEffect(() => {
-    // macOS 的红绿灯压在导航轨顶上，躲开它
+    // macOS 的红绿灯压在标题栏顶上，躲开它
     document.documentElement.dataset.platform = host.platform
   }, [])
 
@@ -97,13 +99,10 @@ export function App() {
   }, [setSnapshot, applySessionEvents])
 
   /*
-   * agent 操作浏览器时，把右侧面板切到浏览器视图。
+   * agent 操作浏览器时把窄轨切到浏览器入口。
    *
    * 判定在 browserFocus.ts 里：主进程每次 agent 调浏览器工具就换一份新的活动记录，
-   * 渲染进程认出「换了一份」就切过去。面板收着的时候也展开 ——
-   * 收起来的检视器只剩一条窄轨，看不见浏览器。
-   *
-   * 用户自己在面板里点不触发 —— 那条路不写活动记录。
+   * 渲染进程认出「换了一份」就切过去。用户自己点不触发 —— 那条路不写活动记录。
    */
   useEffect(() => {
     const controller = createBrowserFocusController(() => {
@@ -114,13 +113,13 @@ export function App() {
   }, [])
 
   /**
-   * 切标签就换内容流（R1 R5）：持久态在 Pi 的会话文件里，宿主不另存一份。
+   * 切 agent 就换内容流（R1 R5）：持久态在 Pi 的会话文件里，宿主不另存一份。
    *
-   * **每个标签一份**（PLAN.md D4 修订）：内容流按标签 id 存在 store 里，
+   * **每个 agent 一份**（PLAN.md D58）：内容流按 agent id 存在 store 里，
    * 切回来读内存里那一份 —— 磁盘上的 entries 落后于实时事件，
    * 拿磁盘覆盖回放会丢消息或重排。
    *
-   * 只有这个标签还没加载过时才去读盘（懒加载的标签第一次点开才建 runtime）。
+   * 只有这个 agent 还没加载过时才去读盘（懒加载的 agener 第一次点开才建 runtime）。
    */
   useEffect(() => {
     if (!activeTabId) return
@@ -132,7 +131,7 @@ export function App() {
     if (!sessionReady) return
     if (useStore.getState().items[activeTabId]) return
     let cancelled = false
-    void host.getTabEntries(activeTabId).then((items) => {
+    void host.getAgentEntries(activeTabId).then((items) => {
       if (!cancelled) setItems(activeTabId, items)
     })
     return () => {
@@ -140,36 +139,13 @@ export function App() {
     }
   }, [activeTabId, sessionReady, setItems])
 
-  // 宽度写在 shell 的 CSS 变量上，标题栏和下方三列共用同一份（见 .shell）
+  // 宽度写在 shell 的 CSS 变量上，标题栏和下方几列共用同一份（见 .shell）
   useLayoutEffect(() => {
-    layoutRef.current = { side: sideWidth, insp: inspWidth, sideOpen: sidebarOpen, inspOpen: inspectorOpen }
     const el = shellRef.current
     if (!el) return
     el.style.setProperty('--side-w', `${sideWidth}px`)
-    el.style.setProperty('--insp-w', `${inspWidth}px`)
-  }, [sideWidth, inspWidth, sidebarOpen, inspectorOpen])
-
-  /*
-   * 「文件」视图需要宽度（文件树 180 + 内容至少 300）。
-   * 面板太窄时树会被容器查询收起，等于没法浏览文件 —— 所以**切到这个视图那一刻**
-   * 检查一次，不够就拉宽。
-   *
-   * **只在切入时检查，之后不再干预**：用户拖窄是他自己的选择，
-   * 拖完又被拉回去会让人以为「拖不动」。切走再切回来会再检查一次 ——
-   * 那时确实又需要看树了。
-   */
-  useEffect(() => {
-    if (nav !== 'code' || !inspectorOpen) return
-    const current = inspWidthRef.current
-    if (current >= FILE_VIEW_MIN) return
-    const ceiling = inspectorCeiling(sidebarOpen ? sideWidth : 0, window.innerWidth)
-    const next = Math.min(FILE_VIEW_MIN, ceiling)
-    if (next <= current) return
-    setInspWidth(next)
-    saveInspectorWidth(next)
-    // 故意不依赖 inspWidth / sideWidth / sidebarOpen —— 见上面那段注释
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nav, inspectorOpen])
+    el.style.setProperty('--zone5-w', `${zone5Width}px`)
+  }, [sideWidth, zone5Width, sidebarOpen, zone5])
 
   // ⌘B / Ctrl+B：跟编辑器一致，侧栏收放的快捷键
   useEffect(() => {
@@ -182,27 +158,22 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [toggleSidebar])
 
-  // 窗口变窄：把两栏收回上限之内，别把主区挤没（收起的那一栏不占宽度）
+  // 窗口变窄：把侧栏收回上限之内，别把区域 6 挤没（收起的那一栏不占宽度）
   useEffect(() => {
     function fitToWindow(): void {
-      const { side, insp, sideOpen, inspOpen } = layoutRef.current
-      const width = window.innerWidth
-      const nextInsp = clampInspector(insp, sideOpen ? side : 0, width)
-      const nextSide = clampSidebar(side, inspOpen ? nextInsp : 0, width)
-      if (nextInsp !== insp) setInspWidth(nextInsp)
+      const { side, sideOpen } = layoutRef.current
+      const nextSide = clampSidebar(side, 0, window.innerWidth)
       if (nextSide !== side) setSideWidth(nextSide)
+      // 区域 5 太宽也一样收 —— 它比侧栏更需要让位给内容
+      if (!sideOpen) return
+      void nextSide
     }
     window.addEventListener('resize', fitToWindow)
-    // 首屏也收一次：上次可能是在更大的窗口里拖的
     fitToWindow()
     return () => window.removeEventListener('resize', fitToWindow)
   }, [])
 
-  const shellClass = [
-    'shell',
-    inspectorOpen ? '' : 'is-insp-hidden',
-    sidebarOpen ? '' : 'is-side-hidden'
-  ]
+  const shellClass = ['shell', sidebarOpen ? '' : 'is-side-hidden', zone5 ? '' : 'is-zone5-hidden']
     .filter(Boolean)
     .join(' ')
 
@@ -211,8 +182,9 @@ export function App() {
       <TitleBar />
       <div className="shell-deck">
         <Sidebar />
-        <MainArea />
-        <Inspector />
+        <Rail />
+        {zone5 && <Zone5 />}
+        <Zone6 />
       </div>
       <StatusBar />
 
@@ -222,10 +194,7 @@ export function App() {
         width={sideWidth}
         min={SIDEBAR_MIN}
         defaultWidth={SIDEBAR_DEFAULT}
-        ceiling={() => {
-          const { insp, inspOpen } = layoutRef.current
-          return sidebarCeiling(inspOpen ? insp : 0, window.innerWidth)
-        }}
+        ceiling={() => sidebarCeiling(zone5 ? zone5Width : 0, window.innerWidth)}
         onDrag={(next) => shellRef.current?.style.setProperty('--side-w', `${next}px`)}
         onCommit={(next) => {
           setSideWidth(next)
@@ -233,22 +202,22 @@ export function App() {
         }}
       />
 
-      <PaneResizer
-        edge="right"
-        label="调整右侧面板宽度"
-        width={inspWidth}
-        min={INSPECTOR_MIN}
-        defaultWidth={INSPECTOR_DEFAULT}
-        ceiling={() => {
-          const { side, sideOpen } = layoutRef.current
-          return inspectorCeiling(sideOpen ? side : 0, window.innerWidth)
-        }}
-        onDrag={(next) => shellRef.current?.style.setProperty('--insp-w', `${next}px`)}
-        onCommit={(next) => {
-          setInspWidth(next)
-          saveInspectorWidth(next)
-        }}
-      />
+      {/*
+        区域 5 的拖动条。位置跟着「窄轨 + 侧栏」走 —— 用 CSS 变量算，不在这里量 DOM。
+      */}
+      {zone5 && (
+        <PaneResizer
+          edge="left"
+          variant="zone5"
+          label="调整区域 5 宽度"
+          width={zone5Width}
+          min={zone5Min}
+          defaultWidth={layout.zone5 ?? zone5Min}
+          ceiling={() => Math.min(ZONE5_MAX, window.innerWidth - 320)}
+          onDrag={(next) => shellRef.current?.style.setProperty('--zone5-w', `${next}px`)}
+          onCommit={(next) => setZone5Width(pane, next)}
+        />
+      )}
 
       {/*
         模型选择器：两个入口（状态栏、输入框胶囊）共用这一个浮层。

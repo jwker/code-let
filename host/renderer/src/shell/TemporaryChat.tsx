@@ -89,7 +89,7 @@ export function TemporaryChat() {
     if (useStore.getState().items[temp.id]) return
     let cancelled = false
     void host
-      .getTabEntries(temp.id)
+      .getAgentEntries(temp.id)
       .then((next) => {
         if (!cancelled) setItems(temp.id, next)
       })

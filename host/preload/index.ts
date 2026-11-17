@@ -12,9 +12,11 @@ import {
   type CommandArgumentOption,
   type CommandOption,
   type DeleteConversationsResult,
+  type DocsResult,
   type FileContent,
-  type FileEntry,
+  type FileListResult,
   type FileSearchResult,
+  type BrowserEvent,
   type BrowserState,
   type GitDiff,
   type GitStatus,
@@ -45,34 +47,65 @@ const api: CodeletApi = {
     ipcRenderer.invoke(IPC.conversationsDelete, { paths }) as Promise<DeleteConversationsResult>,
   renameConversation: (path, name) =>
     ipcRenderer.invoke(IPC.conversationsRename, { path, name }) as Promise<HostSnapshot>,
-  openConversation: (path, cwd) => ipcRenderer.invoke(IPC.tabsOpen, { path, cwd }) as Promise<HostSnapshot>,
+  openConversation: (path, cwd) => ipcRenderer.invoke(IPC.agentsOpen, { path, cwd }) as Promise<HostSnapshot>,
   newConversation: (cwd, name) =>
-    ipcRenderer.invoke(IPC.tabsNew, { cwd, name }) as Promise<HostSnapshot>,
-  activateTab: (tabId) => ipcRenderer.invoke(IPC.tabsActivate, { tabId }) as Promise<HostSnapshot>,
-  closeTab: (tabId) => ipcRenderer.invoke(IPC.tabsClose, { tabId }) as Promise<HostSnapshot>,
-  reloadTab: (tabId) => ipcRenderer.invoke(IPC.tabsReload, { tabId }) as Promise<HostSnapshot>,
-  getTabEntries: (tabId) => ipcRenderer.invoke(IPC.tabsEntries, { tabId }) as Promise<StreamItem[]>,
-  prompt: (tabId, text, attachments, uploads) =>
-    ipcRenderer.invoke(IPC.promptSend, { tabId, text, attachments, uploads }),
-  abortPrompt: (tabId) => ipcRenderer.invoke(IPC.promptAbort, { tabId }) as Promise<void>,
-  compactTab: (tabId) => ipcRenderer.invoke(IPC.promptCompact, { tabId }) as Promise<void>,
+    ipcRenderer.invoke(IPC.agentsCreate, { cwd, name }) as Promise<HostSnapshot>,
+  activateAgent: (agentId) =>
+    ipcRenderer.invoke(IPC.agentsActivate, { agentId }) as Promise<HostSnapshot>,
+  newAgentFrom: (agentId) =>
+    ipcRenderer.invoke(IPC.agentsNewFrom, { agentId }) as Promise<HostSnapshot>,
+  importConversation: (path) =>
+    ipcRenderer.invoke(IPC.agentsImport, { path }) as Promise<HostSnapshot>,
+  renameAgent: (agentId, name) =>
+    ipcRenderer.invoke(IPC.agentsRename, { agentId, name }) as Promise<HostSnapshot>,
+  archiveAgent: (agentId) =>
+    ipcRenderer.invoke(IPC.agentsArchive, { agentId }) as Promise<HostSnapshot>,
+  restoreAgent: (agentId) =>
+    ipcRenderer.invoke(IPC.agentsRestore, { agentId }) as Promise<HostSnapshot>,
+  deleteAgent: (agentId) => ipcRenderer.invoke(IPC.agentsDelete, { agentId }) as Promise<HostSnapshot>,
+  reloadAgent: (agentId) => ipcRenderer.invoke(IPC.agentsReload, { agentId }) as Promise<HostSnapshot>,
+  getAgentEntries: (agentId) =>
+    ipcRenderer.invoke(IPC.agentsEntries, { agentId }) as Promise<StreamItem[]>,
+  activateProjectTab: (tabId) =>
+    ipcRenderer.invoke(IPC.projectsActivateTab, { tabId }) as Promise<HostSnapshot>,
+  closeProjectTab: (tabId) =>
+    ipcRenderer.invoke(IPC.projectsCloseTab, { tabId }) as Promise<HostSnapshot>,
+  setPane: (tabId, pane) =>
+    ipcRenderer.invoke(IPC.projectsSetPane, { tabId, pane }) as Promise<HostSnapshot>,
+  prompt: (agentId, text, attachments, uploads) =>
+    ipcRenderer.invoke(IPC.promptSend, { agentId, text, attachments, uploads }),
+  abortPrompt: (agentId) => ipcRenderer.invoke(IPC.promptAbort, { agentId }) as Promise<void>,
+  compactAgent: (agentId) => ipcRenderer.invoke(IPC.promptCompact, { agentId }) as Promise<void>,
   pickAttachments: () =>
     ipcRenderer.invoke(IPC.attachmentsPick) as Promise<PickAttachmentsResult>,
-  getBrowserState: () => ipcRenderer.invoke(IPC.browserGet) as Promise<BrowserState>,
-  createBrowserTab: (url) => ipcRenderer.invoke(IPC.browserCreate, { url }) as Promise<BrowserState>,
-  closeBrowserTab: (tabId) => ipcRenderer.invoke(IPC.browserClose, { tabId }) as Promise<BrowserState>,
-  activateBrowserTab: (tabId) => ipcRenderer.invoke(IPC.browserActivate, { tabId }) as Promise<BrowserState>,
-  navigateBrowser: (tabId, url) =>
-    ipcRenderer.invoke(IPC.browserNavigate, { tabId, url }) as Promise<BrowserState>,
-  browserBack: (tabId) => ipcRenderer.invoke(IPC.browserBack, { tabId }) as Promise<BrowserState>,
-  browserForward: (tabId) => ipcRenderer.invoke(IPC.browserForward, { tabId }) as Promise<BrowserState>,
-  browserReload: (tabId) => ipcRenderer.invoke(IPC.browserReload, { tabId }) as Promise<BrowserState>,
+  /*
+   * 浏览器的每条调用都要带 **host**（PLAN.md D57）。
+   *
+   * 注意：TypeScript 不报「少传参数」—— 零参函数也能赋给「一个参数」的函数类型，
+   * 所以这里的 host 漏传时编译是过的，运行时才会在 schema 校验里炸（host undefined）。
+   * 这条靠 `tests/preload.test.ts` 的一条源码断言守着。
+   */
+  getBrowserState: (host) => ipcRenderer.invoke(IPC.browserGet, { host }) as Promise<BrowserState>,
+  createBrowserTab: (host, url) =>
+    ipcRenderer.invoke(IPC.browserCreate, { host, url }) as Promise<BrowserState>,
+  closeBrowserTab: (host, tabId) =>
+    ipcRenderer.invoke(IPC.browserClose, { host, tabId }) as Promise<BrowserState>,
+  activateBrowserTab: (host, tabId) =>
+    ipcRenderer.invoke(IPC.browserActivate, { host, tabId }) as Promise<BrowserState>,
+  navigateBrowser: (host, tabId, url) =>
+    ipcRenderer.invoke(IPC.browserNavigate, { host, tabId, url }) as Promise<BrowserState>,
+  browserBack: (host, tabId) =>
+    ipcRenderer.invoke(IPC.browserBack, { host, tabId }) as Promise<BrowserState>,
+  browserForward: (host, tabId) =>
+    ipcRenderer.invoke(IPC.browserForward, { host, tabId }) as Promise<BrowserState>,
+  browserReload: (host, tabId) =>
+    ipcRenderer.invoke(IPC.browserReload, { host, tabId }) as Promise<BrowserState>,
   setBrowserBounds: (bounds) => ipcRenderer.invoke(IPC.browserBounds, bounds) as Promise<void>,
-  setBrowserVisible: (visible) => ipcRenderer.invoke(IPC.browserVisible, { visible }) as Promise<void>,
-  getGitStatus: (tabId) =>
-    ipcRenderer.invoke(IPC.gitStatus, { tabId }) as Promise<GitStatus>,
-  getGitDiff: (tabId, path, scope) =>
-    ipcRenderer.invoke(IPC.gitDiff, { tabId, path, scope }) as Promise<GitDiff>,
+  setBrowserVisible: (host, visible) =>
+    ipcRenderer.invoke(IPC.browserVisible, { host, visible }) as Promise<void>,
+  getGitStatus: (cwd) => ipcRenderer.invoke(IPC.gitStatus, { cwd }) as Promise<GitStatus>,
+  getGitDiff: (cwd, path, scope) =>
+    ipcRenderer.invoke(IPC.gitDiff, { cwd, path, scope }) as Promise<GitDiff>,
   openTemporaryChat: () => ipcRenderer.invoke(IPC.temporaryOpen) as Promise<HostSnapshot>,
   closeTemporaryChat: () => ipcRenderer.invoke(IPC.temporaryClose) as Promise<HostSnapshot>,
   promptTemporary: (id, text, uploads) =>
@@ -81,28 +114,31 @@ const api: CodeletApi = {
   listTemporaryModels: (id) => ipcRenderer.invoke(IPC.temporaryModels, { id }) as Promise<ModelOption[]>,
   selectTemporaryModel: (id, provider, modelId) =>
     ipcRenderer.invoke(IPC.temporaryModelSelect, { id, provider, modelId }) as Promise<HostSnapshot>,
-  listCommands: (tabId) => ipcRenderer.invoke(IPC.commandsList, { tabId }) as Promise<CommandOption[]>,
-  completeCommand: (tabId, name, prefix) =>
-    ipcRenderer.invoke(IPC.commandsComplete, { tabId, name, prefix }) as Promise<CommandArgumentOption[]>,
-  listThinkingLevels: (tabId) =>
-    ipcRenderer.invoke(IPC.thinkingLevels, { tabId }) as Promise<ThinkingLevel[]>,
-  selectThinkingLevel: (tabId, level) =>
-    ipcRenderer.invoke(IPC.thinkingSelect, { tabId, level }) as Promise<void>,
+  listCommands: (agentId) =>
+    ipcRenderer.invoke(IPC.commandsList, { agentId }) as Promise<CommandOption[]>,
+  completeCommand: (agentId, name, prefix) =>
+    ipcRenderer.invoke(IPC.commandsComplete, { agentId, name, prefix }) as Promise<CommandArgumentOption[]>,
+  listThinkingLevels: (agentId) =>
+    ipcRenderer.invoke(IPC.thinkingLevels, { agentId }) as Promise<ThinkingLevel[]>,
+  selectThinkingLevel: (agentId, level) =>
+    ipcRenderer.invoke(IPC.thinkingSelect, { agentId, level }) as Promise<void>,
   dismissExtensionErrors: () => ipcRenderer.invoke(IPC.extensionErrorsDismiss) as Promise<HostSnapshot>,
   searchFiles: (cwd, query, limit, requestId) =>
     ipcRenderer.invoke(IPC.filesSearch, { cwd, query, limit, requestId }) as Promise<FileSearchResult[]>,
   cancelFileSearch: (requestId) => ipcRenderer.invoke(IPC.filesSearchCancel, { requestId }) as Promise<void>,
   copyText: (text) => ipcRenderer.invoke(IPC.clipboardWrite, { text }) as Promise<void>,
-  listFiles: (cwd, dir) => ipcRenderer.invoke(IPC.filesList, { cwd, dir }) as Promise<FileEntry[]>,
+  listDocs: (cwd) => ipcRenderer.invoke(IPC.docsList, { cwd }) as Promise<DocsResult>,
+  listFiles: (cwd, dir) =>
+    ipcRenderer.invoke(IPC.filesList, { cwd, dir }) as Promise<FileListResult>,
   readFile: (cwd, path) => ipcRenderer.invoke(IPC.filesRead, { cwd, path }) as Promise<FileContent>,
   openFile: (cwd, path) => ipcRenderer.invoke(IPC.filesOpen, { cwd, path }) as Promise<HostSnapshot>,
   closeFile: (fileId) => ipcRenderer.invoke(IPC.filesClose, { fileId }) as Promise<HostSnapshot>,
   activateFile: (fileId) => ipcRenderer.invoke(IPC.filesActivate, { fileId }) as Promise<HostSnapshot>,
   openFileExternal: (cwd, path) => ipcRenderer.invoke(IPC.filesOpenExternal, { cwd, path }) as Promise<void>,
   reloadFile: (fileId) => ipcRenderer.invoke(IPC.filesReload, { fileId }) as Promise<HostSnapshot>,
-  listModels: (tabId) => ipcRenderer.invoke(IPC.modelsList, { tabId }) as Promise<ModelOption[]>,
-  selectModel: (tabId, provider, id, persist) =>
-    ipcRenderer.invoke(IPC.modelsSelect, { tabId, provider, id, persist }) as Promise<void>,
+  listModels: (agentId) => ipcRenderer.invoke(IPC.modelsList, { agentId }) as Promise<ModelOption[]>,
+  selectModel: (agentId, provider, id, persist) =>
+    ipcRenderer.invoke(IPC.modelsSelect, { agentId, provider, id, persist }) as Promise<void>,
 
   onSnapshot: (listener) => {
     const handler = (_event: unknown, snapshot: HostSnapshot): void => listener(snapshot)
@@ -121,7 +157,7 @@ const api: CodeletApi = {
   },
 
   onBrowserState: (listener) => {
-    const handler = (_event: unknown, state: BrowserState): void => listener(state)
+    const handler = (_event: unknown, payload: BrowserEvent): void => listener(payload)
     ipcRenderer.on(IPC_EVENTS.browser, handler)
     return () => {
       ipcRenderer.removeListener(IPC_EVENTS.browser, handler)

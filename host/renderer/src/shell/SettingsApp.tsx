@@ -21,7 +21,18 @@ export function SettingsApp() {
   }, [])
 
   const [values, setValues] = useState<Record<string, unknown>>({})
-  const [category, setCategory] = useState('general')
+  /*
+   * 默认停在**第一个有内容的分类**上。
+   *
+   * 写死 `'general'` 的话，一旦某个分类（比如「通用」）一条设置都没有，
+   * 窗口打开就是一页空白 —— 看着像坏了。分类顺序仍按注册表。
+   */
+  const [category, setCategory] = useState(
+    () =>
+      SETTINGS_CATEGORIES.slice()
+        .sort((a, b) => a.order - b.order)
+        .find((entry) => SETTINGS_ITEMS.some((item) => item.category === entry.id))?.id ?? 'general'
+  )
   const [stats, setStats] = useState<ConsoleStats | null>(null)
   const [confirm, setConfirm] = useState<SettingItem | null>(null)
   const [busy, setBusy] = useState(false)
@@ -71,6 +82,10 @@ export function SettingsApp() {
 
   const runAction = useCallback(
     async (item: SettingItem): Promise<void> => {
+      if (item.action === 'consoleOpen') {
+        await host.openConsoleWindow()
+        return
+      }
       if (item.action === 'consoleClear') {
         setBusy(true)
         try {

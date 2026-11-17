@@ -220,9 +220,25 @@ function ChildLevel({
   onToggle: (cwd: string, dir: string) => Promise<void>
   onOpen: (cwd: string, path: string) => Promise<void>
 }) {
-  const entries = useStore((s) => s.treeEntries[`${cwd}\u0001${dir}`])
+  const key = `${cwd}\u0001${dir}`
+  const entries = useStore((s) => s.treeEntries[key])
+  const error = useStore((s) => s.treeErrors[key])
   if (!entries) {
     return <div className="file-tree-loading" style={{ paddingLeft: 16 + depth * 12 }}>加载中…</div>
+  }
+  /*
+   * 读不成的那一层要**说清为什么**。
+   *
+   * 最常见的情况不是出错，而是符号链接指向项目外（`node_modules` 里的 link 依赖）——
+   * 主进程按「渲染进程不能点名读项目外」拒绝了它。显示成「（空）」会让人以为
+   * 这个目录真的没有东西。
+   */
+  if (error && entries.length === 0) {
+    return (
+      <div className="file-tree-note" style={{ paddingLeft: 16 + depth * 12 }} title={error}>
+        {error}
+      </div>
+    )
   }
   if (entries.length === 0) {
     return <div className="file-tree-loading" style={{ paddingLeft: 16 + depth * 12 }}>（空）</div>

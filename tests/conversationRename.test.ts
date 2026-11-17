@@ -6,7 +6,7 @@ import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
-import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { ModelOption, StreamItem } from '@contract/index'
 
 /**
@@ -33,24 +33,30 @@ class FakePi implements PiRuntimePort {
     return () => this.listeners.delete(listener)
   }
 
-  async openTab(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void> {
     const manager = options.path ? SessionManager.open(options.path) : SessionManager.create(options.cwd)
     this.managers.set(tabId, manager)
   }
 
-  async closeTab(tabId: string): Promise<void> {
+  async closeAgent(tabId: string): Promise<void> {
     this.managers.delete(tabId)
   }
 
-  async activateTab(): Promise<void> {
+  async activateAgent(): Promise<void> {
     // 不参与
   }
 
-  async reloadTab(): Promise<void> {
+  async reloadAgent(): Promise<void> {
     // 不参与
   }
 
-  tabState(tabId: string): TabRuntimeState {
+  agentState(tabId: string): AgentRuntimeState {
     const manager = this.managers.get(tabId)
     return {
       ready: Boolean(manager),
@@ -81,7 +87,7 @@ class FakePi implements PiRuntimePort {
     // 不参与
   }
 
-  async abortTab(): Promise<void> {
+  async abortAgent(): Promise<void> {
     // 不参与
   }
 
@@ -102,7 +108,7 @@ class FakePi implements PiRuntimePort {
     return []
   }
 
-  async compactTab(): Promise<void> {
+  async compactAgent(): Promise<void> {
     // 不参与
   }
 
@@ -155,7 +161,7 @@ async function seed(
   pi: FakePi,
   cwd: string,
   text: string
-): Promise<{ tabId: string; path: string }> {
+): Promise<{ agentId: string; path: string }> {
   await host.newConversation(cwd)
   const tabId = host.snapshot().activeTabId
   if (!tabId) throw new Error('新标签没建出来')
@@ -163,7 +169,7 @@ async function seed(
   await host.refreshConversations()
   const conversation = host.snapshot().conversations.find((c) => c.title === text)
   if (!conversation) throw new Error('会话没有落盘')
-  return { tabId, path: conversation.path }
+  return { agentId: tabId, path: conversation.path }
 }
 
 afterEach(async () => {
@@ -190,7 +196,7 @@ describe('重命名会话', () => {
 
   it('没开着的会话 —— 打开文件追加 session_info，列表标题跟着变', async () => {
     const { env, state: host, pi } = await boot()
-    const { tabId, path } = await seed(host, pi, env.cwd, '原始第一条消息')
+    const { agentId: tabId, path } = await seed(host, pi, env.cwd, '原始第一条消息')
     await host.closeTab(tabId)
 
     await host.renameConversation(path, '改过的名字')
@@ -201,9 +207,9 @@ describe('重命名会话', () => {
     expect(SessionManager.open(path).getSessionName()).toBe('改过的名字')
   })
 
-  it('开着的会话 —— 走 runtime，标签标题与 tabs.json 一起更新', async () => {
+  it('开着的会话 —— 只改会话名，agent 名不动（两个名字分开维护）', async () => {
     const { env, state: host, pi } = await boot()
-    const { tabId, path } = await seed(host, pi, env.cwd, '原始第一条消息')
+    const { agentId: tabId, path } = await seed(host, pi, env.cwd, '原始第一条消息')
 
     // 前后空格由宿主去掉
     await host.renameConversation(path, '  新标题  ')
@@ -211,10 +217,18 @@ describe('重命名会话', () => {
     expect(pi.renameCalls).toEqual([{ path, name: '新标题' }])
     expect(SessionManager.open(path).getSessionName()).toBe('新标题')
     expect(host.snapshot().conversations[0]?.title).toBe('新标题')
-    expect(host.snapshot().tabs.find((tab) => tab.id === tabId)?.title).toBe('新标题')
 
-    const saved = JSON.parse(readFileSync(env.tabFile, 'utf8')) as { tabs: Array<{ id: string; title: string }> }
-    expect(saved.tabs.find((tab) => tab.id === tabId)?.title).toBe('新标题')
+    /*
+     * agent 名**不跟着变**：会话名属于会话文件（裸 pi 也看得到），
+     * agent 名是窄轨里的本地名字，由「重命名 agent」改。
+     * 两者混在一起改的后果是改一次会话名就动一次文件 mtime，被误判成「在别处被改过」。
+     */
+    const saved = JSON.parse(readFileSync(join(env.agentDir, 'agents.json'), 'utf8')) as {
+      agents: Array<{ id: string; name: string }>
+    }
+    expect(saved.agents.find((agent) => agent.id === tabId)?.name).not.toBe('新标题')
+    // 快照里 agent 的会话名跟着变了，窄轨的悬停气泡靠它显示第二行
+    expect(host.snapshot().agents.find((agent) => agent.id === tabId)?.sessionTitle).toBe('新标题')
   })
 
   it('空名字 —— 清掉自定义名，标题退回首条用户消息', async () => {

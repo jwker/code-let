@@ -1,4 +1,6 @@
-import type { BrowserAgentActivity, BrowserState } from '@contract/index'
+import type { BrowserAgentActivity } from '@contract/index'
+import type { BrowserEvent } from '@contract/index'
+import { PROJECT_BROWSER } from '@contract/browser'
 
 /**
  * 「agent 动了浏览器」这件事的判定。
@@ -14,16 +16,23 @@ import type { BrowserAgentActivity, BrowserState } from '@contract/index'
  * 放在组件里就只能靠点页面来验。
  */
 export interface BrowserFocusController {
-  /** 收到一份新的浏览器状态；判定是 agent 的新动作就调 onFocus */
-  handle(state: BrowserState): void
+  /** 收到一次浏览器状态推送；判定是 agent 的新动作就调 onFocus */
+  handle(event: BrowserEvent): void
 }
 
 export function createBrowserFocusController(onFocus: () => void): BrowserFocusController {
   let lastActivity: BrowserAgentActivity | null = null
 
   return {
-    handle(state: BrowserState): void {
-      const activity = state.agent
+    handle(event: BrowserEvent): void {
+      /*
+       * 只认**项目级**浏览器的活动。
+       *
+       * agent 动的是自己的预览宿主（`agent:<id>`），那东西就在它自己的
+       * 区域 6 里，不用把窄轨切走 —— 切过去反而会盖掉用户正在看的对话。
+       */
+      if (event.host !== PROJECT_BROWSER) return
+      const activity = event.state.agent
       // 没有活动记录 = agent 没在动浏览器
       if (!activity) return
       // 同一份记录被重复推 → 不是新动作

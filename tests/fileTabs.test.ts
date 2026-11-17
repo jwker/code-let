@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore, type StoredFile } from '../host/main/tabs'
-import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { ModelOption, StreamItem } from '@contract/index'
 
 /**
@@ -21,11 +21,17 @@ class FakePi implements PiRuntimePort {
     this.listeners.add(l)
     return () => this.listeners.delete(l)
   }
-  async openTab(): Promise<void> {}
-  async closeTab(): Promise<void> {}
-  async activateTab(): Promise<void> {}
-  async reloadTab(): Promise<void> {}
-  tabState(): TabRuntimeState {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(): Promise<void> {}
+  async closeAgent(): Promise<void> {}
+  async activateAgent(): Promise<void> {}
+  async reloadAgent(): Promise<void> {}
+  agentState(): AgentRuntimeState {
     return { ready: false, sessionId: null, sessionFile: null, streaming: false, model: null, thinkingLevel: null, modelFallback: null }
   }
   readEntries(): StreamItem[] {
@@ -37,7 +43,7 @@ class FakePi implements PiRuntimePort {
   async refreshModelAvailability(): Promise<void> {}
   async selectModel(): Promise<void> {}
   async prompt(): Promise<void> {}
-  async abortTab(): Promise<void> {
+  async abortAgent(): Promise<void> {
     // 测试里没有真 agent，中止是空操作
   }
   async renameSession(): Promise<void> {
@@ -50,7 +56,7 @@ class FakePi implements PiRuntimePort {
     return []
   }
 
-  async compactTab(): Promise<void> {
+  async compactAgent(): Promise<void> {
     // 不参与
   }
 

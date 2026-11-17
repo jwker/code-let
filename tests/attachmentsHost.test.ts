@@ -6,7 +6,7 @@ import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
 import type { PromptImage } from '../host/main/attachments'
-import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { CommandOption, ModelOption, StreamItem } from '@contract/index'
 
 /**
@@ -16,16 +16,22 @@ import type { CommandOption, ModelOption, StreamItem } from '@contract/index'
  */
 
 class FakePi implements PiRuntimePort {
-  readonly prompts: Array<{ tabId: string; text: string; images?: PromptImage[] }> = []
+  readonly prompts: Array<{ agentId: string; text: string; images?: PromptImage[] }> = []
 
   onEvent(_listener: PiEventListener): () => void {
     return () => {}
   }
-  async openTab(): Promise<void> {}
-  async closeTab(): Promise<void> {}
-  async activateTab(): Promise<void> {}
-  async reloadTab(): Promise<void> {}
-  tabState(_tabId: string): TabRuntimeState {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(): Promise<void> {}
+  async closeAgent(): Promise<void> {}
+  async activateAgent(): Promise<void> {}
+  async reloadAgent(): Promise<void> {}
+  agentState(_tabId: string): AgentRuntimeState {
     return {
       ready: true,
       sessionId: 's-fake',
@@ -46,11 +52,11 @@ class FakePi implements PiRuntimePort {
   async listCommands(): Promise<CommandOption[]> {
     return []
   }
-  async compactTab(): Promise<void> {}
-  async prompt(tabId: string, text: string, images?: PromptImage[]): Promise<void> {
-    this.prompts.push({ tabId, text, images })
+  async compactAgent(): Promise<void> {}
+  async prompt(agentId: string, text: string, images?: PromptImage[]): Promise<void> {
+    this.prompts.push({ agentId, text, images })
   }
-  async abortTab(): Promise<void> {}
+  async abortAgent(): Promise<void> {}
   async completeCommand(): Promise<never[]> {
     return []
   }

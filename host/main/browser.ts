@@ -5,6 +5,7 @@ import type {
   BrowserState,
   BrowserTabState
 } from '@contract/index'
+import { BrowserPools, PROJECT_BROWSER, type BrowserHost } from './browserPools'
 
 /**
  * 右侧浏览器会话。
@@ -30,6 +31,8 @@ const WAIT_MAX_MS = 30_000
 
 interface Tab {
   id: string
+  /** 这条标签属于哪个宿主 —— 事件回调里要靠它知道推给谁 */
+  host: BrowserHost
   view: WebContentsView
   url: string
   title: string
@@ -99,92 +102,102 @@ export function normalizeBrowserUrl(input: string): { url: string; error: string
 }
 
 export class BrowserManager {
-  private readonly tabs: Tab[] = []
-  private activeTabId: string | null = null
+  /**
+   * 按宿主分开的标签池（PLAN.md D57）。
+   *
+   * `project` 是窄轨里那个入口，`agent:<id>` 是某个 agent 自己的预览。
+   * 分开是为了让 agent 的工具碰不到用户正在看的那一页。
+   */
+  private readonly pools = new BrowserPools<Tab>()
+  /** 现在显示的是哪个宿主的浏览器（同一时刻只有一个 WebContentsView 挂在窗口上） */
+  private visibleHost: BrowserHost | null = null
   private bounds: BrowserBounds = { x: 0, y: 0, width: 0, height: 0 }
-  private visible = false
   private seq = 0
   private permissionConfigured = false
   private disposed = false
 
   constructor(
     private readonly win: BrowserWindow,
-    private readonly onChange: (state: BrowserState) => void
+    private readonly onChange: (host: BrowserHost, state: BrowserState) => void
   ) {}
 
-  state(): BrowserState {
+  state(host: BrowserHost): BrowserState {
     return {
-      tabs: this.tabs.map((tab) => this.publicTab(tab)),
-      activeTabId: this.activeTabId,
-      agent: this.agentActivity
+      host,
+      tabs: this.pools.list(host).map((tab) => this.publicTab(tab)),
+      activeTabId: this.pools.activeTabId(host),
+      agent: this.activity.get(host)?.value ?? null
     }
   }
 
-  /** 最近一次 agent 操作 —— 面板上给用户看 */
-  private agentActivity: BrowserAgentActivity | null = null
-  private agentTimer: ReturnType<typeof setTimeout> | null = null
+  /**
+   * 最近一次 agent 操作 —— 按宿主分开记。
+   *
+   * 分开是必须的：agent 动的是自己的预览，不该在项目浏览器的面板上
+   * 显示「Agent 正在操作」，也不该把窄轨切过去。
+   */
+  private readonly activity = new Map<
+    BrowserHost,
+    { value: BrowserAgentActivity | null; timer: ReturnType<typeof setTimeout> | null }
+  >()
 
-  private noteAgent(tool: string, label: string, ref?: string): void {
-    this.agentActivity = { tool, label, ...(ref ? { ref } : {}), at: Date.now() }
+  private noteAgent(host: BrowserHost, tool: string, label: string, ref?: string): void {
+    const entry = this.activity.get(host) ?? { value: null, timer: null }
+    entry.value = { tool, label, ...(ref ? { ref } : {}), at: Date.now() }
     // 过一会儿自己收起：agent 不再动作时，面板上不该一直挂着提示
-    if (this.agentTimer) clearTimeout(this.agentTimer)
-    this.agentTimer = setTimeout(() => {
-      this.agentActivity = null
-      this.agentTimer = null
-      this.emit()
+    if (entry.timer) clearTimeout(entry.timer)
+    entry.timer = setTimeout(() => {
+      entry.value = null
+      entry.timer = null
+      this.emit(host)
     }, 6000)
+    this.activity.set(host, entry)
     /*
      * 推一次 —— 渲染进程靠这个活动记录判断「agent 刚动过浏览器」，
      * 好把右侧面板切到浏览器视图（收着的话顺手展开）。
      * 不推的话，只读类工具（截图、读页面结构）就没有这条通知。
      */
-    this.emit()
+    this.emit(host)
   }
 
-  getState(): Promise<BrowserState> {
-    return Promise.resolve(this.state())
+  getState(host: BrowserHost): Promise<BrowserState> {
+    return Promise.resolve(this.state(host))
   }
 
-  async create(url = 'about:blank'): Promise<BrowserState> {
-    const tab = this.createTab()
-    this.activeTabId = tab.id
+  async create(host: BrowserHost, url = 'about:blank'): Promise<BrowserState> {
+    const tab = this.createTab(host)
+    this.pools.add(host, tab)
     this.applyVisibility()
     await this.load(tab, url)
-    this.emit()
-    return this.state()
+    this.emit(host)
+    return this.state(host)
   }
 
-  close(tabId: string): Promise<BrowserState> {
-    const index = this.tabs.findIndex((tab) => tab.id === tabId)
-    if (index < 0) return Promise.resolve(this.state())
-    const [tab] = this.tabs.splice(index, 1)
-    this.win.contentView.removeChildView(tab.view)
-    tab.view.webContents.close()
-    if (this.activeTabId === tabId) {
-      this.activeTabId = this.tabs[Math.min(index, this.tabs.length - 1)]?.id ?? null
+  close(host: BrowserHost, tabId: string): Promise<BrowserState> {
+    const removed = this.pools.remove(host, tabId)
+    if (!removed) return Promise.resolve(this.state(host))
+    this.detach(removed.tab)
+    if (this.visibleHost === host) this.applyVisibility()
+    this.emit(host)
+    return Promise.resolve(this.state(host))
+  }
+
+  activate(host: BrowserHost, tabId: string): Promise<BrowserState> {
+    if (this.pools.setActive(host, tabId)) {
       this.applyVisibility()
+      this.emit(host)
     }
-    this.emit()
-    return Promise.resolve(this.state())
+    return Promise.resolve(this.state(host))
   }
 
-  activate(tabId: string): Promise<BrowserState> {
-    if (this.tabs.some((tab) => tab.id === tabId)) {
-      this.activeTabId = tabId
-      this.applyVisibility()
-      this.emit()
-    }
-    return Promise.resolve(this.state())
-  }
-
-  async navigate(tabId: string, input: string): Promise<BrowserState> {
-    const tab = this.tabs.find((item) => item.id === tabId)
-    if (!tab) return this.state()
+  async navigate(host: BrowserHost, tabId: string, input: string): Promise<BrowserState> {
+    const tab = this.pools.find(host, tabId)
+    if (!tab) return this.state(host)
     const normalized = normalizeBrowserUrl(input)
     if (normalized.error) {
       tab.error = normalized.error
-      this.emit()
-      return this.state()
+      this.emit(host)
+      return this.state(host)
     }
     tab.error = null
     if (normalized.url.startsWith('javascript:')) {
@@ -193,29 +206,29 @@ export class BrowserManager {
       } catch (error) {
         tab.error = error instanceof Error ? error.message : String(error)
       }
-      this.emit()
-      return this.state()
+      this.emit(host)
+      return this.state(host)
     }
     await this.load(tab, normalized.url)
-    return this.state()
+    return this.state(host)
   }
 
-  back(tabId: string): Promise<BrowserState> {
-    const tab = this.tabs.find((item) => item.id === tabId)
+  back(host: BrowserHost, tabId: string): Promise<BrowserState> {
+    const tab = this.pools.find(host, tabId)
     if (tab?.view.webContents.canGoBack()) tab.view.webContents.goBack()
-    return Promise.resolve(this.state())
+    return Promise.resolve(this.state(host))
   }
 
-  forward(tabId: string): Promise<BrowserState> {
-    const tab = this.tabs.find((item) => item.id === tabId)
+  forward(host: BrowserHost, tabId: string): Promise<BrowserState> {
+    const tab = this.pools.find(host, tabId)
     if (tab?.view.webContents.canGoForward()) tab.view.webContents.goForward()
-    return Promise.resolve(this.state())
+    return Promise.resolve(this.state(host))
   }
 
-  reload(tabId: string): Promise<BrowserState> {
-    const tab = this.tabs.find((item) => item.id === tabId)
+  reload(host: BrowserHost, tabId: string): Promise<BrowserState> {
+    const tab = this.pools.find(host, tabId)
     tab?.view.webContents.reload()
-    return Promise.resolve(this.state())
+    return Promise.resolve(this.state(host))
   }
 
   setBounds(bounds: BrowserBounds): Promise<void> {
@@ -229,8 +242,15 @@ export class BrowserManager {
     return Promise.resolve()
   }
 
-  setVisible(visible: boolean): Promise<void> {
-    this.visible = visible
+  /**
+   * 显示 / 隐藏某个宿主的浏览器。
+   *
+   * 同一时刻只有一个宿主的 WebContentsView 挂在窗口上 —— 区域 6 只有一个格子。
+   * 传 `visible: true` 就把可见宿主切过去，原来那个自动隐藏。
+   */
+  setVisible(host: BrowserHost, visible: boolean): Promise<void> {
+    if (visible) this.visibleHost = host
+    else if (this.visibleHost === host) this.visibleHost = null
     this.applyVisibility()
     return Promise.resolve()
   }
@@ -238,57 +258,61 @@ export class BrowserManager {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    for (const tab of this.tabs.splice(0)) {
-      try {
-        this.win.contentView.removeChildView(tab.view)
-      } catch {
-        // 窗口已经进入销毁流程时 contentView 可能不可用
-      }
-      try {
-        tab.view.webContents.close()
-      } catch {
-        // 同上：关闭浏览器标签失败不能让应用退不出去
-      }
+    for (const { tab } of this.pools.allTabs()) this.detach(tab)
+    this.pools.clear()
+    this.visibleHost = null
+    for (const entry of this.activity.values()) {
+      if (entry.timer) clearTimeout(entry.timer)
     }
-    this.activeTabId = null
-    if (this.agentTimer) clearTimeout(this.agentTimer)
-    this.agentTimer = null
+    this.activity.clear()
   }
 
-  /** 给 agent 用的工具入口；所有操作仍然走同一批标签 */
-  async tool(tool: string, args: Record<string, unknown> = {}): Promise<unknown> {
-    const tab = this.tabs.find((item) => item.id === (typeof args.tabId === 'string' ? args.tabId : '')) ??
-      this.tabs.find((item) => item.id === this.activeTabId) ??
-      this.tabs[0]
+  /**
+   * 给 agent 用的工具入口。
+   *
+   * **host 由调用方给死**（`agent:<id>`），这里不再从参数里猜 ——
+   * agent 碰不到别的宿主的标签，这是 D57 的那条安全边界。
+   */
+  async tool(
+    tool: string,
+    args: Record<string, unknown> = {},
+    host: BrowserHost = PROJECT_BROWSER
+  ): Promise<unknown> {
+    const requested = typeof args.tabId === 'string' ? args.tabId : ''
+    const tab =
+      this.pools.find(host, requested) ??
+      this.pools.active(host) ??
+      this.pools.list(host)[0] ??
+      null
     const url = typeof args.url === 'string' ? args.url : ''
 
     if (tool === 'tabs') {
-      this.noteAgent('browser_tabs', '查看标签列表')
-      return this.state()
+      this.noteAgent(host, 'browser_tabs', '查看标签列表')
+      return this.state(host)
     }
     if (tool === 'open') {
-      this.noteAgent('browser_open', `打开 ${url || '空白页'}`)
-      return this.create(url || 'about:blank')
+      this.noteAgent(host, 'browser_open', `打开 ${url || '空白页'}`)
+      return this.create(host, url || 'about:blank')
     }
     if (!tab) throw new Error('没有打开的浏览器标签')
 
     if (tool === 'activate') {
-      return args.tabId ? this.activate(String(args.tabId)) : this.state()
+      return requested ? this.activate(host, requested) : this.state(host)
     }
-    if (tool === 'close') return this.close(tab.id)
-    if (tool === 'back') return this.back(tab.id)
-    if (tool === 'forward') return this.forward(tab.id)
-    if (tool === 'reload') return this.reload(tab.id)
+    if (tool === 'close') return this.close(host, tab.id)
+    if (tool === 'back') return this.back(host, tab.id)
+    if (tool === 'forward') return this.forward(host, tab.id)
+    if (tool === 'reload') return this.reload(host, tab.id)
     if (tool === 'navigate') {
       if (!url) throw new Error('navigate 需要 url')
-      this.noteAgent('browser_navigate', `导航到 ${url}`)
-      return this.navigate(tab.id, url)
+      this.noteAgent(host, 'browser_navigate', `导航到 ${url}`)
+      return this.navigate(host, tab.id, url)
     }
     if (tool === 'snapshot') {
       const offset = Number.isInteger(args.offset) ? Number(args.offset) : 0
       const limit = Number.isInteger(args.limit) ? Number(args.limit) : DEFAULT_PAGE_SIZE
-      this.noteAgent('browser_snapshot', '读取页面结构')
-      return this.snapshot(tab.id, Math.max(0, offset), Math.min(MAX_PAGE_SIZE, Math.max(1, limit)))
+      this.noteAgent(host, 'browser_snapshot', '读取页面结构')
+      return this.snapshot(host, tab.id, Math.max(0, offset), Math.min(MAX_PAGE_SIZE, Math.max(1, limit)))
     }
     if (tool === 'click') {
       const ref = typeof args.ref === 'string' ? args.ref : ''
@@ -298,9 +322,9 @@ export class BrowserManager {
       )
       if (!clicked) throw new Error(`找不到元素 ${ref}`)
       const label = await this.describeElement(tab, ref)
-      this.noteAgent('browser_click', `点击 ${label}`, ref)
+      this.noteAgent(host, 'browser_click', `点击 ${label}`, ref)
       this.highlight(tab, ref)
-      this.emit()
+      this.emit(host)
       return { clicked: ref, label, url: tab.view.webContents.getURL() }
     }
     if (tool === 'type') {
@@ -321,14 +345,14 @@ export class BrowserManager {
       )
       if (!changed) throw new Error(`找不到元素 ${ref}`)
       const label = await this.describeElement(tab, ref)
-      this.noteAgent('browser_type', `在 ${label} 输入 ${text.length} 个字符`, ref)
+      this.noteAgent(host, 'browser_type', `在 ${label} 输入 ${text.length} 个字符`, ref)
       this.highlight(tab, ref)
-      this.emit()
+      this.emit(host)
       return { typed: ref, label, url: tab.view.webContents.getURL() }
     }
     if (tool === 'screenshot') {
-      this.noteAgent('browser_screenshot', '截取页面')
-      return this.screenshot(tab.id)
+      this.noteAgent(host, 'browser_screenshot', '截取页面')
+      return this.screenshot(host, tab.id)
     }
     if (tool === 'wait') {
       const selector = typeof args.selector === 'string' ? args.selector : ''
@@ -337,8 +361,8 @@ export class BrowserManager {
         Number.isInteger(args.timeoutMs) ? Math.max(0, Number(args.timeoutMs)) : 10_000
       )
       const result = await this.wait(tab, selector, timeout)
-      this.noteAgent('browser_wait', selector ? `等待 ${selector}` : '等待页面稳定')
-      this.emit()
+      this.noteAgent(host, 'browser_wait', selector ? `等待 ${selector}` : '等待页面稳定')
+      this.emit(host)
       return result
     }
     throw new Error(`不支持的浏览器工具：${tool}`)
@@ -400,8 +424,8 @@ export class BrowserManager {
   }
 
   /** 截当前页面；缩到模型能看的大小 */
-  private async screenshot(tabId: string): Promise<unknown> {
-    const tab = this.tabs.find((item) => item.id === tabId)
+  private async screenshot(host: BrowserHost, tabId: string): Promise<unknown> {
+    const tab = this.pools.find(host, tabId)
     if (!tab) throw new Error('没有打开的浏览器标签')
     try {
       const image = await tab.view.webContents.capturePage()
@@ -440,8 +464,8 @@ export class BrowserManager {
     }
   }
 
-  private async snapshot(tabId: string, offset: number, limit: number): Promise<unknown> {
-    const tab = this.tabs.find((item) => item.id === tabId)
+  private async snapshot(host: BrowserHost, tabId: string, offset: number, limit: number): Promise<unknown> {
+    const tab = this.pools.find(host, tabId)
     if (!tab) throw new Error('没有打开的浏览器标签')
     const raw = await tab.view.webContents.executeJavaScript(
       `(() => {
@@ -490,7 +514,7 @@ export class BrowserManager {
     }
   }
 
-  private createTab(): Tab {
+  private createTab(host: BrowserHost): Tab {
     const view = new WebContentsView({
       webPreferences: {
         partition: PARTITION,
@@ -501,6 +525,7 @@ export class BrowserManager {
     })
     const tab: Tab = {
       id: `browser-${++this.seq}`,
+      host,
       view,
       url: 'about:blank',
       title: '新标签',
@@ -525,46 +550,46 @@ export class BrowserManager {
       if (normalized.error) {
         event.preventDefault()
         tab.error = normalized.error
-        this.emit()
+        this.emit(tab.host)
       }
     })
     view.webContents.on('did-start-loading', () => {
       tab.loading = true
       tab.error = null
-      this.emit()
+      this.emit(tab.host)
     })
     view.webContents.on('did-stop-loading', () => {
       tab.loading = false
-      this.emit()
+      this.emit(tab.host)
     })
     view.webContents.on('did-navigate', (_event, target) => {
       tab.url = target
       tab.error = null
-      this.emit()
+      this.emit(tab.host)
     })
     view.webContents.on('did-navigate-in-page', (_event, target) => {
       tab.url = target
-      this.emit()
+      this.emit(tab.host)
     })
     view.webContents.on('page-title-updated', (_event, title) => {
       tab.title = title || '新标签'
-      this.emit()
+      this.emit(tab.host)
     })
     view.webContents.on('did-fail-load', (_event, code, description, validatedURL, isMainFrame) => {
       if (!isMainFrame) return
       tab.loading = false
       tab.error = `${description}（${code}）`
       if (validatedURL) tab.url = validatedURL
-      this.emit()
+      this.emit(tab.host)
     })
     view.webContents.on('render-process-gone', (_event, details) => {
       tab.loading = false
       tab.error = `页面进程退出：${details.reason}`
-      this.emit()
+      this.emit(tab.host)
     })
 
+    // 先挂上去、默认不可见 —— applyVisibility 决定谁可见
     this.win.contentView.addChildView(view)
-    this.tabs.push(tab)
     view.setVisible(false)
     view.setBounds(this.bounds)
     return tab
@@ -574,7 +599,7 @@ export class BrowserManager {
     const normalized = normalizeBrowserUrl(input)
     if (normalized.error) {
       tab.error = normalized.error
-      this.emit()
+      this.emit(tab.host)
       return
     }
     if (normalized.url === 'about:blank') {
@@ -582,7 +607,7 @@ export class BrowserManager {
       tab.title = '新标签'
       tab.error = null
       await tab.view.webContents.loadURL('about:blank')
-      this.emit()
+      this.emit(tab.host)
       return
     }
     if (normalized.url.startsWith('javascript:')) {
@@ -594,19 +619,39 @@ export class BrowserManager {
     } catch (error) {
       tab.loading = false
       tab.error = error instanceof Error ? error.message : String(error)
-      this.emit()
+      this.emit(tab.host)
+    }
+  }
+
+  /** 把一条标签的 view 从窗口上摘掉并关闭它的 webContents */
+  private detach(tab: Tab): void {
+    try {
+      this.win.contentView.removeChildView(tab.view)
+    } catch {
+      // 窗口已经进入销毁流程时 contentView 可能不可用
+    }
+    try {
+      tab.view.webContents.close()
+    } catch {
+      // 关闭失败不能让应用退不出去
     }
   }
 
   private applyBounds(): void {
-    for (const tab of this.tabs) tab.view.setBounds(this.bounds)
+    for (const { tab } of this.pools.allTabs()) tab.view.setBounds(this.bounds)
   }
 
+  /**
+   * 决定哪个 view 挂在窗口上。
+   *
+   * 只有「可见宿主的活动标签」是可见的，其余全部隐藏 —— 区域 6 只有一个格子，
+   * 两个宿主的页面不会同时显示。
+   */
   private applyVisibility(): void {
-    for (const tab of this.tabs) {
-      const active = tab.id === this.activeTabId
+    const visibleTab = this.visibleHost ? this.pools.active(this.visibleHost) : null
+    for (const { tab } of this.pools.allTabs()) {
       tab.view.setBounds(this.bounds)
-      tab.view.setVisible(this.visible && active)
+      tab.view.setVisible(tab === visibleTab)
     }
   }
 
@@ -622,7 +667,7 @@ export class BrowserManager {
     }
   }
 
-  private emit(): void {
-    this.onChange(this.state())
+  private emit(host: BrowserHost): void {
+    this.onChange(host, this.state(host))
   }
 }

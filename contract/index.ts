@@ -12,6 +12,23 @@
 
 // 类型再导出一份：调用方统一从 '@contract/index' 取
 export type {
+  AgentInfo,
+  AgentType,
+  PaneLayout,
+  PaneLayoutKey,
+  ProjectPane,
+  ProjectPaneView,
+  ProjectTabInfo
+} from './agents'
+export {
+  AGENT_TYPE_LABEL,
+  PANE_LAYOUT,
+  ZONE5_MAX,
+  ZONE5_MIN,
+  defaultAgentName,
+  paneLayoutFor
+} from './agents'
+export type {
   ConsoleEvent,
   ConsoleExportProgress,
   ConsoleExportRequest,
@@ -39,6 +56,8 @@ import type {
   ConsoleListResult,
   ConsoleStats
 } from './console'
+import type { AgentInfo, ProjectPaneView, ProjectTabInfo } from './agents'
+import type { BrowserHost } from './browser'
 import type {
   ModelAuthEvent,
   ModelEntry,
@@ -63,26 +82,44 @@ export const IPC = {
   conversationsDelete: 'host:conversations:delete',
   /** 给会话改名（写进会话文件的 session_info 条目） */
   conversationsRename: 'host:conversations:rename',
-  /** 打开一个已有会话 → 开成新标签 */
-  tabsOpen: 'host:tabs:open',
-  /** 在某个目录里新建会话 → 开成新标签 */
-  tabsNew: 'host:tabs:new',
-  /** 切到某个标签 */
-  tabsActivate: 'host:tabs:activate',
-  /** 关掉某个标签 */
-  tabsClose: 'host:tabs:close',
-  /** 重新加载某个标签（外部改过这个会话文件之后） */
-  tabsReload: 'host:tabs:reload',
-  /** 读某个标签的内容流（历史重建） */
-  tabsEntries: 'host:tabs:entries',
-  /** 往某个标签发一条用户消息 */
+  /** 打开一个已有会话 —— 已经有 agent 管着它就激活它，否则建一个 */
+  agentsOpen: 'host:agents:open',
+  /** 在某个目录里新建一个 agent（一条会话） */
+  agentsCreate: 'host:agents:create',
+  /** 以此 agent 新建实例：配置照搬，会话是新的 */
+  agentsNewFrom: 'host:agents:new-from',
+  /** 切到某个 agent */
+  agentsActivate: 'host:agents:activate',
+  /** 给 agent 改名（写进会话文件的 session_info，同时改清单里的名字） */
+  agentsRename: 'host:agents:rename',
+  /** 把一条已有会话导入成通用 agent */
+  agentsImport: 'host:agents:import',
+  /** 归档某个 agent（只改状态，会话文件不动） */
+  agentsArchive: 'host:agents:archive',
+  /** 从归档里恢复 */
+  agentsRestore: 'host:agents:restore',
+  /** 删除某个 agent（会话文件移入系统废纸篓） */
+  agentsDelete: 'host:agents:delete',
+  /** 重新加载某个 agent（外部改过这个会话文件之后） */
+  agentsReload: 'host:agents:reload',
+  /** 读某个 agent 的内容流（历史重建） */
+  agentsEntries: 'host:agents:entries',
+  /** 切到某条项目标签 */
+  projectsActivateTab: 'host:projects:activate-tab',
+  /** 关掉一条项目标签 —— 只收起页面，不碰任何 agent */
+  projectsCloseTab: 'host:projects:close-tab',
+  /** 切某个项目标签的入口（代码 / 文档 / 浏览器 / 设置 / 某个 agent） */
+  projectsSetPane: 'host:projects:set-pane',
+  /** 往某个 agent 发一条用户消息 */
   promptSend: 'host:prompt:send',
-  /** 中止某个标签正在跑的那一轮 */
+  /** 中止某个 agent 正在跑的那一轮 */
   promptAbort: 'host:prompt:abort',
-  /** 压缩某个标签的上下文 */
+  /** 压缩某个 agent 的上下文 */
   promptCompact: 'host:prompt:compact',
   /** 把一段文字写入系统剪贴板 */
   clipboardWrite: 'host:clipboard:write',
+  /** 列 AI 文档（AGENTS.md 与 .ai/ 下的各组） */
+  docsList: 'host:docs:list',
   /** 列一个目录下的条目（文件树） */
   filesList: 'host:files:list',
   /** 按名字搜索项目里的文件（@ 引用） */
@@ -103,7 +140,7 @@ export const IPC = {
   filesReload: 'host:files:reload',
   /** 列出已配置凭据的模型 */
   modelsList: 'host:models:list',
-  /** 列出某个标签可用的 `/` 命令 */
+  /** 列出某个 agent 可用的 `/` 命令 */
   commandsList: 'host:commands:list',
   /** 列某个扩展命令的参数候选 */
   commandsComplete: 'host:commands:complete',
@@ -255,23 +292,6 @@ export const ATTACHMENT_LIMITS = {
 // ---------------------------------------------------------------------------
 /** 对话区的三种排版模式（PLAN.md D10） */
 export type ConversationMode = 'normal' | 'terminal' | 'html'
-
-/**
- * 右侧面板的导航入口。
- *
- * **没有「会话」** —— 主区永远是对话，不跟着导航切；
- * 导航只决定右侧面板显示什么。
- *
- * Git / Agent 也在里面：右侧面板一次只显示一个视图，没有常驻面板。
- */
-export type NavEntry =
-  | 'memory'
-  | 'code'
-  | 'terminal'
-  | 'git'
-  | 'agent'
-  | 'browser'
-  | 'console'
 
 /** 一个项目 = 一个目录 */
 export interface ProjectInfo {
@@ -455,8 +475,8 @@ export type CommandSource = 'template' | 'extension' | 'skill'
 
 /** 扩展错误：加载失败，或者执行 handler / session_start 时抛错 */
 export interface ExtensionErrorInfo {
-  /** 属于哪个标签；加载错误在恢复标签时也可能有 */
-  tabId: string | null
+  /** 属于哪个 agent；加载错误在恢复 agent 时也可能有 */
+  agentId: string | null
   kind: 'load' | 'runtime'
   /** 扩展文件路径，或者 `<runtime>` / `<session_start>` */
   path: string
@@ -465,6 +485,45 @@ export interface ExtensionErrorInfo {
   message: string
   /** 发生时刻（Unix 毫秒），用于排序 */
   at: number
+}
+
+/**
+ * 列一个目录的结果。
+ *
+ * 带 `error` 是因为有一种情况**不是错误而是正常状态**：目录是个指向项目外的
+ * 符号链接（`node_modules` 里的 link 依赖很常见）。主进程拒绝读它是为了守住
+ * 「渲染进程不能点名读项目外的路径」，但界面得说清楚为什么没展开，
+ * 而不是甩一个空文件夹加一条控制台报错。
+ */
+export interface FileListResult {
+  entries: FileEntry[]
+  error: string | null
+}
+
+/** 文档区里的一份文档 */
+export interface DocEntry {
+  /** 绝对路径 —— 读内容时原样传回主进程 */
+  path: string
+  /** 相对项目根的路径，界面显示用 */
+  relPath: string
+  /** 文件名 */
+  name: string
+  /** 字节数 */
+  size: number
+  /** 修改时间（毫秒）；列表按它倒序 */
+  modified: number
+}
+
+/** 文档区的一组（`AGENTS.md` 一组，`.ai/` 下每个目录各一组） */
+export interface DocGroup {
+  title: string
+  entries: DocEntry[]
+}
+
+export interface DocsResult {
+  groups: DocGroup[]
+  /** 某一组条目太多被截断了 */
+  truncated: boolean
 }
 
 /** Pi 的思考等级 —— 具体哪些可用由当前模型决定 */
@@ -526,7 +585,15 @@ export interface BrowserAgentActivity {
   at: number
 }
 
+/** 浏览器状态推送：带着「这是哪个宿主的状态」 */
+export interface BrowserEvent {
+  host: string
+  state: BrowserState
+}
+
 export interface BrowserState {
+  /** 这份状态属于哪个宿主：`project` 或 `agent:<id>` */
+  host: string
   tabs: BrowserTabState[]
   activeTabId: string | null
   /** 最近一次 agent 操作；没有则为空 */
@@ -542,7 +609,7 @@ export interface BrowserBounds {
 
 /** agent 读取的页面摘要 */
 export interface BrowserSnapshot {
-  tabId: string
+  agentId: string
   url: string
   title: string
   text: string
@@ -633,10 +700,23 @@ export interface SessionState {
 
 /** 宿主权威状态的完整快照 */
 export interface HostSnapshot {
-  /** 打开的标签（按标签栏的顺序） */
+  /**
+   * 兼容投影：每个项目标签把它**当前活动 agent** 装成一条旧形状的标签（按标签栏顺序）。
+   *
+   * 改造期间（PLAN.md D50/D53）旧界面还按它渲染，一个项目显示一条。
+   * 新界面（S6/S7）改用 `projectTabs` + `agents`，那时这份投影删掉。
+   *
+   * **它的 id 是 agent id**，不是项目标签 id —— 旧界面的所有调用都拿它当运行时键用。
+   */
   tabs: TabInfo[]
-  /** 当前活动的标签 */
+  /** 当前活动的 agent（兼容投影：旧界面拿它跟 `tabs[].id` 比） */
   activeTabId: string | null
+  /** 项目标签（新外壳用；一个项目一条） */
+  projectTabs: ProjectTabInfo[]
+  /** 当前活动的项目标签。`null` = 一条都没开 */
+  activeProjectTabId: string | null
+  /** 全部 agent，含已归档的（窄轨显示未归档的，设置里显示归档的） */
+  agents: AgentInfo[]
   /**
    * 用户选的项目清单（PLAN.md D4 修订）。
    *
@@ -683,12 +763,12 @@ export interface SessionEvent {
   /** 主进程产生时刻 */
   at: number
   /**
-   * 这条事件属于哪个标签。
+   * 这条事件属于哪个 agent。
    *
-   * 多标签之后事件不再是「无主」的（PLAN.md D4 修订）——
-   * 渲染进程按它把事件分发到对应的内容流。
+   * 事件不再是「无主」的（PLAN.md D4 修订）—— 渲染进程按它把事件分发到对应的内容流。
+   * 键是 **agent id**：一个 agent 一个 runtime（D58）。
    */
-  tabId: string
+  agentId: string
 }
 
 // ---------------------------------------------------------------------------
@@ -825,25 +905,41 @@ export interface CodeletApi {
   /** 在某个目录里新建会话 → 开成新标签。name 为空时标题退回首条用户消息 */
   newConversation(cwd: string, name?: string): Promise<HostSnapshot>
   /** 切到某个标签 */
-  activateTab(tabId: string): Promise<HostSnapshot>
-  /** 关掉某个标签 */
-  closeTab(tabId: string): Promise<HostSnapshot>
+  activateAgent(agentId: string): Promise<HostSnapshot>
+  /** 以此 agent 新建实例：配置照搬，会话是新的 */
+  newAgentFrom(agentId: string): Promise<HostSnapshot>
+  /** 把一条已有会话导入成通用 agent */
+  importConversation(path: string): Promise<HostSnapshot>
+  /** 给 agent 改名。名字写进会话文件，清单里的名字也跟着改 */
+  renameAgent(agentId: string, name: string): Promise<HostSnapshot>
+  /** 归档某个 agent：只改状态，会话文件原地不动 */
+  archiveAgent(agentId: string): Promise<HostSnapshot>
+  /** 从归档里恢复 */
+  restoreAgent(agentId: string): Promise<HostSnapshot>
+  /** 删除某个 agent：会话文件移入系统废纸篓 */
+  deleteAgent(agentId: string): Promise<HostSnapshot>
+  /** 切到某条项目标签（一个项目一条） */
+  activateProjectTab(tabId: string): Promise<HostSnapshot>
+  /** 关掉一条项目标签 —— 只收起页面，不中止任何 agent */
+  closeProjectTab(tabId: string): Promise<HostSnapshot>
+  /** 切项目标签的入口（代码 / 文档 / 浏览器 / 设置 / 某个 agent） */
+  setPane(tabId: string, pane: ProjectPaneView): Promise<HostSnapshot>
   /**
    * 重新加载某个标签：重建它的 runtime，从磁盘重新读会话。
    *
    * 用于「这个会话在别处被改过」（`stale`）之后 —— 不自动做，因为重建会丢掉
    * 当前 runtime 的状态，而且如果别处还在写，重建完很快又会落后。
    */
-  reloadTab(tabId: string): Promise<HostSnapshot>
-  /** 读某个标签的内容流（历史重建，R1 R5） */
-  getTabEntries(tabId: string): Promise<StreamItem[]>
+  reloadAgent(agentId: string): Promise<HostSnapshot>
+  /** 读某个 agent 的内容流（历史重建，R1 R5） */
+  getAgentEntries(agentId: string): Promise<StreamItem[]>
   /**
    * 往某个标签发一条消息。
    *
    * attachments 是项目内的相对路径；uploads 是 pickAttachments() 返回的 id。
    * 主进程在发送时读取内容并嵌入。
    */
-  prompt(tabId: string, text: string, attachments?: string[], uploads?: string[]): Promise<void>
+  prompt(agentId: string, text: string, attachments?: string[], uploads?: string[]): Promise<void>
   /**
    * 中止某个标签正在跑的那一轮。
    *
@@ -851,11 +947,11 @@ export interface CodeletApi {
    * 所以等待期间界面要靠 `aborting` 显示「停止中」。
    * 没在跑、或者已经在停 —— 直接返回，不报错。
    */
-  abortPrompt(tabId: string): Promise<void>
-  /** 压缩某个标签的上下文。没有 runtime 时抛错 */
-  compactTab(tabId: string): Promise<void>
-  /** 列某个标签可用的 `/` 命令（Pi 模板、扩展、技能） */
-  listCommands(tabId: string): Promise<CommandOption[]>
+  abortPrompt(agentId: string): Promise<void>
+  /** 压缩某个 agent 的上下文。没有 runtime 时抛错 */
+  compactAgent(agentId: string): Promise<void>
+  /** 列某个 agent 可用的 `/` 命令（Pi 模板、扩展、技能） */
+  listCommands(agentId: string): Promise<CommandOption[]>
   /** 打开系统文件选择器，选择文本或图片附件 */
   pickAttachments(): Promise<PickAttachmentsResult>
   /** 打开或恢复临时对话；已存在时返回当前会话 */
@@ -871,34 +967,34 @@ export interface CodeletApi {
   /** 临时对话切换模型；只影响这份内存会话 */
   selectTemporaryModel(id: string, provider: string, modelId: string): Promise<HostSnapshot>
   /** 右侧浏览器当前状态 */
-  getBrowserState(): Promise<BrowserState>
+  getBrowserState(host: BrowserHost): Promise<BrowserState>
   /** 新建浏览器标签 */
-  createBrowserTab(url?: string): Promise<BrowserState>
+  createBrowserTab(host: BrowserHost, url?: string): Promise<BrowserState>
   /** 关闭浏览器标签 */
-  closeBrowserTab(tabId: string): Promise<BrowserState>
+  closeBrowserTab(host: BrowserHost, tabId: string): Promise<BrowserState>
   /** 切换浏览器标签 */
-  activateBrowserTab(tabId: string): Promise<BrowserState>
+  activateBrowserTab(host: BrowserHost, tabId: string): Promise<BrowserState>
   /** 导航浏览器标签 */
-  navigateBrowser(tabId: string, url: string): Promise<BrowserState>
-  browserBack(tabId: string): Promise<BrowserState>
-  browserForward(tabId: string): Promise<BrowserState>
-  browserReload(tabId: string): Promise<BrowserState>
+  navigateBrowser(host: BrowserHost, tabId: string, url: string): Promise<BrowserState>
+  browserBack(host: BrowserHost, tabId: string): Promise<BrowserState>
+  browserForward(host: BrowserHost, tabId: string): Promise<BrowserState>
+  browserReload(host: BrowserHost, tabId: string): Promise<BrowserState>
   /** 同步页面内容区矩形 */
   setBrowserBounds(bounds: BrowserBounds): Promise<void>
   /** 显示 / 隐藏浏览器页面 */
-  setBrowserVisible(visible: boolean): Promise<void>
-  /** 订阅浏览器标签状态 */
-  onBrowserState(listener: (state: BrowserState) => void): () => void
-  /** 当前活动标签的 Git 状态；只读 */
-  getGitStatus(tabId: string): Promise<GitStatus>
+  setBrowserVisible(host: BrowserHost, visible: boolean): Promise<void>
+  /** 订阅浏览器标签状态。事件带宿主 —— 两个宿主的池是分开的 */
+  onBrowserState(listener: (event: BrowserEvent) => void): () => void
+  /** 某个目录的 Git 状态；只读。Git 是项目级的东西，按目录取而不是按 agent */
+  getGitStatus(cwd: string): Promise<GitStatus>
   /** 单个文件的 Git diff */
-  getGitDiff(tabId: string, path: string, scope: GitDiffScope): Promise<GitDiff>
+  getGitDiff(cwd: string, path: string, scope: GitDiffScope): Promise<GitDiff>
   /** 列某个扩展命令的参数候选 */
-  completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]>
+  completeCommand(agentId: string, name: string, prefix: string): Promise<CommandArgumentOption[]>
   /** 列当前模型可用的思考等级 */
-  listThinkingLevels(tabId: string): Promise<ThinkingLevel[]>
-  /** 设置某个标签的思考等级 */
-  selectThinkingLevel(tabId: string, level: ThinkingLevel): Promise<void>
+  listThinkingLevels(agentId: string): Promise<ThinkingLevel[]>
+  /** 设置某个 agent 的思考等级 */
+  selectThinkingLevel(agentId: string, level: ThinkingLevel): Promise<void>
   /** 清掉已经显示的扩展错误 */
   dismissExtensionErrors(): Promise<HostSnapshot>
   /** 按名字搜索项目里的文件 —— `@` 引用用，只返回相对路径。requestId 用于取消 */
@@ -907,8 +1003,12 @@ export interface CodeletApi {
   cancelFileSearch(requestId: string): Promise<void>
   /** 把一段文字写入系统剪贴板（复制回复正文） */
   copyText(text: string): Promise<void>
-  /** 列一个目录下的条目 */
-  listFiles(cwd: string, dir: string): Promise<FileEntry[]>
+  /** 把一条会话导入成本项目的通用 agent */
+  importConversation(path: string): Promise<HostSnapshot>
+  /** 列 AI 文档：`AGENTS.md` 加上 `.ai/` 下每个目录 */
+  listDocs(cwd: string): Promise<DocsResult>
+  /** 列一个目录下的条目。越界的符号链接会带 `error` 回来，不抛 */
+  listFiles(cwd: string, dir: string): Promise<FileListResult>
   /** 读一个文件 */
   readFile(cwd: string, path: string): Promise<FileContent>
   /** 打开一个文件（进文件标签栏） */
@@ -933,8 +1033,8 @@ export interface CodeletApi {
   onSnapshot(listener: (snapshot: HostSnapshot) => void): () => void
   /** 订阅会话流增量事件 */
   onSessionEvent(listener: (events: SessionEvent[]) => void): () => void
-  /** 订阅右侧浏览器标签状态 */
-  onBrowserState(listener: (state: BrowserState) => void): () => void
+  /** 订阅浏览器标签状态。事件带宿主 —— 项目级与 agent 级的池是分开的 */
+  onBrowserState(listener: (event: BrowserEvent) => void): () => void
   /** 调试控制台：列出所有记录 */
   listConsoleRecords(): Promise<ConsoleListResult>
   /** 调试控制台：取一个字段（一级节点或数组元素） */

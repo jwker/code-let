@@ -44,7 +44,7 @@ describe('PiRuntime.renameSession', () => {
   it('懒加载的标签没有 runtime —— 直接打开会话文件追加 session_info', async () => {
     const { cwd, path } = makeSession()
     const pi = new PiRuntime()
-    await pi.openTab('tab-1', { cwd, path, lazy: true })
+    await pi.openAgent('tab-1', { cwd, path, lazy: true })
 
     await pi.renameSession(path, '懒加载改名')
 

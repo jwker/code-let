@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserAgentActivity, BrowserState } from '@contract/index'
+import type { BrowserAgentActivity, BrowserEvent, BrowserState } from '@contract/index'
 import { createBrowserFocusController } from '../host/renderer/src/shell/browserFocus'
 
 function activity(tool: string): BrowserAgentActivity {
   return { tool, label: tool, at: 1 }
 }
 
-function state(agent: BrowserAgentActivity | null): BrowserState {
-  return { tabs: [], activeTabId: null, agent }
+function state(agent: BrowserAgentActivity | null, host = 'project'): BrowserEvent {
+  const value: BrowserState = { host, tabs: [], activeTabId: null, agent }
+  return { host, state: value }
 }
 
-describe('agent 操作浏览器时把右侧面板切到浏览器', () => {
+describe('agent 操作项目浏览器时把窄轨切到浏览器', () => {
   it('来了一份新的活动记录 → 切过去', () => {
     let focused = 0
     const controller = createBrowserFocusController(() => {
@@ -48,5 +49,24 @@ describe('agent 操作浏览器时把右侧面板切到浏览器', () => {
     })
     controller.handle(state(null))
     expect(focused).toBe(0)
+  })
+
+  it('agent 自己那套预览的活动不切面板 —— 它就在自己的区域 6 里', () => {
+    let focused = 0
+    const controller = createBrowserFocusController(() => {
+      focused += 1
+    })
+    controller.handle(state(activity('browser_click'), 'agent:a1'))
+    expect(focused).toBe(0)
+  })
+
+  it('切到项目宿主之后再动 → 照常切', () => {
+    let focused = 0
+    const controller = createBrowserFocusController(() => {
+      focused += 1
+    })
+    controller.handle(state(activity('browser_click'), 'agent:a1'))
+    controller.handle(state(activity('browser_click'), 'project'))
+    expect(focused).toBe(1)
   })
 })

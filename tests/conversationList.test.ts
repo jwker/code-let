@@ -6,7 +6,7 @@ import { SessionManager } from '@earendil-works/pi-coding-agent'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
-import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { HostSnapshot, ModelOption, StreamItem } from '@contract/index'
 
 /**
@@ -34,26 +34,32 @@ class FakePi implements PiRuntimePort {
   }
 
   private emit(tabId: string, type: string, data: unknown): void {
-    for (const listener of this.listeners) listener({ type, data, tabId })
+    for (const listener of this.listeners) listener({ type, data, agentId: tabId })
   }
 
-  async openTab(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void> {
     this.managers.set(tabId, options.path ? SessionManager.open(options.path) : SessionManager.create(options.cwd))
   }
 
-  async closeTab(tabId: string): Promise<void> {
+  async closeAgent(tabId: string): Promise<void> {
     this.managers.delete(tabId)
     this.streaming.delete(tabId)
   }
 
-  async activateTab(): Promise<void> {
+  async activateAgent(): Promise<void> {
     // 不参与
   }
-  async reloadTab(): Promise<void> {
+  async reloadAgent(): Promise<void> {
     // 不参与
   }
 
-  tabState(tabId: string): TabRuntimeState {
+  agentState(tabId: string): AgentRuntimeState {
     const manager = this.managers.get(tabId)
     return {
       ready: Boolean(manager),
@@ -77,7 +83,7 @@ class FakePi implements PiRuntimePort {
     this.managers.get(tabId)?.appendMessage(message)
   }
 
-  async abortTab(): Promise<void> {
+  async abortAgent(): Promise<void> {
     // 测试里没有真 agent，中止是空操作
   }
 
@@ -106,7 +112,7 @@ class FakePi implements PiRuntimePort {
     return []
   }
 
-  async compactTab(): Promise<void> {
+  async compactAgent(): Promise<void> {
     // 不参与
   }
 

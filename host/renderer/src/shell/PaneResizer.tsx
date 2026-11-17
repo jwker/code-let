@@ -3,6 +3,11 @@ import { useRef } from 'react'
 interface PaneResizerProps {
   /** 缝在哪一侧：left = 左栏右缘，right = 右栏左缘 */
   edge: 'left' | 'right'
+  /**
+   * 位置变体。不传就是传统两栏（侧栏 / 检视器）的位置；
+   * `zone5` 是窄轨之后那一列 —— 它的左缘要算上窄轨和侧栏的宽度。
+   */
+  variant?: 'zone5'
   label: string
   /** 当前宽度（px）。拖拽过程中的实时值不走 React，见 onDrag */
   width: number
@@ -28,6 +33,7 @@ const STEP_LARGE = 32
  */
 export function PaneResizer({
   edge,
+  variant,
   label,
   width,
   min,
@@ -114,7 +120,7 @@ export function PaneResizer({
       aria-valuenow={width}
       tabIndex={0}
       title={`${label}（双击复位）`}
-      className={`shell-grip shell-grip-${edge}`}
+      className={`shell-grip shell-grip-${edge}${variant ? ` shell-grip-${variant}` : ''}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

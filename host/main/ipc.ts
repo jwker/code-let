@@ -5,16 +5,19 @@ import {
   IPC_EVENTS,
   MAX_PAYLOAD_BYTES,
   type SessionEvent,
+  type BrowserState,
   type ThinkingLevel
 } from '@contract/index'
 import {
   browserBoundsSchema,
   browserNavigateSchema,
+  browserStateSchema,
   browserTabSchema,
   browserUrlSchema,
   browserVisibleSchema,
   clipboardWriteSchema,
   commandCompleteSchema,
+  gitCwdSchema,
   gitDiffSchema,
   conversationRenameSchema,
   conversationsDeleteSchema,
@@ -28,9 +31,13 @@ import {
   projectPathSchema,
   promptAbortSchema,
   promptSchema,
-  tabIdSchema,
-  tabNewSchema,
-  tabOpenSchema,
+  agentIdSchema,
+  agentCreateSchema,
+  agentImportSchema,
+  agentRenameSchema,
+  agentOpenSchema,
+  projectTabIdSchema,
+  projectPaneSchema,
   temporaryIdSchema,
   temporaryModelSelectSchema,
   temporaryPromptSchema,
@@ -39,6 +46,7 @@ import {
 import { compactSessionEvent, trimMessageUpdate } from '@contract/stream'
 import type { HostState } from './state'
 import type { BrowserManager } from './browser'
+import { listDocs } from './docs'
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -102,10 +110,10 @@ export function registerIpc(
     broadcast(IPC_EVENTS.snapshot, snapshot)
   })
 
-  state.on('session-event', (event: { type: string; data: unknown; tabId: string }) => {
+  state.on('session-event', (event: { type: string; data: unknown; agentId: string }) => {
     const compacted = compactSessionEvent(event)
     const data = compacted.type === 'message_update' ? trimMessageUpdate(compacted.data) : compacted.data
-    coalescer.push({ type: compacted.type, data, at: Date.now(), tabId: event.tabId })
+    coalescer.push({ type: compacted.type, data, at: Date.now(), agentId: event.agentId })
   })
 
   ipcMain.handle(IPC.snapshotGet, () => state.snapshot())
@@ -134,61 +142,115 @@ export function registerIpc(
     return state.snapshot()
   })
 
-  ipcMain.handle(IPC.tabsOpen, async (_event, payload: unknown) => {
-    const { path, cwd } = tabOpenSchema.parse(payload)
+  ipcMain.handle(IPC.agentsOpen, async (_event, payload: unknown) => {
+    const { path, cwd } = agentOpenSchema.parse(payload)
     await state.openConversation(path, cwd)
     return state.snapshot()
   })
 
-  ipcMain.handle(IPC.tabsNew, async (_event, payload: unknown) => {
-    const { cwd, name } = tabNewSchema.parse(payload)
+  ipcMain.handle(IPC.agentsCreate, async (_event, payload: unknown) => {
+    const { cwd, name } = agentCreateSchema.parse(payload)
     await state.newConversation(cwd, name)
     return state.snapshot()
   })
 
-  ipcMain.handle(IPC.tabsActivate, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
+  ipcMain.handle(IPC.agentsNewFrom, async (_event, payload: unknown) => {
+    const { agentId } = agentIdSchema.parse(payload)
+    await state.newAgentFrom(agentId)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.agentsActivate, async (_event, payload: unknown) => {
+    const { agentId } = agentIdSchema.parse(payload)
+    await state.activateAgent(agentId)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.agentsImport, async (_event, payload: unknown) => {
+    const { path } = agentImportSchema.parse(payload)
+    await state.importConversation(path)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.agentsRename, async (_event, payload: unknown) => {
+    const { agentId, name } = agentRenameSchema.parse(payload)
+    await state.renameAgent(agentId, name)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.agentsArchive, async (_event, payload: unknown) => {
+    const { agentId } = agentIdSchema.parse(payload)
+    await state.archiveAgent(agentId)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.agentsRestore, async (_event, payload: unknown) => {
+    const { agentId } = agentIdSchema.parse(payload)
+    await state.restoreAgent(agentId)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.agentsDelete, async (_event, payload: unknown) => {
+    const { agentId } = agentIdSchema.parse(payload)
+    await state.deleteAgent(agentId)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.agentsReload, async (_event, payload: unknown) => {
+    const { agentId } = agentIdSchema.parse(payload)
+    await state.reloadTab(agentId)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.agentsEntries, async (_event, payload: unknown) => {
+    const { agentId } = agentIdSchema.parse(payload)
+    return state.readEntries(agentId)
+  })
+
+  ipcMain.handle(IPC.projectsActivateTab, async (_event, payload: unknown) => {
+    const { tabId } = projectTabIdSchema.parse(payload)
     await state.activateTab(tabId)
     return state.snapshot()
   })
 
-  ipcMain.handle(IPC.tabsClose, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
-    await state.closeTab(tabId)
+  ipcMain.handle(IPC.projectsCloseTab, async (_event, payload: unknown) => {
+    const { tabId } = projectTabIdSchema.parse(payload)
+    await state.closeProjectTab(tabId)
     return state.snapshot()
   })
 
-  ipcMain.handle(IPC.tabsReload, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
-    await state.reloadTab(tabId)
+  ipcMain.handle(IPC.projectsSetPane, async (_event, payload: unknown) => {
+    const { tabId, pane } = projectPaneSchema.parse(payload)
+    await state.setPane(tabId, pane)
     return state.snapshot()
-  })
-
-  ipcMain.handle(IPC.tabsEntries, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
-    return state.readEntries(tabId)
   })
 
   // —— 会话 ——
 
   ipcMain.handle(IPC.promptSend, async (_event, payload: unknown) => {
-    const { tabId, text, attachments, uploads } = promptSchema.parse(payload)
-    await state.prompt(tabId, text, attachments, uploads)
+    const { agentId, text, attachments, uploads } = promptSchema.parse(payload)
+    await state.prompt(agentId, text, attachments, uploads)
   })
 
   ipcMain.handle(IPC.promptAbort, async (_event, payload: unknown) => {
-    const { tabId } = promptAbortSchema.parse(payload)
-    await state.abortPrompt(tabId)
+    const { agentId } = promptAbortSchema.parse(payload)
+    await state.abortPrompt(agentId)
   })
 
   ipcMain.handle(IPC.promptCompact, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
-    await state.compactTab(tabId)
+    const { agentId } = agentIdSchema.parse(payload)
+    await state.compactAgent(agentId)
   })
 
   ipcMain.handle(IPC.clipboardWrite, (_event, payload: unknown) => {
     const { text } = clipboardWriteSchema.parse(payload)
     clipboard.writeText(text)
+  })
+
+  // —— 文档（AI 产物） ——
+  ipcMain.handle(IPC.docsList, async (_event, payload: unknown) => {
+    const { cwd } = gitCwdSchema.parse(payload)
+    return listDocs(cwd)
   })
 
   // —— 文件 ——
@@ -243,47 +305,58 @@ export function registerIpc(
   })
 
   ipcMain.handle(IPC.modelsList, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
-    return state.listModels(tabId)
+    const { agentId } = agentIdSchema.parse(payload)
+    return state.listModels(agentId)
   })
 
   ipcMain.handle(IPC.attachmentsPick, () => state.pickAttachments())
 
-  ipcMain.handle(IPC.browserGet, () => getBrowser()?.state() ?? { tabs: [], activeTabId: null })
+  /** 没有浏览器时的空状态 —— 也要带上 host，否则渲染层分不清是哪一边 */
+  const emptyBrowser = (host: string): BrowserState => ({
+    host,
+    tabs: [],
+    activeTabId: null,
+    agent: null
+  })
+
+  ipcMain.handle(IPC.browserGet, async (_event, payload: unknown) => {
+    const { host } = browserStateSchema.parse(payload ?? {})
+    return (await getBrowser()?.getState(host)) ?? emptyBrowser(host)
+  })
 
   ipcMain.handle(IPC.browserCreate, async (_event, payload: unknown) => {
-    const { url } = browserUrlSchema.parse(payload ?? {})
-    return (await getBrowser()?.create(url ?? 'about:blank')) ?? { tabs: [], activeTabId: null }
+    const { host, url } = browserUrlSchema.parse(payload ?? {})
+    return (await getBrowser()?.create(host, url ?? 'about:blank')) ?? emptyBrowser(host)
   })
 
   ipcMain.handle(IPC.browserClose, async (_event, payload: unknown) => {
-    const { tabId } = browserTabSchema.parse(payload)
-    return (await getBrowser()?.close(tabId)) ?? { tabs: [], activeTabId: null }
+    const { host, tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.close(host, tabId)) ?? emptyBrowser(host)
   })
 
   ipcMain.handle(IPC.browserActivate, async (_event, payload: unknown) => {
-    const { tabId } = browserTabSchema.parse(payload)
-    return (await getBrowser()?.activate(tabId)) ?? { tabs: [], activeTabId: null }
+    const { host, tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.activate(host, tabId)) ?? emptyBrowser(host)
   })
 
   ipcMain.handle(IPC.browserNavigate, async (_event, payload: unknown) => {
-    const { tabId, url } = browserNavigateSchema.parse(payload)
-    return (await getBrowser()?.navigate(tabId, url)) ?? { tabs: [], activeTabId: null }
+    const { host, tabId, url } = browserNavigateSchema.parse(payload)
+    return (await getBrowser()?.navigate(host, tabId, url)) ?? emptyBrowser(host)
   })
 
   ipcMain.handle(IPC.browserBack, async (_event, payload: unknown) => {
-    const { tabId } = browserTabSchema.parse(payload)
-    return (await getBrowser()?.back(tabId)) ?? { tabs: [], activeTabId: null }
+    const { host, tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.back(host, tabId)) ?? emptyBrowser(host)
   })
 
   ipcMain.handle(IPC.browserForward, async (_event, payload: unknown) => {
-    const { tabId } = browserTabSchema.parse(payload)
-    return (await getBrowser()?.forward(tabId)) ?? { tabs: [], activeTabId: null }
+    const { host, tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.forward(host, tabId)) ?? emptyBrowser(host)
   })
 
   ipcMain.handle(IPC.browserReload, async (_event, payload: unknown) => {
-    const { tabId } = browserTabSchema.parse(payload)
-    return (await getBrowser()?.reload(tabId)) ?? { tabs: [], activeTabId: null }
+    const { host, tabId } = browserTabSchema.parse(payload)
+    return (await getBrowser()?.reload(host, tabId)) ?? emptyBrowser(host)
   })
 
   ipcMain.handle(IPC.browserBounds, async (_event, payload: unknown) => {
@@ -292,18 +365,18 @@ export function registerIpc(
   })
 
   ipcMain.handle(IPC.browserVisible, async (_event, payload: unknown) => {
-    const { visible } = browserVisibleSchema.parse(payload)
-    await getBrowser()?.setVisible(visible)
+    const { host, visible } = browserVisibleSchema.parse(payload)
+    await getBrowser()?.setVisible(host, visible)
   })
 
   ipcMain.handle(IPC.gitStatus, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
-    return state.getGitStatus(tabId)
+    const { cwd } = gitCwdSchema.parse(payload)
+    return state.getGitStatus(cwd)
   })
 
   ipcMain.handle(IPC.gitDiff, async (_event, payload: unknown) => {
-    const { tabId, path, scope } = gitDiffSchema.parse(payload)
-    return state.getGitDiff(tabId, path, scope)
+    const { cwd, path, scope } = gitDiffSchema.parse(payload)
+    return state.getGitDiff(cwd, path, scope)
   })
 
   ipcMain.handle(IPC.temporaryOpen, () => state.openTemporaryChat())
@@ -326,23 +399,23 @@ export function registerIpc(
   })
 
   ipcMain.handle(IPC.commandsList, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
-    return state.listCommands(tabId)
+    const { agentId } = agentIdSchema.parse(payload)
+    return state.listCommands(agentId)
   })
 
   ipcMain.handle(IPC.commandsComplete, async (_event, payload: unknown) => {
-    const { tabId, name, prefix } = commandCompleteSchema.parse(payload)
-    return state.completeCommand(tabId, name, prefix)
+    const { agentId, name, prefix } = commandCompleteSchema.parse(payload)
+    return state.completeCommand(agentId, name, prefix)
   })
 
   ipcMain.handle(IPC.thinkingLevels, async (_event, payload: unknown) => {
-    const { tabId } = tabIdSchema.parse(payload)
-    return state.listThinkingLevels(tabId)
+    const { agentId } = agentIdSchema.parse(payload)
+    return state.listThinkingLevels(agentId)
   })
 
   ipcMain.handle(IPC.thinkingSelect, async (_event, payload: unknown) => {
-    const { tabId, level } = thinkingSelectSchema.parse(payload)
-    await state.selectThinkingLevel(tabId, level as ThinkingLevel)
+    const { agentId, level } = thinkingSelectSchema.parse(payload)
+    await state.selectThinkingLevel(agentId, level as ThinkingLevel)
     return state.snapshot()
   })
 
@@ -352,8 +425,8 @@ export function registerIpc(
   })
 
   ipcMain.handle(IPC.modelsSelect, async (_event, payload: unknown) => {
-    const { tabId, provider, id, persist } = modelSelectSchema.parse(payload)
-    await state.selectModel(tabId, provider, id, persist)
+    const { agentId, provider, id, persist } = modelSelectSchema.parse(payload)
+    await state.selectModel(agentId, provider, id, persist)
   })
 
   return () => {
@@ -363,16 +436,19 @@ export function registerIpc(
     ipcMain.removeHandler(IPC.projectsRemove)
     ipcMain.removeHandler(IPC.conversationsDelete)
     ipcMain.removeHandler(IPC.conversationsRename)
-    ipcMain.removeHandler(IPC.tabsOpen)
-    ipcMain.removeHandler(IPC.tabsNew)
-    ipcMain.removeHandler(IPC.tabsActivate)
-    ipcMain.removeHandler(IPC.tabsClose)
-    ipcMain.removeHandler(IPC.tabsReload)
-    ipcMain.removeHandler(IPC.tabsEntries)
+    ipcMain.removeHandler(IPC.agentsOpen)
+    ipcMain.removeHandler(IPC.agentsCreate)
+    ipcMain.removeHandler(IPC.agentsActivate)
+    ipcMain.removeHandler(IPC.agentsImport)
+    ipcMain.removeHandler(IPC.agentsRename)
+    ipcMain.removeHandler(IPC.agentsArchive)
+    ipcMain.removeHandler(IPC.agentsReload)
+    ipcMain.removeHandler(IPC.agentsEntries)
     ipcMain.removeHandler(IPC.promptSend)
     ipcMain.removeHandler(IPC.promptAbort)
     ipcMain.removeHandler(IPC.promptCompact)
     ipcMain.removeHandler(IPC.clipboardWrite)
+    ipcMain.removeHandler(IPC.docsList)
     ipcMain.removeHandler(IPC.filesList)
     ipcMain.removeHandler(IPC.filesSearch)
     ipcMain.removeHandler(IPC.filesSearchCancel)

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BrowserState, BrowserTabState } from '@contract/index'
+import type { BrowserHost } from '@contract/browser'
 import { host } from '../host'
 
 /**
@@ -14,8 +15,20 @@ function displayUrl(tab: BrowserTabState | null): string {
   return tab.url
 }
 
-export function BrowserPane() {
-  const [state, setState] = useState<BrowserState>({ tabs: [], activeTabId: null, agent: null })
+/**
+ * 浏览器面板（PLAN.md D57）。
+ *
+ * `host` 决定它看的是哪一套标签：`project` 是窄轨里那个入口，
+ * `agent:<id>` 是某个 agent 自己的预览。两套标签互不可见 ——
+ * agent 的 `browser_*` 工具也只作用于自己的那一套。
+ */
+export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
+  const [state, setState] = useState<BrowserState>(() => ({
+    host: browserHost,
+    tabs: [],
+    activeTabId: null,
+    agent: null
+  }))
   const [address, setAddress] = useState('')
   const [addressFocused, setAddressFocused] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -29,12 +42,12 @@ export function BrowserPane() {
 
   useEffect(() => {
     let cancelled = false
-    void host.getBrowserState().then((next) => {
+    void host.getBrowserState(browserHost).then((next) => {
       if (cancelled) return
       setState(next)
       if (next.tabs.length === 0) {
         setCreating(true)
-        void host.createBrowserTab('about:blank').then((created) => {
+        void host.createBrowserTab(browserHost, 'about:blank').then((created) => {
           if (!cancelled) {
             setState(created)
             setCreating(false)
@@ -44,15 +57,17 @@ export function BrowserPane() {
         })
       }
     })
-    const off = host.onBrowserState((next) => {
-      if (!cancelled) setState(next)
+    const off = host.onBrowserState((event) => {
+      // 两个宿主各推各的 —— 只收自己那一份
+      if (cancelled || event.host !== browserHost) return
+      setState(event.state)
     })
     return () => {
       cancelled = true
       off()
-      void host.setBrowserVisible(false)
+      void host.setBrowserVisible(browserHost, false)
     }
-  }, [])
+  }, [browserHost])
 
   useEffect(() => {
     if (!addressFocused) setAddress(displayUrl(active))
@@ -67,7 +82,7 @@ export function BrowserPane() {
       if (!node) return
       const rect = node.getBoundingClientRect()
       if (rect.width < 1 || rect.height < 1) {
-        void host.setBrowserVisible(false)
+        void host.setBrowserVisible(browserHost, false)
         return
       }
       void host.setBrowserBounds({
@@ -94,13 +109,13 @@ export function BrowserPane() {
 
   // 页面报错时把原生 view 收起来，让下面的错误说明可见；没有标签时同理。
   useEffect(() => {
-    void host.setBrowserVisible(Boolean(active) && !active?.error)
-  }, [active?.id, active?.error])
+    void host.setBrowserVisible(browserHost, Boolean(active) && !active?.error)
+  }, [browserHost, active?.id, active?.error])
 
   async function createTab(): Promise<void> {
     setCreating(true)
     try {
-      const next = await host.createBrowserTab('about:blank')
+      const next = await host.createBrowserTab(browserHost, 'about:blank')
       setState(next)
       requestAnimationFrame(() => addressRef.current?.focus())
     } finally {
@@ -109,31 +124,31 @@ export function BrowserPane() {
   }
 
   async function closeTab(tabId: string): Promise<void> {
-    const next = await host.closeBrowserTab(tabId)
+    const next = await host.closeBrowserTab(browserHost, tabId)
     setState(next)
   }
 
   async function activateTab(tabId: string): Promise<void> {
-    const next = await host.activateBrowserTab(tabId)
+    const next = await host.activateBrowserTab(browserHost, tabId)
     setState(next)
   }
 
   async function navigate(): Promise<void> {
     if (!active) return
-    const next = await host.navigateBrowser(active.id, address)
+    const next = await host.navigateBrowser(browserHost, active.id, address)
     setState(next)
   }
 
   async function goBack(): Promise<void> {
-    if (active) setState(await host.browserBack(active.id))
+    if (active) setState(await host.browserBack(browserHost, active.id))
   }
 
   async function goForward(): Promise<void> {
-    if (active) setState(await host.browserForward(active.id))
+    if (active) setState(await host.browserForward(browserHost, active.id))
   }
 
   async function reload(): Promise<void> {
-    if (active) setState(await host.browserReload(active.id))
+    if (active) setState(await host.browserReload(browserHost, active.id))
   }
 
   return (

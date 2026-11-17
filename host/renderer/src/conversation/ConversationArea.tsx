@@ -599,7 +599,7 @@ export function ConversationArea() {
     if (!activeTabId) return
     showNotice('info', '正在压缩上下文…')
     try {
-      await host.compactTab(activeTabId)
+      await host.compactAgent(activeTabId)
       showNotice('info', '上下文已压缩', 2500)
     } catch (error) {
       showNotice('error', error instanceof Error ? error.message : String(error))

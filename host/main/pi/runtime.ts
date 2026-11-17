@@ -36,13 +36,13 @@ export interface PiEvent {
   type: string
   data: unknown
   /** 事件属于哪个标签 */
-  tabId: string
+  agentId: string
 }
 
 export type PiEventListener = (event: PiEvent) => void
 
 /** 某个标签的运行时状态 */
-export interface TabRuntimeState {
+export interface AgentRuntimeState {
   /** runtime 建好了没 */
   ready: boolean
   /** 当前会话的 id */
@@ -65,42 +65,53 @@ export interface TabRuntimeState {
 }
 
 /**
- * 宿主状态用到的运行时能力（PLAN.md D7 / D4 修订）。
+ * 宿主状态用到的运行时能力（PLAN.md D7 / D58）。
  *
  * 单独拎出来是为了让宿主状态能拿假实现跑测试 ——
  * 真实运行时要模型、要凭据，测不动。
  *
- * **一个标签一个 runtime**（D4 修订）：`createAgentSessionRuntime()` 可以调用多次，
- * 每次产出互相独立的 runtime。切标签不调 `switchSession` ——
- * 那条路径会先 `teardownCurrent()`，里面 `await this.session.abort()` 把正在跑的那轮结算掉。
+ * **一个 agent 一个 runtime**（D58）：`createAgentSessionRuntime()` 可以调用多次，
+ * 每次产出互相独立的 runtime，键是 agent id。
+ *
+ * 换会话时**不能**调 `switchSession`（D50 的代价）：那条路径会先 `teardownCurrent()`，
+ * 里面 `await this.session.abort()` 把正在跑的那轮结算掉。项目内换 agent 只是换
+ * 「看哪个 runtime」，不碰任何一个 runtime 的会话。
  */
 export interface PiRuntimePort {
-  /** 订阅会话流事件（事件带 tabId），返回退订函数 */
+  /** 订阅会话流事件（事件带 agentId），返回退订函数 */
   onEvent(listener: PiEventListener): () => void
   /**
    * 登记一个标签。
    *
-   * lazy = true 时先不建 runtime（恢复出来的标签用），点了再 `activateTab`。
-   * 给了 path 但文件不在 → 抛 `TabSessionMissingError`。
+   * lazy = true 时先不建 runtime（恢复出来的标签用），点了再 `activateAgent`。
+   * 给了 path 但文件不在 → 抛 `AgentSessionMissingError`。
    */
-  openTab(
-    tabId: string,
+  openAgent(
+    agentId: string,
     options: { cwd: string; path?: string; lazy?: boolean; inMemory?: boolean }
   ): Promise<void>
-  /** 关掉一个标签：先 abort 等那一轮结算，再 dispose */
-  closeTab(tabId: string): Promise<void>
-  /** 激活一个标签：runtime 还没建就建 */
-  activateTab(tabId: string): Promise<void>
-  /** 重建某个标签的 runtime —— 从磁盘重新读会话 */
-  reloadTab(tabId: string): Promise<void>
-  /** 某个标签的运行时状态 */
-  tabState(tabId: string): TabRuntimeState
-  /** 某个标签的会话条目 */
-  readEntries(tabId: string): StreamItem[]
+  /** 关掉一个 agent：先 abort 等那一轮结算，再 dispose */
+  closeAgent(agentId: string): Promise<void>
+  /** 激活一个 agent：runtime 还没建就建 */
+  activateAgent(agentId: string): Promise<void>
+  /** 重建某个 agent 的 runtime —— 从磁盘重新读会话 */
+  reloadAgent(agentId: string): Promise<void>
+  /**
+   * 这个 agent 登记过 runtime 没有。
+   *
+   * **不等于「建好了」** —— 懒加载登记过的也是 true（`agentState().ready` 才是「建好没」）。
+   * 宿主用它判断「要不要先 `openAgent` 再激活」：一个项目里可以有好几个 agent，
+   * 启动只登记未归档的那批，归档后恢复、或中途新建的走按需补登记。
+   */
+  hasAgent(agentId: string): boolean
+  /** 某个 agent 的运行时状态 */
+  agentState(agentId: string): AgentRuntimeState
+  /** 某个 agent 的会话条目 */
+  readEntries(agentId: string): StreamItem[]
   /** 接上浏览器工具桥 */
-  setBrowserToolHandler?(handler: (tabId: string, request: unknown) => Promise<unknown>): void
+  setBrowserToolHandler?(handler: (agentId: string, request: unknown) => Promise<unknown>): void
   /** 某个标签的可用模型清单 */
-  listModels(tabId: string): Promise<ModelOption[]>
+  listModels(agentId: string): Promise<ModelOption[]>
   /**
    * 重新查一遍每个标签的可用模型。
    *
@@ -109,7 +120,7 @@ export interface PiRuntimePort {
    */
   refreshModelAvailability(): Promise<void>
   /** 切某个标签的模型（persist 时同时设为新会话默认） */
-  selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void>
+  selectModel(agentId: string, provider: string, id: string, persist: boolean): Promise<void>
   /**
    * 给某个会话改名。
    *
@@ -118,20 +129,20 @@ export interface PiRuntimePort {
    */
   renameSession(path: string, name: string): Promise<void>
   /** 给某个标签的会话起名（新建时用 —— 那时还没有会话文件路径） */
-  setSessionName(tabId: string, name: string): Promise<void>
+  setSessionName(agentId: string, name: string): Promise<void>
   /** 列某个标签可用的 `/` 命令（Pi 模板、扩展、技能） */
-  listCommands(tabId: string): Promise<CommandOption[]>
+  listCommands(agentId: string): Promise<CommandOption[]>
   /** 列某个扩展命令的参数候选 */
-  completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]>
+  completeCommand(agentId: string, name: string, prefix: string): Promise<CommandArgumentOption[]>
   /** 当前模型支持的思考等级 */
-  thinkingLevels(tabId: string): ThinkingLevel[]
+  thinkingLevels(agentId: string): ThinkingLevel[]
   /** 设置思考等级（只影响当前会话） */
-  setThinkingLevel(tabId: string, level: ThinkingLevel): void
+  setThinkingLevel(agentId: string, level: ThinkingLevel): void
   /** 压缩某个标签的上下文 */
-  compactTab(tabId: string): Promise<void>
+  compactAgent(agentId: string): Promise<void>
   /** 往某个标签发一条用户消息；expandPromptTemplates=false 时把 / 当普通文字 */
   prompt(
-    tabId: string,
+    agentId: string,
     text: string,
     images?: PromptImage[],
     options?: { expandPromptTemplates?: boolean }
@@ -141,16 +152,16 @@ export interface PiRuntimePort {
    *
    * 返回时已经停稳；没在跑就直接返回。
    */
-  abortTab(tabId: string): Promise<void>
+  abortAgent(agentId: string): Promise<void>
   /** 收摊 */
   stop(): Promise<void>
 }
 
 /** 会话文件不在了（被删了，或者从没落盘过） */
-export class TabSessionMissingError extends Error {
+export class AgentSessionMissingError extends Error {
   constructor(readonly path: string) {
     super(`会话文件不存在：${path}`)
-    this.name = 'TabSessionMissingError'
+    this.name = 'AgentSessionMissingError'
   }
 }
 
@@ -203,8 +214,8 @@ export function missingExtensionTools(
 }
 
 /** 一个标签背后的一套运行时 */
-interface TabRecord {
-  tabId: string
+interface AgentRuntime {
+  agentId: string
   cwd: string
   /** 会话文件路径（新会话在第一条用户消息之前还没有文件） */
   path: string | null
@@ -228,11 +239,11 @@ interface TabRecord {
  * Pi 自己的 API 一律不外泄到渲染进程（D5 / 边界 1）。
  */
 export class PiRuntime implements PiRuntimePort {
-  private tabs = new Map<string, TabRecord>()
+  private tabs = new Map<string, AgentRuntime>()
   private listeners = new Set<PiEventListener>()
   /** 已经打过日志的扩展加载错误 —— 每个标签都会建 runtime，别重复刷屏 */
   private readonly reportedExtensionErrors = new Set<string>()
-  private browserToolHandler: ((tabId: string, request: unknown) => Promise<unknown>) | null = null
+  private browserToolHandler: ((agentId: string, request: unknown) => Promise<unknown>) | null = null
 
   constructor(private readonly extensionsDir: string | null = defaultExtensionsDir()) {}
 
@@ -242,7 +253,7 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /** HostState 把浏览器工具接到当前运行时 */
-  setBrowserToolHandler(handler: (tabId: string, request: unknown) => Promise<unknown>): void {
+  setBrowserToolHandler(handler: (agentId: string, request: unknown) => Promise<unknown>): void {
     this.browserToolHandler = handler
   }
 
@@ -257,13 +268,13 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /** 把扩展错误作为一条宿主事件送出去；HostState 会把它收进快照 */
-  private emitExtensionError(tabId: string, error: Omit<ExtensionErrorInfo, 'tabId'>): void {
-    this.emit({ type: 'extension_error', data: error, tabId })
+  private emitExtensionError(agentId: string, error: Omit<ExtensionErrorInfo, 'agentId'>): void {
+    this.emit({ type: 'extension_error', data: error, agentId })
   }
 
-  private record(tabId: string): TabRecord {
-    const found = this.tabs.get(tabId)
-    if (!found) throw new Error(`标签不存在：${tabId}`)
+  private record(agentId: string): AgentRuntime {
+    const found = this.tabs.get(agentId)
+    if (!found) throw new Error(`标签不存在：${agentId}`)
     return found
   }
 
@@ -273,16 +284,16 @@ export class PiRuntime implements PiRuntimePort {
    * lazy = true 时**不建 runtime** —— 恢复出来的标签用它：
    * 标签栏立刻能显示，runtime 等用户点它的时候再建（起一个约 15–25ms）。
    */
-  async openTab(
-    tabId: string,
+  async openAgent(
+    agentId: string,
     options: { cwd: string; path?: string; lazy?: boolean; inMemory?: boolean }
   ): Promise<void> {
     const path = options.path ?? null
     // 文件不在就别登记了 —— 恢复时靠这个把没落盘的标签挑出去
-    if (path && !existsSync(path)) throw new TabSessionMissingError(path)
+    if (path && !existsSync(path)) throw new AgentSessionMissingError(path)
 
-    const record: TabRecord = {
-      tabId,
+    const record: AgentRuntime = {
+      agentId,
       cwd: options.cwd,
       path,
       inMemory: options.inMemory === true,
@@ -295,7 +306,7 @@ export class PiRuntime implements PiRuntimePort {
     }
     record.consoleUnsub = record.bus.on('debug-console:record', (data) => {
       // 正文很大 —— 只在主进程里转给存储，不往渲染进程送
-      this.emit({ type: 'debug_console_record', data, tabId })
+      this.emit({ type: 'debug_console_record', data, agentId })
     })
     record.browserUnsub = record.bus.on('browser:request', (data) => {
       const request = data as { id?: unknown }
@@ -307,12 +318,12 @@ export class PiRuntime implements PiRuntimePort {
         respond({ id, ok: false, error: '浏览器工具不可用' })
         return
       }
-      void this.browserToolHandler(tabId, request).then(
+      void this.browserToolHandler(agentId, request).then(
         (result) => respond({ id, ok: true, result }),
         (error) => respond({ id, ok: false, error: error instanceof Error ? error.message : String(error) })
       )
     })
-    this.tabs.set(tabId, record)
+    this.tabs.set(agentId, record)
     if (options.lazy) return
     await this.buildRuntime(record)
   }
@@ -322,7 +333,7 @@ export class PiRuntime implements PiRuntimePort {
    *
    * 每个标签一套 services、一套 EventBus、一套扩展上下文。
    */
-  private async buildRuntime(record: TabRecord): Promise<void> {
+  private async buildRuntime(record: AgentRuntime): Promise<void> {
     const agentDir = getAgentDir()
 
     // 工厂由这个标签持有，换会话时会被再次调用，所以事件订阅在这里重绑
@@ -349,7 +360,7 @@ export class PiRuntime implements PiRuntimePort {
         if (this.reportedExtensionErrors.has(key)) continue
         this.reportedExtensionErrors.add(key)
         console.error(`扩展加载失败（${error.path}）：${error.error}`)
-        this.emitExtensionError(record.tabId, {
+        this.emitExtensionError(record.agentId, {
           kind: 'load',
           path: error.path,
           message: error.error,
@@ -370,7 +381,7 @@ export class PiRuntime implements PiRuntimePort {
         scopedModels,
         model: !hasExistingSession && scopedModels.length > 0 ? scopedModels[0].model : undefined
       })
-      record.unbind = this.bind(record.tabId, session)
+      record.unbind = this.bind(record.agentId, session)
 
       /*
        * 绑定扩展的命令上下文和错误监听。
@@ -394,7 +405,7 @@ export class PiRuntime implements PiRuntimePort {
             }
           },
           onError: (error) => {
-            this.emitExtensionError(record.tabId, {
+            this.emitExtensionError(record.agentId, {
               kind: 'runtime',
               path: error.extensionPath,
               event: error.event,
@@ -404,7 +415,7 @@ export class PiRuntime implements PiRuntimePort {
           }
         })
       } catch (error) {
-        this.emitExtensionError(record.tabId, {
+        this.emitExtensionError(record.agentId, {
           kind: 'runtime',
           path: '<session_start>',
           event: 'session_start',
@@ -455,10 +466,10 @@ export class PiRuntime implements PiRuntimePort {
     session.setActiveToolsByName([...session.getActiveToolNames(), ...missing])
   }
 
-  private bind(tabId: string, session: AgentSession): () => void {
+  private bind(agentId: string, session: AgentSession): () => void {
     return session.subscribe((event) => {
       const { type, ...rest } = event as unknown as { type: string } & Record<string, unknown>
-      this.emit(this.withImageThumbnails({ type, data: rest, tabId }))
+      this.emit(this.withImageThumbnails({ type, data: rest, agentId }))
     })
   }
 
@@ -490,9 +501,9 @@ export class PiRuntime implements PiRuntimePort {
     }
   }
 
-  /** 激活一个标签：runtime 还没建就建（懒加载） */
-  async activateTab(tabId: string): Promise<void> {
-    const record = this.record(tabId)
+  /** 激活一个 agent：runtime 还没建就建（懒加载） */
+  async activateAgent(agentId: string): Promise<void> {
+    const record = this.record(agentId)
     if (record.runtime) return
     await this.buildRuntime(record)
   }
@@ -505,8 +516,8 @@ export class PiRuntime implements PiRuntimePort {
    *
    * 正在跑的话先 abort 等结算（跟关标签同一个道理：别丢半截轮次）。
    */
-  async reloadTab(tabId: string): Promise<void> {
-    const record = this.record(tabId)
+  async reloadAgent(agentId: string): Promise<void> {
+    const record = this.record(agentId)
     const runtime = record.runtime
     if (runtime) {
       record.unbind?.()
@@ -520,17 +531,17 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /**
-   * 关掉一个标签。
+   * 关掉一个 agent。
    *
    * 先 `abort()` 等正在跑的那一轮结算掉，再 `dispose()` ——
    * `AgentSessionRuntime.dispose()` **不 await** 那一轮（它只调同步的
    * `AgentSession.dispose()`，里面的 `agent.abort()` 是 fire-and-forget），
    * 照它直接关，半截轮次可能没落盘。
    */
-  async closeTab(tabId: string): Promise<void> {
-    const record = this.tabs.get(tabId)
+  async closeAgent(agentId: string): Promise<void> {
+    const record = this.tabs.get(agentId)
     if (!record) return
-    this.tabs.delete(tabId)
+    this.tabs.delete(agentId)
     record.unbind?.()
     record.unbind = null
     record.consoleUnsub?.()
@@ -545,8 +556,12 @@ export class PiRuntime implements PiRuntimePort {
     await runtime.dispose()
   }
 
-  tabState(tabId: string): TabRuntimeState {
-    const record = this.tabs.get(tabId)
+  hasAgent(agentId: string): boolean {
+    return this.tabs.has(agentId)
+  }
+
+  agentState(agentId: string): AgentRuntimeState {
+    const record = this.tabs.get(agentId)
     const runtime = record?.runtime
     if (!record || !runtime) {
       return {
@@ -577,8 +592,8 @@ export class PiRuntime implements PiRuntimePort {
    * 取的是**当前分支**（getBranch）：压缩前的旧话也要在，压缩是为了给模型看，
    * 不是为了让人忘掉。
    */
-  readEntries(tabId: string): StreamItem[] {
-    const sessionManager = this.tabs.get(tabId)?.runtime?.session.sessionManager
+  readEntries(agentId: string): StreamItem[] {
+    const sessionManager = this.tabs.get(agentId)?.runtime?.session.sessionManager
     if (!sessionManager) return []
     const branch = sessionManager.getBranch()
     const entries = branch.length > 0 ? branch : sessionManager.getEntries()
@@ -596,8 +611,8 @@ export class PiRuntime implements PiRuntimePort {
   // -------------------------------------------------------------------------
 
   /** 某个标签用的模型 */
-  currentModel(tabId: string): ModelOption | null {
-    const model = this.tabs.get(tabId)?.runtime?.session.model
+  currentModel(agentId: string): ModelOption | null {
+    const model = this.tabs.get(agentId)?.runtime?.session.model
     return model ? toOption(model) : null
   }
 
@@ -607,8 +622,8 @@ export class PiRuntime implements PiRuntimePort {
    * Pi 会退回全局默认而不报错，原因只放在这个字段里 —— 不显示出来，
    * 用户就只会看到「我明明选了 X，打开却是 Y」。
    */
-  modelFallback(tabId: string): string | null {
-    return this.tabs.get(tabId)?.runtime?.modelFallbackMessage ?? null
+  modelFallback(agentId: string): string | null {
+    return this.tabs.get(agentId)?.runtime?.modelFallbackMessage ?? null
   }
 
   /**
@@ -617,8 +632,8 @@ export class PiRuntime implements PiRuntimePort {
    * 设置里的「可用模型」清单会在这里生效：清单里没有的模型不列出来。
    * 清单没设过（undefined）就是全部可用；存成空数组是一个都不列。
    */
-  async listModels(tabId: string): Promise<ModelOption[]> {
-    const session = this.tabs.get(tabId)?.runtime?.session
+  async listModels(agentId: string): Promise<ModelOption[]> {
+    const session = this.tabs.get(agentId)?.runtime?.session
     if (!session) return []
     const modelRuntime = session.modelRuntime
     try {
@@ -675,8 +690,8 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /** 切某个标签的模型 */
-  async selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void> {
-    const session = this.tabs.get(tabId)?.runtime?.session
+  async selectModel(agentId: string, provider: string, id: string, persist: boolean): Promise<void> {
+    const session = this.tabs.get(agentId)?.runtime?.session
     if (!session) throw new Error('runtime 尚未启动')
     const model = session.modelRuntime.getModel(provider, id)
     if (!model) throw new Error(`模型不存在：${provider}/${id}`)
@@ -689,8 +704,8 @@ export class PiRuntime implements PiRuntimePort {
    * 三类来源：Pi 的 prompt 模板、扩展命令、技能命令。同名时按 Pi 的实际分发顺序
    * 覆盖：扩展 > 技能 > 模板（`prompt()` 先试扩展命令，再展开技能，最后展开模板）。
    */
-  async listCommands(tabId: string): Promise<CommandOption[]> {
-    const session = this.tabs.get(tabId)?.runtime?.session
+  async listCommands(agentId: string): Promise<CommandOption[]> {
+    const session = this.tabs.get(agentId)?.runtime?.session
     if (!session) return []
     const byName = new Map<string, CommandOption>()
 
@@ -723,8 +738,8 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /** 列某个扩展命令的参数候选 */
-  async completeCommand(tabId: string, name: string, prefix: string): Promise<CommandArgumentOption[]> {
-    const command = this.tabs.get(tabId)?.runtime?.session.extensionRunner.getCommand(name)
+  async completeCommand(agentId: string, name: string, prefix: string): Promise<CommandArgumentOption[]> {
+    const command = this.tabs.get(agentId)?.runtime?.session.extensionRunner.getCommand(name)
     if (!command?.getArgumentCompletions) return []
     try {
       const items = await command.getArgumentCompletions(prefix)
@@ -740,8 +755,8 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /** 当前模型支持的思考等级 */
-  thinkingLevels(tabId: string): ThinkingLevel[] {
-    const session = this.tabs.get(tabId)?.runtime?.session
+  thinkingLevels(agentId: string): ThinkingLevel[] {
+    const session = this.tabs.get(agentId)?.runtime?.session
     if (!session) return []
     try {
       return [...session.getAvailableThinkingLevels()]
@@ -752,15 +767,15 @@ export class PiRuntime implements PiRuntimePort {
   }
 
   /** 设置思考等级（只影响当前会话） */
-  setThinkingLevel(tabId: string, level: ThinkingLevel): void {
-    const session = this.tabs.get(tabId)?.runtime?.session
+  setThinkingLevel(agentId: string, level: ThinkingLevel): void {
+    const session = this.tabs.get(agentId)?.runtime?.session
     if (!session) throw new Error('runtime 尚未启动')
     session.setThinkingLevel(level)
   }
 
   /** 压缩某个标签的上下文 */
-  async compactTab(tabId: string): Promise<void> {
-    const session = this.tabs.get(tabId)?.runtime?.session
+  async compactAgent(agentId: string): Promise<void> {
+    const session = this.tabs.get(agentId)?.runtime?.session
     if (!session) throw new Error('runtime 尚未启动')
     await session.compact()
   }
@@ -781,19 +796,19 @@ export class PiRuntime implements PiRuntimePort {
       return
     }
     // 没有 runtime：文件必须还在 —— open() 遇到不存在的路径会新建一个会话，改错文件
-    if (!existsSync(path)) throw new TabSessionMissingError(path)
+    if (!existsSync(path)) throw new AgentSessionMissingError(path)
     SessionManager.open(path).appendSessionInfo(name)
   }
 
-  async setSessionName(tabId: string, name: string): Promise<void> {
-    const session = this.tabs.get(tabId)?.runtime?.session
+  async setSessionName(agentId: string, name: string): Promise<void> {
+    const session = this.tabs.get(agentId)?.runtime?.session
     if (!session) throw new Error('runtime 尚未启动')
     session.setSessionName(name)
   }
 
   /** 往某个标签发一条用户消息 */
-  async prompt(tabId: string, text: string, images?: PromptImage[]): Promise<void> {
-    const session = this.tabs.get(tabId)?.runtime?.session
+  async prompt(agentId: string, text: string, images?: PromptImage[]): Promise<void> {
+    const session = this.tabs.get(agentId)?.runtime?.session
     if (!session) throw new Error('runtime 尚未启动')
     await session.prompt(text, images && images.length > 0 ? { images } : undefined)
   }
@@ -801,14 +816,14 @@ export class PiRuntime implements PiRuntimePort {
   /**
    * 中止某个标签正在跑的那一轮。
    *
-   * 跟 `closeTab` 里那次 `abort()` 不是一回事：那个是关标签前的收尾，
+   * 跟 `closeAgent` 里那次 `abort()` 不是一回事：那个是关标签前的收尾，
    * 这里是用户主动停 —— 停完标签还在、runtime 不动，接着还能发下一条。
    *
    * `abort()` 内部会 `await waitForIdle()`：工具正在执行时要等它响应 abort signal，
    * 可能几秒。所以这个方法会等，调用方要知道它不是瞬时的。
    */
-  async abortTab(tabId: string): Promise<void> {
-    const session = this.tabs.get(tabId)?.runtime?.session
+  async abortAgent(agentId: string): Promise<void> {
+    const session = this.tabs.get(agentId)?.runtime?.session
     // 没在跑就直接返回 —— 按钮可能连着点了两下，第二次什么都不该发生
     if (!session || !session.isStreaming) return
     await session.abort()
@@ -816,7 +831,7 @@ export class PiRuntime implements PiRuntimePort {
 
   async stop(): Promise<void> {
     const ids = [...this.tabs.keys()]
-    for (const id of ids) await this.closeTab(id)
+    for (const id of ids) await this.closeAgent(id)
   }
 
   /**

@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { ConversationMode } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
-import { IconMoon, IconMore, IconPanelLeft, IconPanelRight, IconSettings, IconSun } from './icons'
-import { TabBar } from './TabBar'
+import { IconMoon, IconMore, IconPanelLeft, IconSettings, IconSun } from './icons'
+import { ProjectTabs } from './ProjectTabs'
 
 const MODES: Array<{ key: ConversationMode; label: string }> = [
   { key: 'normal', label: '普通' },
@@ -21,8 +21,6 @@ const MODES: Array<{ key: ConversationMode; label: string }> = [
 export function TitleBar() {
   const mode = useStore((s) => s.mode)
   const setMode = useStore((s) => s.setMode)
-  const inspectorOpen = useStore((s) => s.inspectorOpen)
-  const toggleInspector = useStore((s) => s.toggleInspector)
   const sidebarOpen = useStore((s) => s.sidebarOpen)
   const toggleSidebar = useStore((s) => s.toggleSidebar)
   const theme = useStore((s) => s.theme)
@@ -107,7 +105,7 @@ export function TitleBar() {
       </div>
 
       {/* 标签板块：药丸标签 */}
-      <TabBar />
+      <ProjectTabs />
 
       {/* 右按钮板块 */}
       <div className="titlebar-zone right no-drag">
@@ -243,17 +241,6 @@ export function TitleBar() {
             )}
           </div>
         )}
-
-        <button
-          type="button"
-          aria-pressed={inspectorOpen}
-          aria-label={inspectorOpen ? '隐藏右侧面板' : '显示右侧面板'}
-          title={inspectorOpen ? '隐藏右侧面板' : '显示右侧面板'}
-          onClick={toggleInspector}
-          className="titlebar-icon-btn"
-        >
-          <IconPanelRight />
-        </button>
       </div>
     </header>
   )

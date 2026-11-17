@@ -676,7 +676,7 @@ function ProjectGroup({
 /** 打开一条会话：已经在标签栏里开着就切过去 */
 async function openConversation(conversation: ConversationInfo, tab: TabInfo | undefined): Promise<void> {
   if (tab) {
-    await host.activateTab(tab.id)
+    await host.activateAgent(tab.id)
     return
   }
   await host.openConversation(conversation.path, conversation.cwd)

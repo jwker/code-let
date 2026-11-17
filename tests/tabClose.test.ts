@@ -6,7 +6,7 @@ import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
 import { PiRuntime } from '../host/main/pi/runtime'
-import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { ModelOption, StreamItem } from '@contract/index'
 
 /**
@@ -30,21 +30,27 @@ class FakePi implements PiRuntimePort {
     return () => this.listeners.delete(listener)
   }
 
-  async openTab(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string, options: { cwd: string; path?: string; lazy?: boolean }): Promise<void> {
     this.tabs.set(tabId, { cwd: options.cwd, streaming: false })
   }
 
-  async closeTab(tabId: string): Promise<void> {
+  async closeAgent(tabId: string): Promise<void> {
     this.calls.push(`close:${tabId}`)
     this.tabs.delete(tabId)
   }
 
-  async activateTab(tabId: string): Promise<void> {
+  async activateAgent(tabId: string): Promise<void> {
     this.calls.push(`activate:${tabId}`)
   }
-  async reloadTab(): Promise<void> {}
+  async reloadAgent(): Promise<void> {}
 
-  tabState(tabId: string): TabRuntimeState {
+  agentState(tabId: string): AgentRuntimeState {
     const tab = this.tabs.get(tabId)
     return {
       ready: Boolean(tab),
@@ -74,7 +80,7 @@ class FakePi implements PiRuntimePort {
     // 不参与
   }
 
-  async abortTab(): Promise<void> {
+  async abortAgent(): Promise<void> {
     // 测试里没有真 agent，中止是空操作
   }
 
@@ -89,7 +95,7 @@ class FakePi implements PiRuntimePort {
     return []
   }
 
-  async compactTab(): Promise<void> {
+  async compactAgent(): Promise<void> {
     // 不参与
   }
 
@@ -235,7 +241,7 @@ describe('运行时：关掉正在跑的标签', () => {
 
     // 造一条记录塞进去 —— 真实的 session 跑起来要凭据，测不动
     const record = {
-      tabId: 'tab-1',
+      agentId: 'tab-1',
       cwd: '/tmp',
       path: null,
       bus: {},
@@ -257,21 +263,21 @@ describe('运行时：关掉正在跑的标签', () => {
     }
     ;(runtime as unknown as { tabs: Map<string, unknown> }).tabs.set('tab-1', record)
 
-    await runtime.closeTab('tab-1')
+    await runtime.closeAgent('tab-1')
 
     // abort 结算完才 dispose —— 半截轮次不能被丢掉
     expect(aborted).toBe(true)
     expect(order).toEqual(['abort', 'dispose'])
     // 关掉之后运行时不再有这个标签
-    expect(runtime.tabState('tab-1').ready).toBe(false)
-    expect(runtime.tabState('tab-1').streaming).toBe(false)
+    expect(runtime.agentState('tab-1').ready).toBe(false)
+    expect(runtime.agentState('tab-1').streaming).toBe(false)
   })
 
   it('没在跑的时候不 abort', async () => {
     const runtime = new PiRuntime()
     const order: string[] = []
     const record = {
-      tabId: 'tab-2',
+      agentId: 'tab-2',
       cwd: '/tmp',
       path: null,
       bus: {},
@@ -291,7 +297,7 @@ describe('运行时：关掉正在跑的标签', () => {
     }
     ;(runtime as unknown as { tabs: Map<string, unknown> }).tabs.set('tab-2', record)
 
-    await runtime.closeTab('tab-2')
+    await runtime.closeAgent('tab-2')
 
     expect(order).toEqual(['dispose'])
   })

@@ -10,7 +10,7 @@ import { host } from '../host'
 export function ExtensionErrorBanner() {
   const errors = useStore((s) => s.snapshot.extensionErrors)
   const latest = errors[errors.length - 1]
-  const tab = useStore((s) => (latest?.tabId ? s.snapshot.tabs.find((item) => item.id === latest.tabId) : undefined))
+  const tab = useStore((s) => (latest?.agentId ? s.snapshot.tabs.find((item) => item.id === latest.agentId) : undefined))
   if (!latest) return null
 
   const label = latest.kind === 'load' ? '加载失败' : '执行失败'

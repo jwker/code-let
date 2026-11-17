@@ -133,7 +133,7 @@ describe('PiRuntime 重建 runtime 时补回掉队的扩展工具', () => {
 
     const pi = new PiRuntime(extensionsDir)
     try {
-      await pi.openTab('tab-1', { cwd, path })
+      await pi.openAgent('tab-1', { cwd, path })
 
       const record = (pi as unknown as { tabs: Map<string, { runtime: { session: AgentSession } }> }).tabs.get(
         'tab-1'

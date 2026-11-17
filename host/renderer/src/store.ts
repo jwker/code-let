@@ -1,11 +1,16 @@
 import { create } from 'zustand'
 import type {
   ConversationMode,
+  DocEntry,
+  DocGroup,
+  GitDiff,
+  GitDiffScope,
+  GitStatus,
   HostSnapshot,
   FileContent,
   FileEntry,
   ModelOption,
-  NavEntry,
+  ProjectPane,
   SessionEvent,
   StreamItem
 } from '@contract/index'
@@ -17,6 +22,9 @@ export type Theme = 'light' | 'dark'
 const EMPTY_SNAPSHOT: HostSnapshot = {
   tabs: [],
   activeTabId: null,
+  projectTabs: [],
+  activeProjectTabId: null,
+  agents: [],
   projects: [],
   conversations: [],
   refreshing: false,
@@ -88,31 +96,138 @@ function saveTreeExpanded(value: Record<string, string[]>): void {
 
 const MODE_KEY = 'codelet:conversation-mode'
 
-const INSPECTOR_KEY = 'codelet:inspector-open'
+const PANE_KEY = 'codelet:pane'
+const ZONE5_KEY = 'codelet:zone5-widths'
 
-const SIDEBAR_KEY = 'codelet:sidebar-open'
+const SIDEBAR_KEY = 'codelet:sidebar-open-v2'
 
-/** 右侧检视器默认展开 */
-function loadInspectorOpen(): boolean {
-  try {
-    return localStorage.getItem(INSPECTOR_KEY) !== '0'
-  } catch {
-    return true
-  }
+/** 代码区的两个 tab */
+export type CodeMode = 'files' | 'changes'
+
+/** Git 改动在渲染层的样子：区域 5 用列表、区域 6 用 diff */
+export interface GitViewState {
+  status: GitStatus | null
+  loading: boolean
+  error: string | null
+  /** 当前选中的改动（路径 + 分组） */
+  selected: { path: string; scope: GitDiffScope } | null
+  diff: GitDiff | null
+  diffLoading: boolean
+  diffError: string | null
 }
 
-function saveInspectorOpen(open: boolean): void {
+const EMPTY_GIT: GitViewState = {
+  status: null,
+  loading: false,
+  error: null,
+  selected: null,
+  diff: null,
+  diffLoading: false,
+  diffError: null
+}
+
+/** 请求序号：后发的覆盖先发的，切项目时不会串 */
+let gitSeq = 0
+let diffSeq = 0
+let docsSeq = 0
+let docSeq = 0
+
+/** 文档区在渲染层的样子 */
+export interface DocsViewState {
+  groups: DocGroup[]
+  truncated: boolean
+  loading: boolean
+  error: string | null
+  /** 当前选中的那一篇 */
+  selected: { path: string; entry: DocEntry } | null
+  /** 它的正文（只有文本类能读） */
+  content: string | null
+  contentLoading: boolean
+  contentError: string | null
+}
+
+const EMPTY_DOCS: DocsViewState = {
+  groups: [],
+  truncated: false,
+  loading: false,
+  error: null,
+  selected: null,
+  content: null,
+  contentLoading: false,
+  contentError: null
+}
+
+/** 活动项目标签的目录 —— Git 是项目级的东西，都按它取 */
+function activeCwd(snapshot: HostSnapshot): string {
+  return snapshot.projectTabs.find((tab) => tab.id === snapshot.activeProjectTabId)?.cwd ?? ''
+}
+
+/**
+ * 窄轨选中的入口。`'agent'` 表示看当前活动 agent 的对话。
+ *
+ * 放在渲染层而不是快照里：它是「我现在看哪儿」，不是事实。
+ * 按项目分别记住要到 S7（项目标签接管入口状态）才做。
+ */
+export type PaneTarget = ProjectPane | 'agent'
+
+const PANE_VALUES: readonly PaneTarget[] = ['code', 'docs', 'browser', 'settings', 'agent']
+
+function loadPane(): PaneTarget {
   try {
-    localStorage.setItem(INSPECTOR_KEY, open ? '1' : '0')
+    const raw = localStorage.getItem(PANE_KEY)
+    if (raw && (PANE_VALUES as readonly string[]).includes(raw)) return raw as PaneTarget
+  } catch {
+    // 存不下就用默认
+  }
+  /*
+   * 默认看**对话**，不是「代码」。
+   *
+   * 打开应用第一眼应该是上次那个 agent 在聊什么；代码区是「我要翻文件」时才去的地方，
+   * 而且新项目里它是个空树 —— 拿空树当首页是劝退。记过选择的话用记的那个。
+   */
+  return 'agent'
+}
+
+function savePane(pane: PaneTarget): void {
+  try {
+    localStorage.setItem(PANE_KEY, pane)
   } catch {
     // 存不下就算了
   }
 }
 
-/** 左侧栏默认展开 */
+/** 区域 5 的宽度，按入口各记一份 —— 文件树和对话需要的宽度不一样 */
+function loadZone5Widths(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(ZONE5_KEY)
+    const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
+    const out: Record<string, number> = {}
+    for (const [key, value] of Object.entries(parsed ?? {})) {
+      if (typeof value === 'number' && Number.isFinite(value)) out[key] = value
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function saveZone5Widths(widths: Record<string, number>): void {
+  try {
+    localStorage.setItem(ZONE5_KEY, JSON.stringify(widths))
+  } catch {
+    // 存不下就算了
+  }
+}
+
+/**
+ * 左侧栏默认收起。
+ *
+ * 窄轨（S6）已经承担了导航，「按项目列会话」这条在 agent 化之后由窄轨接管，
+ * 侧栏退成可选的抽屉（⌘B 打开）。旧键名带 v2，让已经存过 true 的机器也走一次新默认。
+ */
 function loadSidebarOpen(): boolean {
   try {
-    return localStorage.getItem(SIDEBAR_KEY) !== '0'
+    return localStorage.getItem(SIDEBAR_KEY) === '1'
   } catch {
     return true
   }
@@ -149,12 +264,12 @@ function saveModes(modes: ModeMap): void {
 interface RendererStore {
   snapshot: HostSnapshot
   /**
-   * 右侧面板当前显示哪个视图。
+   * 窄轨当前选中的是什么（PLAN.md D51 / D52）。
    *
-   * 主区不看这个值，它永远是对话。
-   * 一次只显示一个 —— 右侧面板里没有常驻内容。
+   * `'agent'` 表示看当前活动 agent 的对话；其余四个是项目级入口。
+   * 区域 5 有没有、多宽，由 `PANE_LAYOUT` 决定，不在这里存。
    */
-  nav: NavEntry
+  pane: PaneTarget
   /** 对话区当前排版模式（PLAN.md D10） */
   mode: ConversationMode
   /** 亮 / 暗，默认亮色 */
@@ -174,8 +289,20 @@ interface RendererStore {
   streaming: Record<string, boolean>
   /** 工具输出哪些是展开的（callId → 展开与否）。默认收起来，点开才看。按标签存 */
   expandedTools: Record<string, Record<string, boolean>>
-  /** 右侧检视器是否展开 */
-  inspectorOpen: boolean
+  /**
+   * 代码区的两个 tab：文件 / 改动（PLAN.md D52）。
+   *
+   * 纯界面状态 —— 不落盘到宿主。记住它是为了「点文件看 diff，再点文件树」时不用重新选。
+   */
+  codeMode: CodeMode
+  /** Git 改动的状态、列表与当前选中的 diff —— 区域 5 显示列表，区域 6 显示 diff */
+  git: GitViewState
+  /** 文档区：分组清单、当前选中的一篇、它的内容 */
+  docs: DocsViewState
+  /** 项目设置里选中的分类 */
+  settingsCategory: 'general' | 'agents' | 'conversations' | 'project'
+  /** 区域 5 的宽度，按入口各记一份 */
+  zone5Widths: Record<string, number>
   /** 左侧栏是否展开 */
   sidebarOpen: boolean
   /** 从输入框发起的改名请求 —— 侧栏看到后进入行内编辑 */
@@ -207,17 +334,30 @@ interface RendererStore {
   treeExpanded: Record<string, string[]>
   /** 各项目已加载的目录内容（按 `cwd + 目录路径`） */
   treeEntries: Record<string, FileEntry[]>
+  /** 某个目录为什么没读成 —— 越界的符号链接会写在这里 */
+  treeErrors: Record<string, string>
 
   setSnapshot: (snapshot: HostSnapshot) => void
-  setNav: (nav: NavEntry) => void
+  setPane: (pane: PaneTarget) => void
+  setCodeMode: (mode: CodeMode) => void
+  /** 读 Git 状态（区域 5 的「改动」tab 用） */
+  loadGitStatus: (cwd: string) => Promise<void>
+  /** 选中一个改动 → 区域 6 读它的 diff */
+  selectChange: (path: string, scope: GitDiffScope) => Promise<void>
+  /** 关掉 diff（回到文件预览） */
+  closeChange: () => void
+  /** 读 AI 文档清单（区域 5 的文档区） */
+  setSettingsCategory: (category: 'general' | 'agents' | 'conversations' | 'project') => void
+  loadDocs: (cwd: string) => Promise<void>
+  /** 打开一篇文档 → 区域 6 读它的内容 */
+  openDoc: (path: string) => Promise<void>
+  setZone5Width: (pane: string, width: number) => void
   /** 选中某一轮，右侧上下文看截至这一轮的最后两次请求 */
   setMode: (mode: ConversationMode) => void
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
-  /** 展开 / 收起右侧检视器 */
-  toggleInspector: () => void
   /**
-   * 把右侧检视器切到浏览器视图，必要时展开面板。
+   * 把窄轨切到浏览器入口（agent 在操作浏览器时用）。
    *
    * agent 操作浏览器时调它 —— 用户不用自己找面板。
    */
@@ -276,7 +416,7 @@ interface RendererStore {
 
 export const useStore = create<RendererStore>((set, get) => ({
   snapshot: EMPTY_SNAPSHOT,
-  nav: 'code',
+  pane: loadPane(),
   mode: 'normal',
   theme: loadTheme(),
   eventCount: 0,
@@ -284,7 +424,11 @@ export const useStore = create<RendererStore>((set, get) => ({
   items: {},
   streaming: {},
   expandedTools: {},
-  inspectorOpen: loadInspectorOpen(),
+  codeMode: 'files',
+  git: EMPTY_GIT,
+  docs: EMPTY_DOCS,
+  settingsCategory: 'agents',
+  zone5Widths: loadZone5Widths(),
   sidebarOpen: loadSidebarOpen(),
   renameRequest: null,
   newConversationRequest: null,
@@ -296,6 +440,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   fileContents: {},
   treeExpanded: loadTreeExpanded(),
   treeEntries: {},
+  treeErrors: {},
 
   setSnapshot: (snapshot) => {
     const previousSessionId = get().snapshot.session.sessionId
@@ -321,7 +466,146 @@ export const useStore = create<RendererStore>((set, get) => ({
   },
 
 
-  setNav: (nav) => set({ nav }),
+  setPane: (pane) => {
+    savePane(pane)
+    set({ pane })
+  },
+
+  setCodeMode: (mode) => set({ codeMode: mode }),
+
+  loadGitStatus: async (cwd) => {
+    const seq = ++gitSeq
+    set({ git: { ...get().git, loading: true, error: null } })
+    try {
+      const next = await host.getGitStatus(cwd)
+      if (seq !== gitSeq) return
+      const previous = get().git.selected
+      // 选中的文件如果已经不在改动里了（提交了、还原了），把 diff 也收起来
+      const still =
+        previous && next[previous.scope].some((file) => file.path === previous.path) ? previous : null
+      set({
+        git: { ...get().git, status: next, loading: false, error: next.error, selected: still, diff: still ? get().git.diff : null }
+      })
+    } catch (caught) {
+      if (seq !== gitSeq) return
+      set({
+        git: {
+          ...get().git,
+          loading: false,
+          error: caught instanceof Error ? caught.message : String(caught)
+        }
+      })
+    }
+  },
+
+  selectChange: async (path, scope) => {
+    const cwd = activeCwd(get().snapshot)
+    if (!cwd) return
+    const seq = ++diffSeq
+    set({ git: { ...get().git, selected: { path, scope }, diff: null, diffError: null, diffLoading: true } })
+    try {
+      const next = await host.getGitDiff(cwd, path, scope)
+      if (seq !== diffSeq) return
+      set({ git: { ...get().git, diff: next, diffError: next.error, diffLoading: false } })
+    } catch (caught) {
+      if (seq !== diffSeq) return
+      set({
+        git: {
+          ...get().git,
+          diffLoading: false,
+          diffError: caught instanceof Error ? caught.message : String(caught)
+        }
+      })
+    }
+  },
+
+  closeChange: () => {
+    diffSeq += 1
+    set({ git: { ...get().git, selected: null, diff: null, diffError: null, diffLoading: false } })
+  },
+
+  setSettingsCategory: (category) => set({ settingsCategory: category }),
+
+  loadDocs: async (cwd) => {
+    if (!cwd) {
+      set({ docs: EMPTY_DOCS })
+      return
+    }
+    const seq = ++docsSeq
+    set({ docs: { ...get().docs, loading: true, error: null } })
+    try {
+      const next = await host.listDocs(cwd)
+      if (seq !== docsSeq) return
+      // 选中的那篇还在清单里就留着，不在就收起来
+      const selected = get().docs.selected
+      const still = selected && next.groups.some((group) => group.entries.some((item) => item.path === selected.path))
+      set({
+        docs: { ...get().docs, groups: next.groups, truncated: next.truncated, loading: false, selected: still ? selected : null }
+      })
+    } catch (caught) {
+      if (seq !== docsSeq) return
+      set({
+        docs: {
+          ...get().docs,
+          loading: false,
+          error: caught instanceof Error ? caught.message : String(caught)
+        }
+      })
+    }
+  },
+
+  openDoc: async (path) => {
+    const cwd = activeCwd(get().snapshot)
+    if (!cwd) return
+    const seq = ++docSeq
+    const entry = get()
+      .docs.groups.flatMap((group) => group.entries)
+      .find((item) => item.path === path)
+    set({
+      docs: {
+        ...get().docs,
+        selected: entry ? { path, entry } : null,
+        content: null,
+        contentLoading: true,
+        contentError: null
+      }
+    })
+    try {
+      const next = await host.readFile(cwd, path)
+      if (seq !== docSeq) return
+      set({
+        docs: {
+          ...get().docs,
+          content: next.kind === 'text' ? next.text : null,
+          // 只有文本能在这里读 —— 图片和二进制给一个说明，指去文件预览
+          contentError:
+            next.kind === 'text'
+              ? next.tooLarge
+                ? '这个文件太大，没有读进来'
+                : null
+              : next.kind === 'unsupported'
+                ? next.reason
+                : '这个格式不能在文档区里读，用文件预览打开',
+          contentLoading: false
+        }
+      })
+    } catch (caught) {
+      if (seq !== docSeq) return
+      set({
+        docs: {
+          ...get().docs,
+          contentLoading: false,
+          contentError: caught instanceof Error ? caught.message : String(caught)
+        }
+      })
+    }
+  },
+
+  setZone5Width: (pane, width) => {
+    const next = { ...get().zone5Widths, [pane]: width }
+    saveZone5Widths(next)
+    set({ zone5Widths: next })
+  },
 
   setTempMinimized: (value) => set({ tempMinimized: value }),
 
@@ -337,9 +621,9 @@ export const useStore = create<RendererStore>((set, get) => ({
     }),
 
   reloadTab: async (tabId) => {
-    await host.reloadTab(tabId)
+    await host.reloadAgent(tabId)
     // 重建完 runtime 再从磁盘读一遍内容流 —— 少了这一步，屏幕还是旧的
-    get().setItems(tabId, await host.getTabEntries(tabId))
+    get().setItems(tabId, await host.getAgentEntries(tabId))
   },
 
   // 换会话：内容流和展开状态一起换（按标签存）
@@ -363,9 +647,9 @@ export const useStore = create<RendererStore>((set, get) => ({
     // 事件带着标签 id —— 按它分发到各自的内容流（后台标签也在流）
     const byTab = new Map<string, SessionEvent[]>()
     for (const event of events) {
-      const bucket = byTab.get(event.tabId)
+      const bucket = byTab.get(event.agentId)
       if (bucket) bucket.push(event)
-      else byTab.set(event.tabId, [event])
+      else byTab.set(event.agentId, [event])
     }
     const items = { ...get().items }
     const streaming = { ...get().streaming }
@@ -412,16 +696,10 @@ export const useStore = create<RendererStore>((set, get) => ({
     set({ theme: next })
   },
 
-  toggleInspector: () => {
-    const next = !get().inspectorOpen
-    saveInspectorOpen(next)
-    set({ inspectorOpen: next })
-  },
-
   focusBrowser: () => {
-    // 面板收着也要先展开 —— 收起来的检视器只留一条窄轨，看不见浏览器
-    if (!get().inspectorOpen) saveInspectorOpen(true)
-    set({ inspectorOpen: true, nav: 'browser' })
+    // agent 操作浏览器时切到浏览器入口 —— 窄轨永远在，不用先展开什么
+    savePane('browser')
+    set({ pane: 'browser' })
   },
 
   toggleSidebar: () => {
@@ -473,11 +751,22 @@ export const useStore = create<RendererStore>((set, get) => ({
     const key = `${cwd}\u0001${dir}`
     if (get().treeEntries[key]) return
     try {
-      const entries = await host.listFiles(cwd, dir)
-      set((state) => ({ treeEntries: { ...state.treeEntries, [key]: entries } }))
-    } catch {
-      // 读不了（权限、被删）—— 记成空，别让界面一直转
-      set((state) => ({ treeEntries: { ...state.treeEntries, [key]: [] } }))
+      const result = await host.listFiles(cwd, dir)
+      set((state) => ({
+        treeEntries: { ...state.treeEntries, [key]: result.entries },
+        treeErrors: result.error
+          ? { ...state.treeErrors, [key]: result.error }
+          : Object.fromEntries(Object.entries(state.treeErrors).filter(([k]) => k !== key))
+      }))
+    } catch (caught) {
+      // 读不了（权限、被删）—— 记成空并写一句原因，别让界面一直转
+      set((state) => ({
+        treeEntries: { ...state.treeEntries, [key]: [] },
+        treeErrors: {
+          ...state.treeErrors,
+          [key]: caught instanceof Error ? caught.message : String(caught)
+        }
+      }))
     }
   },
 

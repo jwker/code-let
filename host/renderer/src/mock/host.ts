@@ -31,6 +31,7 @@ import type {
  */
 
 const FAKE_BROWSER: BrowserState = {
+  host: 'project',
   tabs: [
     {
       id: 'browser-1',
@@ -53,6 +54,48 @@ const FAKE_BROWSER: BrowserState = {
   ],
   activeTabId: 'browser-1',
   agent: null
+}
+
+/** 文档区用的假文档 —— 预览模式下点开就有东西看 */
+const FAKE_DOCS: Record<string, string> = {
+  'AGENTS.md': `# 项目约定
+
+这个项目的约定写在**这里**，pi 每次开新会话都会读它。
+
+## 代码
+
+- 令牌只在 \`tokens.css\` 里定义，组件不得自带原始色值
+- 主进程不 import 渲染层，渲染层不 import Pi SDK
+
+## 提交
+
+一次改动一条提交信息，写清「为什么」而不是「改了什么」。
+`,
+  'PLAN.md': `# 计划
+
+决策记录。前面是当前生效的决策，被取代的收在末尾「历史」。
+
+## 已定
+
+**D50 · 一个标签一个项目** —— 顶部标签从一个会话升到一个项目。
+
+**D53 · 一个 agent 就是一个会话** —— 所以侧栏的会话列表退场：头像就是列表。
+
+## 历史（已被取代）
+
+| 原决策 | 为什么作废 |
+|---|---|
+| D4 一个标签一个会话 | 会话多到一条标签装不下 |
+`,
+  'task.md': `# 任务跟踪
+
+## 任务清单
+
+| 任务 | 范围 | 状态 |
+|---|---|---|
+| 任务七 · 大模型管理页 | R27–R33 | 已完成 |
+| 任务八 · 项目标签与窄导航轨 | R34–R45 | 进行中 |
+`
 }
 
 const FAKE_GIT_STATUS: GitStatus = {
@@ -196,6 +239,15 @@ const FAKE_CONVERSATIONS: Record<string, ConversationInfo[]> = {
   ],
   '/Users/demo/Projects/pi-sdk': [
     {
+      id: 'c9',
+      path: '/fake/pi-sdk/9.jsonl',
+      title: '在终端里聊的一条',
+      name: null,
+      modified: new Date(Date.now() - 3 * 60_000).toISOString(),
+      messageCount: 7,
+      cwd: '/Users/demo/Projects/pi-sdk'
+    },
+    {
       id: 'c4',
       path: '/fake/pi-sdk/1.jsonl',
       title: '流式输出的三种写法',
@@ -215,7 +267,7 @@ const FAKE_TREE: Record<string, FileEntry[]> = {
     { name: 'src', kind: 'dir' },
     { name: 'package.json', kind: 'file', size: 812 },
     { name: 'README.md', kind: 'file', size: 1420 },
-    { name: 'tsconfig.json', kind: 'file', size: 336 }
+    { name: 'tsconfig.json', kind: 'file', size: 336 },
   ],
   src: [
     { name: 'memory', kind: 'dir' },
@@ -466,7 +518,36 @@ export function createMockApi(): CodeletApi {
 
   function snapshot(): HostSnapshot {
     const active = tabs.find((t) => t.id === activeTabId)
+    // 假宿主没有 agent 清单，就从标签推一份出来，形状跟真宿主一致：
+    // 一个 agent 一条会话，项目标签一条一个项目
+    const fakeAgents = tabs.map((tab, index) => ({
+      id: tab.id,
+      name: tab.title,
+      // 演示用：会话名跟 agent 名故意不一样，好在悬停气泡里看出两行
+      sessionTitle: `${tab.title} · 会话`,
+      // 演示用：第二个 agent 当成产品 agent，好看到「窄对话 + 预览」的形态
+      type: (index === 2 ? 'product' : 'general') as 'general' | 'product',
+      // 演示用：第一个 agent 摆进归档区，好在设置里看到「恢复 / 删除」
+      archivedAt: index === 0 ? 1794800000000 : null,
+      instance: index + 1,
+      cwd: tab.cwd,
+      sessionPath: tab.path,
+      lastActiveAt: 0,
+      turns: 0,
+      streaming: tab.streaming,
+      ready: true
+    }))
+    const cwds = [...new Set(tabs.map((tab) => tab.cwd))]
     return {
+      projectTabs: cwds.map((cwd, index) => ({
+        id: `fake-project-${index + 1}`,
+        cwd,
+        title: basenameOf(cwd),
+        pane: 'agent' as const,
+        activeAgentId: tabs.find((tab) => tab.cwd === cwd)?.id ?? null
+      })),
+      activeProjectTabId: `fake-project-${Math.max(1, cwds.indexOf(tabs.find((tab) => tab.id === activeTabId)?.cwd ?? cwds[0] ?? '') + 1)}`,
+      agents: fakeAgents,
       tabs: tabs.map((tab) => ({
         id: tab.id,
         sessionId: `s-${tab.id}`,
@@ -509,9 +590,9 @@ export function createMockApi(): CodeletApi {
     return value
   }
 
-  /** 事件带着 tabId —— 渲染进程按它分发到各自的内容流（D4 修订） */
-  function publishEvent(tabId: string, type: string, data: unknown): void {
-    const events: SessionEvent[] = [{ type, data, at: Date.now(), tabId }]
+  /** 事件带着 agentId —— 渲染进程按它分发到各自的内容流（D4 修订） */
+  function publishEvent(agentId: string, type: string, data: unknown): void {
+    const events: SessionEvent[] = [{ type, data, at: Date.now(), agentId }]
     for (const listener of eventListeners) listener(events)
   }
 
@@ -529,12 +610,24 @@ export function createMockApi(): CodeletApi {
     )
   }
 
-  // 开场就有一个标签
+  // 开场两个项目、三条会话 —— 演示「窄轨只列当前项目的 agent」
   conversations = allConversations()
   addTab({
     cwd: FAKE_PROJECTS[0].path,
     path: FAKE_CONVERSATIONS[FAKE_PROJECTS[0].path][0]?.path ?? null,
     title: FAKE_CONVERSATIONS[FAKE_PROJECTS[0].path][0]?.title ?? '记忆索引重构',
+    items: [...FAKE_ITEMS]
+  })
+  addTab({
+    // 还没说过话的会话：有 agent、还没有会话文件
+    cwd: FAKE_PROJECTS[0].path,
+    title: '会话 2',
+    items: [...FAKE_ITEMS]
+  })
+  addTab({
+    cwd: FAKE_PROJECTS[1].path,
+    path: FAKE_CONVERSATIONS[FAKE_PROJECTS[1].path]?.[0]?.path ?? null,
+    title: FAKE_CONVERSATIONS[FAKE_PROJECTS[1].path]?.[0]?.title ?? '另一个项目里的会话',
     items: [...FAKE_ITEMS]
   })
 
@@ -626,37 +719,99 @@ export function createMockApi(): CodeletApi {
       return publish()
     },
 
-    activateTab: async (tabId) => {
-      if (tabs.some((t) => t.id === tabId)) activeTabId = tabId
+    activateAgent: async (agentId) => {
+      if (tabs.some((t) => t.id === agentId)) activeTabId = agentId
       return publish()
     },
 
-    reloadTab: async (tabId) => {
+    // 假宿主只有一个「项目标签」的概念，这几个操作在它上面都是空转
+    newAgentFrom: async () => publish(),
+    importConversation: async () => publish(),
+    renameAgent: async (agentId, name) => {
+      const tab = tabs.find((t) => t.id === agentId)
+      if (tab) tab.title = name.trim() || tab.title
+      return publish()
+    },
+    archiveAgent: async (agentId) => {
+      const index = tabs.findIndex((t) => t.id === agentId)
+      if (index < 0) return publish()
+      tabs.splice(index, 1)
+      if (activeTabId === agentId) activeTabId = tabs[Math.min(index, tabs.length - 1)]?.id ?? null
+      return publish()
+    },
+    restoreAgent: async () => publish(),
+    deleteAgent: async (agentId) => {
+      const index = tabs.findIndex((t) => t.id === agentId)
+      if (index < 0) return publish()
+      tabs.splice(index, 1)
+      if (activeTabId === agentId) activeTabId = tabs[Math.min(index, tabs.length - 1)]?.id ?? null
+      return publish()
+    },
+    activateProjectTab: async () => publish(),
+    closeProjectTab: async () => publish(),
+    setPane: async () => publish(),
+
+    reloadAgent: async (agentId) => {
       // 假宿主里没有「外部修改」，重载就等于重读自己的条目
-      const tab = tabs.find((t) => t.id === tabId)
+      const tab = tabs.find((t) => t.id === agentId)
       if (tab) tab.items = [...FAKE_ITEMS]
       return publish()
     },
 
-    closeTab: async (tabId) => {
-      const index = tabs.findIndex((t) => t.id === tabId)
-      if (index < 0) return publish()
-      tabs.splice(index, 1)
-      if (activeTabId === tabId) activeTabId = tabs[Math.min(index, tabs.length - 1)]?.id ?? null
-      return publish()
-    },
+    getAgentEntries: async (agentId) => tabs.find((t) => t.id === agentId)?.items ?? [],
 
-    getTabEntries: async (tabId) => tabs.find((t) => t.id === tabId)?.items ?? [],
-
+    listDocs: async () => ({
+      truncated: false,
+      groups: [
+        {
+          title: '项目说明',
+          entries: [
+            { path: '/Users/demo/Projects/codelet/AGENTS.md', relPath: 'AGENTS.md', name: 'AGENTS.md', size: 2140, modified: 1 }
+          ]
+        },
+        {
+          title: 'planning',
+          entries: [
+            {
+              path: '/Users/demo/Projects/codelet/.ai/planning/PLAN.md',
+              relPath: '.ai/planning/PLAN.md',
+              name: 'PLAN.md',
+              size: 67025,
+              modified: 3
+            },
+            {
+              path: '/Users/demo/Projects/codelet/.ai/planning/task.md',
+              relPath: '.ai/planning/task.md',
+              name: 'task.md',
+              size: 115880,
+              modified: 2
+            }
+          ]
+        },
+        {
+          title: 'design',
+          entries: [
+            {
+              path: '/Users/demo/Projects/codelet/.ai/design/project-nav-shell.html',
+              relPath: '.ai/design/project-nav-shell.html',
+              name: 'project-nav-shell.html',
+              size: 95996,
+              modified: 5
+            }
+          ]
+        }
+      ]
+    }),
     listFiles: async (_cwd, dir) => {
       const rel = dir === '' || dir === '.' ? '' : dir.replace(/^\.\//, '')
-      return FAKE_TREE[rel] ?? []
+      return { entries: FAKE_TREE[rel] ?? [], error: null }
     },
 
     readFile: async (_cwd, path) => {
       const rel = path.replace(/^.*?\/src\//, 'src/').replace(/^.*\/(?=[^/]+$)/, (m) => (path.includes('/src/') ? '' : m))
       const key = rel.replace(/^\/+/, '')
-      const text = FAKE_FILES[key] ?? FAKE_FILES[path.split('/').pop() ?? ''] ?? ''
+      const name = path.split('/').pop() ?? ''
+      const text = FAKE_DOCS[name] ?? FAKE_FILES[key] ?? FAKE_FILES[name] ?? ''
       if (!text) {
         return { kind: 'unsupported', reason: '假数据里没有这个文件的内容' }
       }
@@ -702,7 +857,7 @@ export function createMockApi(): CodeletApi {
 
     listModels: async () => FAKE_MODELS,
 
-    compactTab: async () => {
+    compactAgent: async () => {
       // 假宿主里压缩就是等一下
       await new Promise((resolve) => setTimeout(resolve, 500))
     },
@@ -805,7 +960,12 @@ export function createMockApi(): CodeletApi {
     revealConsoleDir: async () => undefined,
     openConsoleWindow: async () => undefined,
     closeConsoleWindow: async () => undefined,
-    getSettings: async () => ({ 'console.record': true, 'console.maxRecordBytes': 32 * 1024 * 1024 }),
+    getSettings: async () => ({
+      'console.record': true,
+      'console.maxRecordBytes': 32 * 1024 * 1024,
+      'agents.archiveAfterDays': 30,
+      'agents.archiveKeepDays': 180
+    }),
     setSetting: async () => true,
     openSettingsWindow: async () => undefined,
     onConsoleEvent: () => () => undefined,
@@ -919,20 +1079,20 @@ export function createMockApi(): CodeletApi {
       }
     },
 
-    abortPrompt: async (tabId) => {
-      const tab = tabs.find((t) => t.id === tabId)
+    abortPrompt: async (agentId) => {
+      const tab = tabs.find((t) => t.id === agentId)
       if (!tab || !tab.streaming) return
       // 设个标志，正在跑的那个循环下一段就会自己退出，由它发收尾事件
-      aborted.add(tabId)
+      aborted.add(agentId)
       /*
        * 先把自己记进 aborting 再推快照 —— 界面靠这个显示「停止中」。
        * 真宿主也是这个顺序（state.abortPrompt 里先 add 再 emit）。
        */
-      abortingTabs.add(tabId)
+      abortingTabs.add(agentId)
       publish()
       // 等一下，模拟 abort() 内部的 waitForIdle()
       await new Promise((r) => setTimeout(r, 260))
-      abortingTabs.delete(tabId)
+      abortingTabs.delete(agentId)
       publish()
     },
 

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
-import type { PiEvent, PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEvent, PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type {
   CommandArgumentOption,
   CommandOption,
@@ -25,24 +25,30 @@ class FakePi implements PiRuntimePort {
   private listeners = new Set<PiEventListener>()
   private tabs = new Map<string, ThinkingLevel>()
   /** `selectThinkingLevel` 的调用记录 */
-  readonly sets: { tabId: string; level: ThinkingLevel }[] = []
+  readonly sets: { agentId: string; level: ThinkingLevel }[] = []
   /** 参数补全的调用记录 */
-  readonly completions: { tabId: string; name: string; prefix: string }[] = []
+  readonly completions: { agentId: string; name: string; prefix: string }[] = []
 
   onEvent(listener: PiEventListener): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
 
-  async openTab(tabId: string): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string): Promise<void> {
     this.tabs.set(tabId, 'medium')
   }
-  async closeTab(tabId: string): Promise<void> {
+  async closeAgent(tabId: string): Promise<void> {
     this.tabs.delete(tabId)
   }
-  async activateTab(): Promise<void> {}
-  async reloadTab(): Promise<void> {}
-  tabState(tabId: string): TabRuntimeState {
+  async activateAgent(): Promise<void> {}
+  async reloadAgent(): Promise<void> {}
+  agentState(tabId: string): AgentRuntimeState {
     return {
       ready: this.tabs.has(tabId),
       sessionId: this.tabs.has(tabId) ? `s-${tabId}` : null,
@@ -71,7 +77,7 @@ class FakePi implements PiRuntimePort {
     name: string,
     prefix: string
   ): Promise<CommandArgumentOption[]> {
-    this.completions.push({ tabId, name, prefix })
+    this.completions.push({ agentId: tabId, name, prefix })
     return ['staging', 'production']
       .filter((value) => value.startsWith(prefix))
       .map((value) => ({ value, label: value }))
@@ -80,12 +86,12 @@ class FakePi implements PiRuntimePort {
     return this.tabs.has(tabId) ? ['off', 'low', 'medium', 'high'] : []
   }
   setThinkingLevel(tabId: string, level: ThinkingLevel): void {
-    this.sets.push({ tabId, level })
+    this.sets.push({ agentId: tabId, level })
     this.tabs.set(tabId, level)
   }
-  async compactTab(): Promise<void> {}
+  async compactAgent(): Promise<void> {}
   async prompt(): Promise<void> {}
-  async abortTab(): Promise<void> {}
+  async abortAgent(): Promise<void> {}
   async stop(): Promise<void> {}
 
   emit(event: PiEvent): void {
@@ -130,11 +136,11 @@ describe('思考等级', () => {
     expect(await host.listThinkingLevels(tabId)).toEqual(['off', 'low', 'medium', 'high'])
 
     await host.selectThinkingLevel(tabId, 'high')
-    expect(pi.sets).toEqual([{ tabId, level: 'high' }])
+    expect(pi.sets).toEqual([{ agentId: tabId, level: 'high' }])
     expect(host.snapshot().session.thinkingLevel).toBe('high')
 
     await expect(host.selectThinkingLevel(tabId, 'max')).rejects.toThrow('不支持')
-    expect(pi.sets).toEqual([{ tabId, level: 'high' }])
+    expect(pi.sets).toEqual([{ agentId: tabId, level: 'high' }])
   })
 
   it('没有 runtime 时列表为空，不抛错', async () => {
@@ -155,6 +161,6 @@ describe('命令参数补全', () => {
     expect(await host.completeCommand(tabId, 'deploy', 'st')).toEqual([
       { value: 'staging', label: 'staging' }
     ])
-    expect(pi.completions).toEqual([{ tabId, name: 'deploy', prefix: 'st' }])
+    expect(pi.completions).toEqual([{ agentId: tabId, name: 'deploy', prefix: 'st' }])
   })
 })

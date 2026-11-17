@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
-import type { PiEventListener, PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiEventListener, PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { ModelOption, StreamItem } from '@contract/index'
 
 /**
@@ -30,20 +30,26 @@ class FakePi implements PiRuntimePort {
     return () => this.listeners.delete(listener)
   }
   /** 假装 Pi 发了个事件 —— 测「自己写完之后不该被标 stale」 */
-  emit(type: string, tabId: string): void {
-    for (const listener of this.listeners) listener({ type, data: {}, tabId })
+  emit(type: string, agentId: string): void {
+    for (const listener of this.listeners) listener({ type, data: {}, agentId })
   }
-  async openTab(tabId: string, options: { cwd: string; path?: string }): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string, options: { cwd: string; path?: string }): Promise<void> {
     this.files.set(tabId, options.path ?? join(tmpdir(), `fake-${tabId}.jsonl`))
   }
-  async closeTab(tabId: string): Promise<void> {
+  async closeAgent(tabId: string): Promise<void> {
     this.files.delete(tabId)
   }
-  async activateTab(tabId: string): Promise<void> {
+  async activateAgent(tabId: string): Promise<void> {
     this.active = tabId
   }
-  async reloadTab(): Promise<void> {}
-  tabState(tabId: string): TabRuntimeState {
+  async reloadAgent(): Promise<void> {}
+  agentState(tabId: string): AgentRuntimeState {
     return {
       ready: this.active === tabId,
       sessionId: `s-${tabId}`,
@@ -63,7 +69,7 @@ class FakePi implements PiRuntimePort {
   async refreshModelAvailability(): Promise<void> {}
   async selectModel(): Promise<void> {}
   async prompt(): Promise<void> {}
-  async abortTab(): Promise<void> {
+  async abortAgent(): Promise<void> {
     // 测试里没有真 agent，中止是空操作
   }
   async renameSession(): Promise<void> {
@@ -76,7 +82,7 @@ class FakePi implements PiRuntimePort {
     return []
   }
 
-  async compactTab(): Promise<void> {
+  async compactAgent(): Promise<void> {
     // 不参与
   }
 
@@ -102,7 +108,8 @@ async function setup() {
   const projects = new ProjectStore(join(dir, 'projects.json'))
   projects.add(dir)
   const tabFile = join(dir, 'tabs.json')
-  new TabStore(tabFile).saveTabs([{ id: 'tab-1', cwd: dir, path: sessionFile, title: '聊过的' }])
+  // v1 形状 —— 走真实迁移路径（PLAN.md D59）
+  writeFileSync(tabFile, JSON.stringify({ tabs: [{ id: 'tab-1', cwd: dir, path: sessionFile, title: '聊过的' }] }))
 
   const pi = new FakePi()
   const state = new HostState({ pi, tabStore: new TabStore(tabFile), projects })
@@ -137,7 +144,7 @@ describe('会话在别处被改过', () => {
     const { dir, sessionFile, pi, state } = await setup()
     // 模拟「我们这一轮写了文件」
     touchFuture(sessionFile)
-    pi.emit('agent_settled', 'tab-1')
+    pi.emit('agent_settled', 'agent-tab-1')
     await state.refreshConversations()
     expect(state.snapshot().tabs[0].stale).toBe(false)
     await state.dispose()
@@ -150,7 +157,7 @@ describe('会话在别处被改过', () => {
     await state.refreshConversations()
     expect(state.snapshot().tabs[0].stale).toBe(true)
 
-    await state.reloadTab('tab-1')
+    await state.reloadTab('agent-tab-1')
     expect(state.snapshot().tabs[0].stale).toBe(false)
     await state.dispose()
     rmSync(dir, { recursive: true, force: true })

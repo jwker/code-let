@@ -1,37 +1,29 @@
 import type { FileTab } from '@contract/index'
-import { FileTree } from './FileTree'
 import { FileViewer } from './FileViewer'
 import { fileMark } from './fileDisplay'
 
 /**
- * 文件浏览器 —— 文件标签栏 + 文件树 + 内容区。
+ * 文件预览 —— 区域 6 的内容（PLAN.md D52）。
  *
- * **只吃 props，不读 store**（PLAN.md D20）：以后要挂到独立窗口里，只需要在那边
- * 提供同样的 props，这个组件不用改。
- *
- * 布局自适应：容器宽 ≥ 480 显示「树 | 内容」两栏，窄了就收起树只留内容。
- * 面板宽度是用户的（他可能特意拖窄了），所以这里不强行改宽度。
+ * 从 `FileBrowser` 里拆出来的：树留在区域 5，标签栏 + 内容在这里。
+ * 仍然是**只吃 props、不读 store**（D20）—— 以后要挂到独立窗口，那边给同样的 props 就行。
  */
-export function FileBrowser({
-  cwd,
+export function FilePreview({
   files,
   activeFileId,
   onActivate,
-  onClose,
-  onReload
+  onClose
 }: {
-  /** 文件树的根 —— 当前活动会话标签的 cwd */
-  cwd: string
+  /** 打开的文件（按打开顺序） */
   files: FileTab[]
   activeFileId: string | null
   onActivate: (fileId: string) => void
   onClose: (fileId: string) => void
-  onReload: (file: FileTab) => void
 }) {
-  const active = files.find((f) => f.id === activeFileId) ?? null
+  const active = files.find((file) => file.id === activeFileId) ?? null
 
   return (
-    <div className="file-browser">
+    <div className="file-preview">
       <div className="file-tabs">
         {files.length === 0 && <span className="file-tabs-empty">没有打开的文件</span>}
         {files.map((file) => (
@@ -56,13 +48,13 @@ export function FileBrowser({
                 title="这个文件在别处有更新，点一下重新加载"
                 onClick={(event) => {
                   event.stopPropagation()
-                  onReload(file)
+                  onActivate(file.id)
                 }}
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter' && event.key !== ' ') return
-                  event.stopPropagation()
                   event.preventDefault()
-                  onReload(file)
+                  event.stopPropagation()
+                  onActivate(file.id)
                 }}
                 className="file-tab-stale"
               >
@@ -79,8 +71,8 @@ export function FileBrowser({
               }}
               onKeyDown={(event) => {
                 if (event.key !== 'Enter' && event.key !== ' ') return
-                event.stopPropagation()
                 event.preventDefault()
+                event.stopPropagation()
                 onClose(file.id)
               }}
               className="file-tab-close"
@@ -91,40 +83,31 @@ export function FileBrowser({
         ))}
       </div>
 
-      <div className="file-body">
-        {/*
-          树的显示由 CSS 容器查询决定：窄了自动隐藏。
-          这样不用在 JS 里量宽度、也不会有闪烁。
-        */}
-        <div className="file-tree-pane">
-          {cwd ? <FileTree cwd={cwd} /> : <div className="file-tree-empty">没有打开的会话</div>}
-        </div>
-        <div className="file-content-pane">
-          {active ? (
-            <>
-              {/* 顶部只放操作，不放文件名 —— 文件标签栏已经显示了 */}
-              <div className="file-actions">
-                <span className="file-actions-path" title={active.path}>
-                  {active.relPath}
-                </span>
-                <button
-                  type="button"
-                  title="复制路径"
-                  aria-label="复制路径"
-                  onClick={() => void navigator.clipboard?.writeText(active.path)}
-                  className="file-action"
-                >
-                  ⧉
-                </button>
-              </div>
-              <div className="file-content">
-                <FileViewer file={active} />
-              </div>
-            </>
-          ) : (
-            <div className="file-viewer-state">从左边选一个文件</div>
-          )}
-        </div>
+      <div className="file-content-pane">
+        {active ? (
+          <>
+            {/* 顶部只放操作，不放文件名 —— 文件标签栏已经显示了 */}
+            <div className="file-actions">
+              <span className="file-actions-path" title={active.path}>
+                {active.relPath}
+              </span>
+              <button
+                type="button"
+                title="复制路径"
+                aria-label="复制路径"
+                onClick={() => void navigator.clipboard?.writeText(active.path)}
+                className="file-action"
+              >
+                ⧉
+              </button>
+            </div>
+            <div className="file-content">
+              <FileViewer file={active} />
+            </div>
+          </>
+        ) : (
+          <div className="file-viewer-state">从区域 5 的文件树里选一个文件</div>
+        )}
       </div>
     </div>
   )

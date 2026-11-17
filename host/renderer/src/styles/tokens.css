@@ -30,6 +30,10 @@
   --sp-10: 40px;
   --sp-12: 48px;
 
+  /* 窄轨固定宽度；区域 5 的默认宽度（实际值由 PANE_LAYOUT 与用户拖动决定） */
+  --rail-w: 56px;
+  --zone5-w: 268px;
+
   /* 主区内容列宽、窗口标题栏高度、标签栏高度 */
   --content-max: 720px;
   --titlebar-h: 44px;
@@ -42,11 +46,10 @@
 }
 
 [data-theme='dark'] {
-  /* 跟亮色一一对应：导航轨/顶栏最暗，侧栏、主区、检视器依次提亮一格 */
+  /* 跟亮色一一对应：窄轨/顶栏最暗，侧栏、区域 5、区域 6 依次提亮一格 */
   --canvas: #131312;
   --panel: #181817;
   --surface: #1c1c1b;
-  --insp: #191918;
   --raised: #242423;
   --sunken: #2a2a29;
   --overlay: rgba(24, 24, 23, 0.92);
@@ -77,6 +80,12 @@
   --info: #6faef0;
   --info-wash: #111f2e;
   --info-line: #1e3c5a;
+  --av-general-bg: #26262b;
+  --av-general-fg: #a8a8b0;
+  --av-dev-bg: #16233a;
+  --av-dev-fg: #7fa8e8;
+  --av-product-bg: #241a3a;
+  --av-product-fg: #a98ae0;
   /* ANSI 基础 16 色 —— 工具输出的颜色还原走这里（R4） */
   --ansi-black: #6a6a76;
   --ansi-red: #f2776b;
@@ -101,11 +110,10 @@
 }
 
 [data-theme='light'] {
-  /* 每块区域各管一段：导航轨/顶栏最灰，侧栏、主区、检视器依次变白 */
+  /* 每块区域各管一段：窄轨/顶栏最灰，侧栏、区域 5、区域 6 依次变白 */
   --canvas: #f4f4f5;
   --panel: #fbfbfb;
   --surface: #ffffff;
-  --insp: #fafafa;
   --raised: #ffffff;
   --sunken: #f1f1f3;
   --overlay: rgba(255, 255, 255, 0.92);
@@ -136,6 +144,16 @@
   --info: #2563a8;
   --info-wash: #e9f1fa;
   --info-line: #c4daf0;
+  /*
+   * agent 头像的两色一组（底 + 形）。窄轨里只有 28px，
+   * 类型靠「形状 + 这两色」区分 —— 现有令牌里没有装饰色，所以单独开一组。
+   */
+  --av-general-bg: #ececee;
+  --av-general-fg: #6e6e76;
+  --av-dev-bg: #e7effc;
+  --av-dev-fg: #2a5db0;
+  --av-product-bg: #f0eafc;
+  --av-product-fg: #6b46b8;
   /* ANSI 基础 16 色 —— 工具输出的颜色还原走这里（R4） */
   --ansi-black: #4b4b55;
   --ansi-red: #b8342a;

@@ -67,8 +67,19 @@ test.describe.serial('调试记录自动清理', () => {
       env: { ...process.env, CODELET_USER_DATA: userDataDir },
       timeout: 30_000
     })
-    page = await app.firstWindow()
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 20_000 })
+    const mainPage = await app.firstWindow()
+    await expect(mainPage.locator('textarea').first()).toBeVisible({ timeout: 20_000 })
+    /*
+     * 控制台从「右侧检视器的一个视图」变成了**独立窗口**（PLAN.md D56）。
+     * 所以这里开一个窗口，接下来的断言都在它里面做 —— 它整窗只有控制台，
+     * 选择器从 `.insp-body` 换成 `body`。
+     */
+    const consoleWindow = app.waitForEvent('window')
+    await mainPage.evaluate(() =>
+      (window as unknown as { codelet: { openConsoleWindow(): Promise<void> } }).codelet.openConsoleWindow()
+    )
+    page = await consoleWindow
+    await expect(page.getByText('调试控制台')).toBeVisible({ timeout: 20_000 })
   })
 
   test.afterAll(async () => {
@@ -78,8 +89,7 @@ test.describe.serial('调试记录自动清理', () => {
   })
 
   test('启动时把超期的记录清掉，新的留着', async () => {
-    await page.getByRole('button', { name: '控制台', exact: true }).click()
-    const pane = page.locator('.insp-body')
+    const pane = page.locator('body')
 
     // 新的还在
     await expect(pane.getByRole('button', { name: /刚记下的记录/ })).toBeVisible({
@@ -92,7 +102,7 @@ test.describe.serial('调试记录自动清理', () => {
   })
 
   test('统计那一行带上占用上限', async () => {
-    const pane = page.locator('.insp-body')
+    const pane = page.locator('body')
     // 开了自动清理并设了上限 → 「N 条 · XB / 512.0MB」
     await expect(pane.getByText(/\/ 512\.0MB/)).toBeVisible()
   })

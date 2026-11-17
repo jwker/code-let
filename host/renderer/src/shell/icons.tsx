@@ -25,12 +25,10 @@ export const IconSession = () => (
   </Icon>
 )
 
-export const IconMemory = () => (
+export const IconDoc = () => (
   <Icon>
-    <circle cx="12" cy="5" r="2.5" />
-    <circle cx="5" cy="18" r="2.5" />
-    <circle cx="19" cy="18" r="2.5" />
-    <path d="M10.6 6.9 6.4 15.7M13.4 6.9l4.2 8.8M7.6 18h8.8" />
+    <path d="M6 3h7l5 5v13H6z" />
+    <path d="M13 3v5h5M9 12h6M9 16h4" />
   </Icon>
 )
 
@@ -49,16 +47,6 @@ export const IconBrowser = () => (
 )
 
 /** Git —— 一条分支线上两个提交点 */
-export const IconGit = () => (
-  <Icon>
-    <circle cx="7" cy="6" r="2.4" />
-    <circle cx="7" cy="18" r="2.4" />
-    <circle cx="17" cy="9" r="2.4" />
-    <path d="M7 8.4v7.2" />
-    <path d="M17 11.4c0 3.2-2.6 4.6-6 4.9" />
-  </Icon>
-)
-
 /** Agent —— 一个带天线的机器人脑袋 */
 export const IconAgent = () => (
   <Icon>
@@ -70,31 +58,11 @@ export const IconAgent = () => (
   </Icon>
 )
 
-export const IconTerminal = () => (
-  <Icon>
-    <path d="m4 17 6-6-6-6M12 19h8" />
-  </Icon>
-)
-
 /** 调试控制台 —— 终端加一个指示点 */
-export const IconConsole = () => (
-  <Icon>
-    <path d="m4 17 6-6-6-6M12 19h8" />
-    <circle cx="18" cy="7" r="2" fill="currentColor" stroke="none" />
-  </Icon>
-)
-
 export const IconPanelLeft = () => (
   <Icon>
     <rect x="3" y="4" width="18" height="16" rx="2.5" />
     <path d="M9 4v16" />
-  </Icon>
-)
-
-export const IconPanelRight = () => (
-  <Icon>
-    <rect x="3" y="4" width="18" height="16" rx="2.5" />
-    <path d="M15 4v16" />
   </Icon>
 )
 

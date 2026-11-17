@@ -162,9 +162,9 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  browser = new BrowserManager(win, (state) => {
+  browser = new BrowserManager(win, (host, state) => {
     for (const target of BrowserWindow.getAllWindows()) {
-      if (!target.isDestroyed()) target.webContents.send(IPC_EVENTS.browser, state)
+      if (!target.isDestroyed()) target.webContents.send(IPC_EVENTS.browser, { host, state })
     }
   })
   state.attachBrowser(browser)
@@ -278,6 +278,22 @@ if (!app.requestSingleInstanceLock()) {
     await state.init().catch((error) => {
       console.error('宿主状态初始化失败:', error)
     })
+    /*
+     * 启动时按设置跑一次自动归档（D55）。
+     *
+     * 跟调试记录一样放在启动：应用关着的时候不会有人来做这件事。
+     * 只归档**通用** agent，正在跑的跳过 —— 判定在 `runAutoArchive` 里。
+     */
+    try {
+      const days = settings.get('agents.archiveAfterDays')
+      if (typeof days === 'number' && days > 0) {
+        const archived = await state.runAutoArchive(days)
+        if (archived > 0) console.log(`自动归档：${archived} 个 agent 超过 ${days} 天没有活动`)
+      }
+    } catch (error) {
+      console.error('自动归档失败:', error)
+    }
+
     // 启动时清一次 —— 应用关着的时候磁盘不会自己变干净
     try {
       const result = state.console.prune()

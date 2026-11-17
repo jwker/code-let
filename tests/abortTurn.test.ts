@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { HostState } from '../host/main/state'
 import { ProjectStore } from '../host/main/projects'
 import { TabStore } from '../host/main/tabs'
-import type { PiRuntimePort, TabRuntimeState } from '../host/main/pi/runtime'
+import type { PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
 import type { ModelOption, StreamItem } from '@contract/index'
 import { applyEvent, entriesToItems, nextStreaming } from '@contract/stream'
 import { summarizeTurn } from '../host/renderer/src/conversation/turnMeta'
@@ -15,32 +15,38 @@ import { summarizeTurn } from '../host/renderer/src/conversation/turnMeta'
  *
  * 三件事要管住：
  *   - 宿主：中止期间快照里能看到 `aborting`（界面靠它显示「停止中」），结束就消失
- *   - 宿主：连点两下只调一次 `abortTab`
+ *   - 宿主：连点两下只调一次 `abortAgent`
  *   - 渲染：`stopReason === "aborted"` 的消息要一路传到「已中止」标记上
  */
 
 class FakePi implements PiRuntimePort {
   private tabs = new Map<string, { streaming: boolean }>()
   readonly calls: string[] = []
-  /** 让 abortTab 挂住，好观察「中止进行中」的快照 */
+  /** 让 abortAgent 挂住，好观察「中止进行中」的快照 */
   holdAbort: Promise<void> | null = null
 
   onEvent(): () => void {
     return () => {}
   }
 
-  async openTab(tabId: string): Promise<void> {
+  hasAgent(agentId: string): boolean {
+    // 假 runtime 都登记在 files/opened 里；没有这两个映射的用例不关心「按需补登记」
+    const map = (this as unknown as { files?: Map<string, unknown>; opened?: unknown[] }).files
+    return map ? map.has(agentId) : true
+  }
+
+  async openAgent(tabId: string): Promise<void> {
     this.tabs.set(tabId, { streaming: false })
   }
 
-  async closeTab(tabId: string): Promise<void> {
+  async closeAgent(tabId: string): Promise<void> {
     this.tabs.delete(tabId)
   }
 
-  async activateTab(): Promise<void> {}
-  async reloadTab(): Promise<void> {}
+  async activateAgent(): Promise<void> {}
+  async reloadAgent(): Promise<void> {}
 
-  tabState(tabId: string): TabRuntimeState {
+  agentState(tabId: string): AgentRuntimeState {
     const tab = this.tabs.get(tabId)
     return {
       ready: Boolean(tab),
@@ -66,7 +72,7 @@ class FakePi implements PiRuntimePort {
 
   async prompt(): Promise<void> {}
 
-  async abortTab(tabId: string): Promise<void> {
+  async abortAgent(tabId: string): Promise<void> {
     this.calls.push(`abort:${tabId}`)
     if (this.holdAbort) await this.holdAbort
     const tab = this.tabs.get(tabId)
@@ -84,7 +90,7 @@ class FakePi implements PiRuntimePort {
     return []
   }
 
-  async compactTab(): Promise<void> {
+  async compactAgent(): Promise<void> {
     // 不参与
   }
 
@@ -130,7 +136,7 @@ describe('中止某个标签', () => {
       const tabId = state.snapshot().activeTabId!
       pi.setStreaming(tabId, true)
 
-      // 让 abortTab 挂住，好在「进行中」这个时刻看快照
+      // 让 abortAgent 挂住，好在「进行中」这个时刻看快照
       let release!: () => void
       pi.holdAbort = new Promise<void>((r) => {
         release = r
@@ -151,7 +157,7 @@ describe('中止某个标签', () => {
     }
   })
 
-  it('连点两次只调一次 abortTab', async () => {
+  it('连点两次只调一次 abortAgent', async () => {
     const pi = new FakePi()
     const { state, dir } = makeState(pi)
     try {
@@ -196,7 +202,7 @@ describe('中止某个标签', () => {
     }
   })
 
-  it('abortTab 抛错也要把 aborting 清掉', async () => {
+  it('abortAgent 抛错也要把 aborting 清掉', async () => {
     const pi = new FakePi()
     const { state, dir } = makeState(pi)
     try {
@@ -204,7 +210,7 @@ describe('中止某个标签', () => {
       await state.newConversation(dir)
       const tabId = state.snapshot().activeTabId!
       pi.setStreaming(tabId, true)
-      pi.abortTab = async () => {
+      pi.abortAgent = async () => {
         throw new Error('停止失败')
       }
 

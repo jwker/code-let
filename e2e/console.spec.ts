@@ -47,9 +47,8 @@ test.describe.serial('调试控制台', () => {
       },
       timeout: 30_000
     })
-    page = await app.firstWindow()
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 20_000 })
-
+    const mainPage = await app.firstWindow()
+    await expect(mainPage.locator('textarea').first()).toBeVisible({ timeout: 20_000 })
     // 往应用数据目录里写一条记录
     const store = new DebugConsoleStore(join(userDataDir, 'debug-console'))
     store.enqueue({
@@ -73,6 +72,18 @@ test.describe.serial('调试控制台', () => {
       if (store.status().writing === 0) break
       await new Promise((resolve) => setTimeout(resolve, 20))
     }
+
+    /*
+     * 控制台从「右侧检视器的一个视图」变成了**独立窗口**（PLAN.md D56）。
+     * 窗口在挂载时读一次列表，所以要在写完记录之后再开它。
+     * 接下来的断言都在控制台窗口里做 —— 它整窗只有控制台，选择器从 `.insp-body` 换成 `body`。
+     */
+    const consoleWindow = app.waitForEvent('window')
+    await mainPage.evaluate(() =>
+      (window as unknown as { codelet: { openConsoleWindow(): Promise<void> } }).codelet.openConsoleWindow()
+    )
+    page = await consoleWindow
+    await expect(page.getByText('调试控制台')).toBeVisible({ timeout: 20_000 })
   })
 
   test.afterAll(async () => {
@@ -82,8 +93,7 @@ test.describe.serial('调试控制台', () => {
   })
 
   test('列出记录，展开一级节点，再展开一条消息', async () => {
-    await page.getByRole('button', { name: '控制台', exact: true }).click()
-    const pane = page.locator('.insp-body')
+    const pane = page.locator('body')
     const row = pane.getByRole('button', { name: /这段内容要能搜到/ })
     await expect(row).toBeVisible()
 
@@ -92,7 +102,7 @@ test.describe.serial('调试控制台', () => {
 
     // 点开记录 → 抽屉
     await row.click()
-    const drawer = page.locator('.insp-body')
+    const drawer = page.locator('body')
     await expect(drawer.getByRole('button', { name: /transcript/ })).toBeVisible()
     await expect(drawer.getByText('claude-e2e').first()).toBeVisible()
 
@@ -111,10 +121,9 @@ test.describe.serial('调试控制台', () => {
   test('provider 页签能看到原始 payload', async () => {
     // 上一条用例留了个抽屉开着 —— 先关掉
     await goBackToList(page)
-    await page.getByRole('button', { name: '控制台', exact: true }).click()
-    const pane = page.locator('.insp-body')
+    const pane = page.locator('body')
     await pane.getByRole('button', { name: /这段内容要能搜到/ }).click()
-    const open = page.locator('.insp-body')
+    const open = page.locator('body')
     await open.getByRole('button', { name: /provider/ }).click()
     await expect(open.getByText('claude-e2e').first()).toBeVisible()
   })
@@ -122,7 +131,6 @@ test.describe.serial('调试控制台', () => {
   test('可以勾选多条，然后批量删', async () => {
     // 上一条用例留了个抽屉开着 —— 先关掉
     await goBackToList(page)
-    await page.getByRole('button', { name: '控制台', exact: true }).click()
 
     // 写三条记录
     const store = new DebugConsoleStore(join(userDataDir, 'debug-console'))
@@ -145,9 +153,9 @@ test.describe.serial('调试控制台', () => {
       await new Promise((resolve) => setTimeout(resolve, 20))
     }
     await page.reload()
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 20_000 })
-    await page.getByRole('button', { name: '控制台', exact: true }).click()
-    const list = page.locator('.insp-body')
+    // 控制台窗口里没有输入框 —— 等它自己的标签页出来即为就绪
+    await expect(page.getByRole('button', { name: '请求', exact: true })).toBeVisible({ timeout: 20_000 })
+    const list = page.locator('body')
 
     // 勾两条
     const boxes = list.getByRole('checkbox')
@@ -167,8 +175,7 @@ test.describe.serial('调试控制台', () => {
 
   test('详情里的「导出这一条」能真的导出成包', async () => {
     await goBackToList(page)
-    await page.getByRole('button', { name: '控制台', exact: true }).click()
-    const pane = page.locator('.insp-body')
+    const pane = page.locator('body')
     await pane.getByRole('button', { name: /这段内容要能搜到/ }).click()
 
     await page.getByRole('button', { name: '导出', exact: true }).click()
@@ -183,38 +190,26 @@ test.describe.serial('调试控制台', () => {
     rmSync(path!, { force: true })
   })
 
-  test('可以分离成独立窗口，也能收回面板', async () => {
-    await goBackToList(page)
-    await page.getByRole('button', { name: '控制台', exact: true }).click()
-    await page.getByRole('button', { name: '分离', exact: true }).click()
-
-    const detached = await app!.waitForEvent('window')
-    await expect(detached.getByText('调试控制台')).toBeVisible({ timeout: 20_000 })
-    await expect(detached.getByRole('button', { name: '收回面板' })).toBeVisible()
-    // 独立窗口里也有列表
-    await expect(detached.getByRole('button', { name: /这段内容要能搜到/ })).toBeVisible()
-
-    // 收回 —— 窗口关掉，主窗口里的面板还在
-    await detached.getByRole('button', { name: '收回面板' }).click()
-    await expect.poll(() => app!.windows().length, { timeout: 10_000 }).toBe(1)
-    // 主窗口里的面板还在（分离窗口关掉不影响它）
-    await expect(page.getByRole('button', { name: '分离', exact: true })).toBeVisible()
+  test('控制台是单实例窗口：再打开一次只是聚焦，不开第二个', async () => {
+    // 控制台现在**始终**是独立窗口（PLAN.md D56），没有「分离 / 收回」这回事了
+    await page.evaluate(() =>
+      (window as unknown as { codelet: { openConsoleWindow(): Promise<void> } }).codelet.openConsoleWindow()
+    )
+    await expect.poll(() => app!.windows().length, { timeout: 10_000 }).toBe(2)
+    await expect(page.getByText('调试控制台')).toBeVisible()
   })
 
   test('三个窗口各有各的标题，Dock 菜单里能分清', async () => {
-    await goBackToList(page)
-    await page.getByRole('button', { name: '控制台', exact: true }).click()
-    await page.getByRole('button', { name: '分离', exact: true }).click()
-    const detached = await app!.waitForEvent('window')
-    await detached.waitForTimeout(600)
-
-    await page.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '设置' }).click()
+    const detached = page
+    // 主窗口（app 的第一个窗口）和设置窗口从这里开
+    const mainPage = app!.windows()[0]
+    await mainPage.getByRole('button', { name: '更多' }).click()
+    await mainPage.getByRole('menuitem', { name: '设置' }).click()
     const settings = await app!.waitForEvent('window')
     await settings.waitForTimeout(600)
 
     // 红绿灯旁边的标题 = 窗口标题
-    expect(await page.title()).toBe('Codelet')
+    expect(await mainPage.title()).toBe('Codelet')
     expect(await detached.title()).toBe('调试控制台')
     expect(await settings.title()).toBe('设置')
 
@@ -234,12 +229,14 @@ test.describe.serial('调试控制台', () => {
   })
 
   test('设置窗口能打开，里面有记录开关和占用统计', async () => {
-    // 上一条用例留了个抽屉开着 —— 先关掉
-    await goBackToList(page)
-    await page.getByRole('button', { name: '更多' }).click()
-    await page.getByRole('menuitem', { name: '设置' }).click()
+    // `page` 现在是控制台窗口 —— 「更多 → 设置」在主窗口上
+    const mainPage = app!.windows()[0]
+    await mainPage.getByRole('button', { name: '更多' }).click()
+    await mainPage.getByRole('menuitem', { name: '设置' }).click()
 
     const settings = await app!.waitForEvent('window')
+    // 设置窗口默认停在第一个有内容的分类 —— 这几项在「调试」里，先切过去
+    await settings.getByRole('button', { name: '调试' }).click()
     await expect(settings.getByText('记录请求内容')).toBeVisible({ timeout: 20_000 })
     await expect(settings.getByText('当前存储占用')).toBeVisible()
     await expect(settings.getByText('记录条数')).toBeVisible()

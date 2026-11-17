@@ -32,7 +32,7 @@ export interface SettingItem {
   /** info 项的取数来源：渲染进程按这个 id 找对应的函数 */
   info?: 'consoleStats'
   /** action 项：渲染进程按这个 id 找对应的处理函数 */
-  action?: 'consoleClear'
+  action?: 'consoleClear' | 'consoleOpen'
   /** panel 项：这一类交给一个专门的面板渲染 */
   panel?: 'modelManagement'
   /** 危险操作 —— 按钮用危险色 */
@@ -43,8 +43,9 @@ export interface SettingItem {
 
 export const SETTINGS_CATEGORIES: SettingCategory[] = [
   { id: 'general', title: '通用', order: 1 },
-  { id: 'debug', title: '调试', order: 2 },
-  { id: 'models', title: '大模型', order: 3 }
+  { id: 'agents', title: 'Agent', order: 2 },
+  { id: 'debug', title: '调试', order: 3 },
+  { id: 'models', title: '大模型', order: 4 }
 ]
 
 export const SETTINGS_ITEMS: SettingItem[] = [
@@ -55,6 +56,38 @@ export const SETTINGS_ITEMS: SettingItem[] = [
     description: '凭据、可用模型、默认模型与思考等级、自定义端点。',
     control: 'panel',
     panel: 'modelManagement'
+  },
+  {
+    id: 'agents.archiveAfterDays',
+    category: 'agents',
+    label: '自动归档',
+    description:
+      '超过这个天数没有活动的通用 agent 自动移进归档。填 0 表示不自动归档。开发与产品 agent 不受影响 —— 它们可能有没干完的活儿。',
+    control: 'number',
+    default: 30,
+    min: 0,
+    max: 365,
+    unit: '天'
+  },
+  {
+    id: 'agents.archiveKeepDays',
+    category: 'agents',
+    label: '归档后保留',
+    description:
+      '归档的 agent 放多久之后提示清理。只提示、不自动删 —— 会话文件不会在没经同意的情况下被删。填 0 表示不提示。',
+    control: 'number',
+    default: 180,
+    min: 0,
+    max: 3650,
+    unit: '天'
+  },
+  {
+    id: 'console.open',
+    category: 'debug',
+    label: '打开控制台窗口',
+    description: '请求、工具调用与错误的原始记录。独立窗口，可以跟主窗口并排看，也可以最小化。',
+    control: 'action',
+    action: 'consoleOpen'
   },
   {
     id: 'console.record',

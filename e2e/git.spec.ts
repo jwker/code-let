@@ -83,22 +83,28 @@ test.describe.serial('Git 面板', () => {
     }
   })
 
-  test('显示分支、分组文件，并能打开 diff', async () => {
-    await page.getByRole('button', { name: 'Git', exact: true }).click()
-    const pane = page.locator('.insp-body')
-    await expect(pane.getByText('Git', { exact: true })).toBeVisible()
-    await expect(pane.getByText('已暂存')).toBeVisible()
-    await expect(pane.getByText('未暂存')).toBeVisible()
-    await expect(pane.getByText('未跟踪')).toBeVisible()
-    await expect(pane.getByText('a.txt')).toBeVisible()
-    await expect(pane.getByText('b.txt')).toBeVisible()
-    await expect(pane.getByText('c.txt')).toBeVisible()
+  test('代码区的「改动」tab 显示分支、分组文件，点开看 diff', async () => {
+    // 改动列表现在在区域 5（代码入口的第二个 tab），diff 在区域 6
+    await page.getByRole('button', { name: '代码', exact: true }).click()
+    await page.getByRole('tab', { name: /改动/ }).click()
 
-    await pane.getByText('a.txt').click()
-    await expect(pane.getByText('+two')).toBeVisible()
-    await expect(pane.getByText('相对 index')).toBeVisible()
+    const zone5 = page.locator('.shell-card.zone5')
+    await expect(zone5.getByText('main')).toBeVisible()
+    await expect(zone5.getByText('已暂存')).toBeVisible()
+    await expect(zone5.getByText('未暂存')).toBeVisible()
+    await expect(zone5.getByText('未跟踪')).toBeVisible()
+    await expect(zone5.getByText('a.txt')).toBeVisible()
+    await expect(zone5.getByText('b.txt')).toBeVisible()
+    await expect(zone5.getByText('c.txt')).toBeVisible()
 
-    await pane.getByRole('button', { name: '返回 Git 列表' }).click()
-    await expect(pane.getByText('未暂存')).toBeVisible()
+    await zone5.getByText('a.txt').click()
+
+    const zone6 = page.locator('.shell-card.zone6')
+    await expect(zone6.getByText('+two')).toBeVisible()
+    await expect(zone6.getByText('相对 index')).toBeVisible()
+
+    // 返回 → 区域 6 回到文件预览
+    await zone6.getByRole('button', { name: '回到文件预览' }).click()
+    await expect(page.getByText('从区域 5 的文件树里选一个文件')).toBeVisible()
   })
 })
