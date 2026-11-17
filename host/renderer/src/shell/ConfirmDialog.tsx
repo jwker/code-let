@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useOverlay } from './useOverlay'
 
 /**
  * 确认框 —— 需要用户点头才继续的那种操作（关掉正在跑的标签、把项目移出清单）。
@@ -31,6 +32,9 @@ export function ConfirmDialog({
   onCancel: () => void
   onConfirm: () => void
 }) {
+  // 浏览器页面是原生 view，会盖住对话框 —— 有浮层时把它收起来
+  useOverlay()
+
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
       if (event.key === 'Escape' && !busy) onCancel()

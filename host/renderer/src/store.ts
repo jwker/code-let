@@ -299,6 +299,13 @@ interface RendererStore {
   git: GitViewState
   /** 文档区：分组清单、当前选中的一篇、它的内容 */
   docs: DocsViewState
+  /**
+   * 当前有几个浮层开着（气泡、菜单、对话框）。
+   *
+   * 浏览器页面是原生 view，画在 DOM 之上；有浮层时要把原生视图收起来，
+   * 否则气泡被盖住、对话框点不到。见 `shell/useOverlay.ts`。
+   */
+  overlayCount: number
   /** 项目设置里选中的分类 */
   settingsCategory: 'general' | 'agents' | 'conversations' | 'project'
   /** 区域 5 的宽度，按入口各记一份 */
@@ -348,6 +355,9 @@ interface RendererStore {
   closeChange: () => void
   /** 读 AI 文档清单（区域 5 的文档区） */
   setSettingsCategory: (category: 'general' | 'agents' | 'conversations' | 'project') => void
+  /** 登记一个浮层（挂载时）/ 撤销（卸载时） */
+  pushOverlay: () => void
+  popOverlay: () => void
   loadDocs: (cwd: string) => Promise<void>
   /** 打开一篇文档 → 区域 6 读它的内容 */
   openDoc: (path: string) => Promise<void>
@@ -427,6 +437,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   codeMode: 'files',
   git: EMPTY_GIT,
   docs: EMPTY_DOCS,
+  overlayCount: 0,
   settingsCategory: 'agents',
   zone5Widths: loadZone5Widths(),
   sidebarOpen: loadSidebarOpen(),
@@ -525,6 +536,9 @@ export const useStore = create<RendererStore>((set, get) => ({
   },
 
   setSettingsCategory: (category) => set({ settingsCategory: category }),
+
+  pushOverlay: () => set((state) => ({ overlayCount: state.overlayCount + 1 })),
+  popOverlay: () => set((state) => ({ overlayCount: Math.max(0, state.overlayCount - 1) })),
 
   loadDocs: async (cwd) => {
     if (!cwd) {

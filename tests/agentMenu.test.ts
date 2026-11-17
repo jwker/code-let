@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agentMenuState } from '../host/renderer/src/shell/AgentContextMenu'
+import { agentMenuState } from '../host/renderer/src/shell/agentMenuItems'
 
 /**
  * agent 右键菜单里各项的可点状态（PLAN.md D53）。

@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import type { AgentInfo, ProjectPane } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
@@ -33,6 +33,47 @@ export function Rail() {
   const [busy, setBusy] = useState(false)
   /** 悬停的 agent —— 气泡要用 fixed 定位，因为窄轨卡片是 overflow: hidden */
   const [tip, setTip] = useState<{ agent: AgentInfo; top: number; left: number } | null>(null)
+  const tipTimer = useRef<number | null>(null)
+  const pushOverlay = useStore((s) => s.pushOverlay)
+  const popOverlay = useStore((s) => s.popOverlay)
+
+  /*
+   * 气泡出现时要把浏览器的原生视图收起来 —— 它永远画在 DOM 之上，不然气泡被吃掉一半。
+   *
+   * 延迟 180ms 才出气泡：鼠标扫过一排头像时不该让页面闪个不停，
+   * 只有真的停下来看才收起。收起/恢复由 `BrowserPane` 根据 overlay 计数处理。
+   */
+  const tipOpen = tip !== null
+  useEffect(() => {
+    if (!tipOpen) return
+    pushOverlay()
+    return () => popOverlay()
+  }, [tipOpen, pushOverlay, popOverlay])
+
+  useEffect(
+    () => () => {
+      if (tipTimer.current !== null) window.clearTimeout(tipTimer.current)
+    },
+    []
+  )
+
+  /** 排一个气泡：位置现在就量好，出现时不再读布局 */
+  function scheduleTip(agent: AgentInfo, element: HTMLElement): void {
+    if (tipTimer.current !== null) window.clearTimeout(tipTimer.current)
+    const rect = element.getBoundingClientRect()
+    tipTimer.current = window.setTimeout(() => {
+      tipTimer.current = null
+      setTip({ agent, top: rect.top, left: rect.right + 8 })
+    }, 180)
+  }
+
+  function hideTip(): void {
+    if (tipTimer.current !== null) {
+      window.clearTimeout(tipTimer.current)
+      tipTimer.current = null
+    }
+    setTip(null)
+  }
   const pane = useStore((s) => s.pane)
   const setPane = useStore((s) => s.setPane)
   const agents = useStore((s) => s.snapshot.agents)
@@ -59,12 +100,6 @@ export function Rail() {
    * 两处都要写：渲染层的 `pane`（现在看什么）和项目标签上的 `pane`（下次切回来还看这个）。
    * 只写前者的话，切到别的项目再切回来就回默认入口了（R34）。
    */
-  /** 气泡贴在头像右边 —— 用按钮自己的 rect 算，侧栏展开时窄轨不在最左边 */
-  function tipFor(agent: AgentInfo, element: HTMLElement): { agent: AgentInfo; top: number; left: number } {
-    const rect = element.getBoundingClientRect()
-    return { agent, top: rect.top, left: rect.right + 8 }
-  }
-
   function pickFunction(key: ProjectPane): void {
     setPane(key)
     if (activeProjectTab) void host.setPane(activeProjectTab.id, key)
@@ -114,10 +149,10 @@ export function Rail() {
               type="button"
               aria-label={agent.name}
               aria-current={active}
-              onMouseEnter={(event) => setTip(tipFor(agent, event.currentTarget))}
-              onMouseLeave={() => setTip(null)}
-              onFocus={(event) => setTip(tipFor(agent, event.currentTarget))}
-              onBlur={() => setTip(null)}
+              onMouseEnter={(event) => scheduleTip(agent, event.currentTarget)}
+              onMouseLeave={hideTip}
+              onFocus={(event) => scheduleTip(agent, event.currentTarget)}
+              onBlur={hideTip}
               onClick={() => void pickAgent(agent.id)}
               onContextMenu={(event) => {
                 event.preventDefault()

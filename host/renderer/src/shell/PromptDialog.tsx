@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useOverlay } from './useOverlay'
 
 /**
  * 一个只有输入框的小对话框。
@@ -36,6 +37,7 @@ export function PromptDialog({
   onCancel: () => void
   onConfirm: (value: string) => void
 }) {
+  useOverlay()
   const [value, setValue] = useState(initialValue)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { BrowserState, BrowserTabState } from '@contract/index'
 import type { BrowserHost } from '@contract/browser'
 import { host } from '../host'
+import { useStore } from '../store'
 
 /**
  * 右侧浏览器。
@@ -107,10 +108,16 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
     }
   }, [])
 
-  // 页面报错时把原生 view 收起来，让下面的错误说明可见；没有标签时同理。
+  /*
+   * 什么时候让原生 view 露出来。
+   *
+   * 三种情况都要收起：没有活动标签、页面报错（让错误说明可见）、
+   * **有浮层开着**（气泡/菜单/对话框会被原生 view 盖住 —— 它永远画在 DOM 之上）。
+   */
+  const overlayCount = useStore((s) => s.overlayCount)
   useEffect(() => {
-    void host.setBrowserVisible(browserHost, Boolean(active) && !active?.error)
-  }, [browserHost, active?.id, active?.error])
+    void host.setBrowserVisible(browserHost, Boolean(active) && !active?.error && overlayCount === 0)
+  }, [browserHost, active?.id, active?.error, overlayCount])
 
   async function createTab(): Promise<void> {
     setCreating(true)

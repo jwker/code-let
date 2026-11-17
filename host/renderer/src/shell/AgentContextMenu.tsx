@@ -4,6 +4,8 @@ import { AGENT_TYPE_LABEL } from '@contract/index'
 import { AgentAvatar } from './AgentAvatar'
 import { ConfirmDialog } from './ConfirmDialog'
 import { PromptDialog } from './PromptDialog'
+import { agentMenuState } from './agentMenuItems'
+import { useOverlay } from './useOverlay'
 
 /**
  * agent 头像的右键菜单（PLAN.md D53）。
@@ -14,38 +16,6 @@ import { PromptDialog } from './PromptDialog'
  * 归档与删除是两个动作，不合并 —— 归档只改状态、会话文件原地不动，
  * 删除才移到系统废纸篓。运行中不许归档（它显然还有活动），项置灰并说明原因。
  */
-
-/** 菜单里一项的可点状态 ——— 抽成纯函数，好测 */
-export interface MenuItemState {
-  /** 能不能点 */
-  enabled: boolean
-  /** 不能点的原因（悬停时给出来，别让人对着灰按钮猜） */
-  reason?: string
-}
-
-/**
- * 哪些项在什么状态下可点。
- *
- * 只有「归档」受状态限制：正在跑的不许归档（D53）。
- * 删除反过来**允许**在运行时做 —— 它会先 abort 再移文件，用户点之前已经被确认过。
- */
-export function agentMenuState(agent: Pick<AgentInfo, 'streaming'>): {
-  newInstance: MenuItemState
-  rename: MenuItemState
-  archive: MenuItemState
-  remove: MenuItemState
-} {
-  return {
-    newInstance: { enabled: true },
-    rename: { enabled: true },
-    archive: agent.streaming
-      ? { enabled: false, reason: '正在跑，先停下来再归档' }
-      : { enabled: true },
-    remove: agent.streaming
-      ? { enabled: true, reason: '会先中止这一轮，再把会话移到废纸篓' }
-      : { enabled: true }
-  }
-}
 
 /** 菜单打开的锚点 */
 export interface AgentMenuAnchor {
@@ -70,6 +40,7 @@ export function AgentContextMenu({
   onArchive: () => void
   onDelete: () => void
 }) {
+  useOverlay()
   const { agent } = anchor
   const state = agentMenuState(agent)
   const ref = useRef<HTMLDivElement>(null)
