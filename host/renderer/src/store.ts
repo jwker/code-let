@@ -307,7 +307,7 @@ interface RendererStore {
    */
   overlayCount: number
   /** 项目设置里选中的分类 */
-  settingsCategory: 'general' | 'agents' | 'conversations' | 'project'
+  settingsCategory: 'agents' | 'conversations' | 'project'
   /** 区域 5 的宽度，按入口各记一份 */
   zone5Widths: Record<string, number>
   /** 左侧栏是否展开 */
@@ -354,7 +354,7 @@ interface RendererStore {
   /** 关掉 diff（回到文件预览） */
   closeChange: () => void
   /** 读 AI 文档清单（区域 5 的文档区） */
-  setSettingsCategory: (category: 'general' | 'agents' | 'conversations' | 'project') => void
+  setSettingsCategory: (category: 'agents' | 'conversations' | 'project') => void
   /** 登记一个浮层（挂载时）/ 撤销（卸载时） */
   pushOverlay: () => void
   popOverlay: () => void

@@ -31,7 +31,7 @@ export function SettingsApp() {
     () =>
       SETTINGS_CATEGORIES.slice()
         .sort((a, b) => a.order - b.order)
-        .find((entry) => SETTINGS_ITEMS.some((item) => item.category === entry.id))?.id ?? 'general'
+        .find((entry) => SETTINGS_ITEMS.some((item) => item.category === entry.id))?.id ?? 'agents'
   )
   const [stats, setStats] = useState<ConsoleStats | null>(null)
   const [confirm, setConfirm] = useState<SettingItem | null>(null)

@@ -42,10 +42,9 @@ export interface SettingItem {
 }
 
 export const SETTINGS_CATEGORIES: SettingCategory[] = [
-  { id: 'general', title: '通用', order: 1 },
-  { id: 'agents', title: 'Agent', order: 2 },
-  { id: 'debug', title: '调试', order: 3 },
-  { id: 'models', title: '大模型', order: 4 }
+  { id: 'agents', title: 'Agent', order: 1 },
+  { id: 'debug', title: '调试', order: 2 },
+  { id: 'models', title: '大模型', order: 3 }
 ]
 
 export const SETTINGS_ITEMS: SettingItem[] = [

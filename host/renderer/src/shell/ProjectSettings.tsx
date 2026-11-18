@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { AGENT_TYPE_LABEL, type AgentInfo, type ConversationInfo } from '@contract/index'
-import { SETTINGS_ITEMS, type SettingItem } from '@contract/settings'
 import { useStore } from '../store'
 import { host } from '../host'
 import { AgentAvatar } from './AgentAvatar'
@@ -19,7 +18,7 @@ import { PromptDialog } from './PromptDialog'
  * 都标了它管到哪儿。
  */
 
-export type SettingsCategory = 'general' | 'agents' | 'conversations' | 'project'
+export type SettingsCategory = 'agents' | 'conversations' | 'project'
 
 interface CategoryEntry {
   id: SettingsCategory
@@ -31,7 +30,6 @@ interface CategoryEntry {
 export const SETTINGS_PANES: CategoryEntry[] = [
   { id: 'agents', title: '归档的 agent', scope: '本项目' },
   { id: 'conversations', title: '会话管理', scope: '本项目' },
-  { id: 'general', title: '通用', scope: '所有项目' },
   { id: 'project', title: '项目', scope: '本项目' }
 ]
 
@@ -87,132 +85,7 @@ export function SettingsBody() {
 
   if (category === 'agents') return <ArchiveList agents={agents.filter((agent) => agent.cwd === cwd)} />
   if (category === 'conversations') return <ConversationList cwd={cwd} />
-  if (category === 'project') return <ProjectPanel cwd={cwd} title={tab?.title ?? ''} />
-  return <GeneralPanel />
-}
-
-/**
- * 应用级的几项（归档天数、打开控制台窗口）。
- *
- * 直接读 `SETTINGS_ITEMS` 里登记的项渲染 —— 跟设置窗口同一份数据，
- * 加一项设置不用在两个地方各写一遍 UI。
- */
-function GeneralPanel() {
-  const [values, setValues] = useState<Record<string, unknown>>({})
-  const [message, setMessage] = useState<string | null>(null)
-
-  const id = 'agents.archiveAfterDays'
-  const keep = 'agents.archiveKeepDays'
-
-  useEffect(() => {
-    void host.getSettings().then(setValues)
-  }, [])
-
-  async function write(item: SettingItem, value: unknown): Promise<void> {
-    const ok = await host.setSetting(item.id, value)
-    if (!ok) {
-      setMessage('这个值不合适，没保存')
-      return
-    }
-    setMessage(null)
-    setValues(await host.getSettings())
-  }
-
-  const items = SETTINGS_ITEMS.filter((item) => item.id === id || item.id === keep)
-
-  return (
-    <div className="settings-body">
-      <div className="settings-note">
-        这几项是<strong>应用级</strong>的 —— 所有项目共用一份，不是这个项目独有的。
-      </div>
-
-      {items.map((item) => (
-        <div key={item.id} className="settings-row">
-          <div className="settings-row-text">
-            <div className="settings-row-label">{item.label}</div>
-            <div className="settings-row-desc">{item.description}</div>
-          </div>
-          <NumberControl
-            // 读不到用注册表里的默认值 —— 显示 0 会让人以为「关掉了」
-            value={
-              typeof values[item.id] === 'number'
-                ? (values[item.id] as number)
-                : typeof item.default === 'number'
-                  ? item.default
-                  : 0
-            }
-            min={item.min ?? 0}
-            max={item.max ?? 3650}
-            unit={item.unit ?? ''}
-            onCommit={(next) => void write(item, next)}
-          />
-        </div>
-      ))}
-
-      <div className="settings-row">
-        <div className="settings-row-text">
-          <div className="settings-row-label">控制台</div>
-          <div className="settings-row-desc">
-            请求、工具调用与错误的原始记录。独立窗口，可以跟主窗口并排看。
-          </div>
-        </div>
-        <button type="button" className="settings-btn" onClick={() => void host.openConsoleWindow()}>
-          打开控制台窗口
-        </button>
-      </div>
-
-      {message && <div className="settings-message">{message}</div>}
-    </div>
-  )
-}
-
-function NumberControl({
-  value,
-  min,
-  max,
-  unit,
-  onCommit
-}: {
-  value: number
-  min: number
-  max: number
-  unit: string
-  onCommit: (next: number) => void
-}) {
-  const [text, setText] = useState(String(value))
-
-  useEffect(() => {
-    setText(String(value))
-  }, [value])
-
-  function commit(): void {
-    const parsed = Number(text)
-    if (!Number.isFinite(parsed)) {
-      setText(String(value))
-      return
-    }
-    const clamped = Math.min(max, Math.max(min, Math.round(parsed)))
-    setText(String(clamped))
-    if (clamped !== value) onCommit(clamped)
-  }
-
-  return (
-    <span className="settings-number">
-      <input
-        value={text}
-        inputMode="numeric"
-        onChange={(event) => setText(event.target.value.replace(/[^\d]/g, ''))}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key !== 'Enter') return
-          event.preventDefault()
-          commit()
-        }}
-        aria-label={unit ? `单位：${unit}` : undefined}
-      />
-      <span className="settings-number-unit">{unit}</span>
-    </span>
-  )
+  return <ProjectPanel cwd={cwd} title={tab?.title ?? ''} />
 }
 
 /** 本项目归档的 agent */
