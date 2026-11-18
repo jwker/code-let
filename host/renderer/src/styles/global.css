@@ -254,11 +254,15 @@
   background: var(--sunken);
   color: var(--fg-1);
 }
+/*
+ * 选中态：**只有左侧那条竖线**，不加底色。
+ *
+ * 窄轨一列最多八项，全靠填充的话会变成一列色块，反而看不出焦点在哪；
+ * 竖线 + 图标提一档亮度已经足够，也让这一列保持干净。
+ */
 .rail-icon[aria-current='true'] {
-  background: var(--accent-wash);
   color: var(--fg-1);
 }
-/* 选中态左侧一条 2px 竖线：窄轨里 8 项全靠填充会变成一列色块 */
 .rail-icon[aria-current='true']::before {
   content: '';
   position: absolute;
