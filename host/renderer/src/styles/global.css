@@ -169,11 +169,15 @@
   display: flex;
   flex-direction: column;
 }
+/*
+ * 窄轨卡片只管宽度 —— **内边距归 `.rail` 自己管**。
+ *
+ * 这里早先写了 `padding: 0`，特异性比 `.rail` 高，把它的上下内边距一直盖着：
+ * 头尾的图标贴着卡片圆角，看着像顶到边上了。
+ */
 .shell-card.rail {
   flex: none;
   width: var(--rail-w);
-  /* 窄轨里只有图标和头像，不需要内边距之外的空隙 */
-  padding: 0;
 }
 .shell-card.zone5 {
   flex: none;
@@ -194,7 +198,11 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 8px 0;
+  /*
+   * 上下各 12px：8px 时头尾的图标离卡片圆角太近，看着像顶到边上了。
+   * 左右不加 —— 56px 宽里 40px 的热区已经居中了。
+   */
+  padding: 12px 0;
   gap: 2px;
 }
 .rail-zone {
