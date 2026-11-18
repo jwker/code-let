@@ -109,7 +109,7 @@ const MIN_AWAY_MS = 3000
 
 export class HostState extends EventEmitter {
   readonly pi: PiRuntimePort
-  /** 用户选的项目清单 —— 侧栏只列这些项目的会话 */
+  /** 用户选的项目清单 —— 会话清单只列这些项目的会话 */
   private readonly projects: ProjectStore
   private readonly tabStore: TabStore
   private readonly agentStore: AgentStore
@@ -992,7 +992,7 @@ export class HostState extends EventEmitter {
    *
    * 现在列的是**全部项目**的会话（`SessionManager.listAll()`）。
    * 它要读并解析每一个 jsonl —— 实测 38 个会话 212ms，随会话数线性增长。
-   * 所以用 `onProgress` 分段出结果：先给一部分，别让侧栏干等。
+   * 所以用 `onProgress` 分段出结果：先给一部分，别让界面干等。
    */
   /**
    * 包一层：进出都改一次计数并推快照 —— 渲染进程靠它显示「刷新中」。
@@ -1570,7 +1570,7 @@ export class HostState extends EventEmitter {
      * 由「重命名 agent」改。混在一起改的后果是：改一次会话名就动了会话文件的 mtime，
      * 而 mtime 是「在别处被改过」的判据 —— 改完名字输入框反而被禁用了。
      */
-    // 不等去抖：改名要立刻反映到侧栏标题上
+    // 不等去抖：改名要立刻反映到会话清单的标题上
     await this.refreshConversations()
     this.readSession()
     this.push()

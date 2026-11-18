@@ -287,7 +287,7 @@ interface RendererStore {
   settingsCategory: 'agents' | 'conversations' | 'project'
   /** 区域 5 的宽度，按入口各记一份 */
   zone5Widths: Record<string, number>
-  /** 从输入框发起的改名请求 —— 侧栏看到后进入行内编辑 */
+  /** 从输入框发起的改名请求 —— 项目设置 → 会话管理看到后打开改名对话框 */
   renameRequest: { path: string; nonce: number } | null
   /** 新建对话请求 —— App 看到后弹出「先起名再建」的对话框 */
   newConversationRequest: { cwd: string; nonce: number } | null
@@ -347,10 +347,9 @@ interface RendererStore {
    * agent 操作浏览器时调它 —— 用户不用自己找面板。
    */
   focusBrowser: () => void
-  /** 展开 / 收起左侧栏 */
-  /** 请求侧栏对某条对话进入行内改名 */
+  /** 请求改某条会话的名字 —— 屏幕上的项目设置 → 会话管理消费它 */
   requestRename: (path: string) => void
-  /** 侧栏已经处理掉改名请求 */
+  /** 改名对话框已经处理掉请求 */
   consumeRenameRequest: () => void
   /** 请求新建对话（先起名） */
   requestNewConversation: (cwd: string) => void

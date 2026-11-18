@@ -838,7 +838,7 @@ export class PiRuntime implements PiRuntimePort {
    * 列出**指定这几个项目**的会话。
    *
    * 不再全量扫 `listAll()` —— 那是 Pi 聊过的所有项目（包括历史遗留的），
-   * 侧栏只该列用户选中的那几个。顺带也快了：只读选中的目录。
+   * 会话清单只该列用户选中的那几个。顺带也快了：只读选中的目录。
    */
   static async listConversations(cwds: string[]): Promise<ConversationInfo[]> {
     const lists = await Promise.all(

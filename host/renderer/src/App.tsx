@@ -18,12 +18,12 @@ import { useStore } from './store'
  *
  * ```
  * 标题栏
- * 侧栏(可选) │ 窄轨(56) │ 区域 5(可选) │ 区域 6
+ * 窄轨(56) │ 区域 5(可选) │ 区域 6
  * 状态栏
  * ```
  *
  * 右侧检视器已经退场：它原来的东西分别进了区域 5/6（代码、文档）和独立窗口（控制台）。
- * 侧栏在 S7 之前还留着（「按项目列会话」），默认收起，⌘B 打开。
+ * 左侧栏也退场了（D63）：维护单位是 agent，窄轨的头像就是列表，剩下的入口各归各处。
  */
 export function App() {
   const setSnapshot = useStore((s) => s.setSnapshot)
@@ -138,7 +138,7 @@ export function App() {
       <StatusBar />
 
       {/*
-        区域 5 的拖动条。位置跟着「窄轨 + 侧栏」走 —— 用 CSS 变量算，不在这里量 DOM。
+        区域 5 的拖动条。位置跟着「窄轨 + 区域 5 宽度」走 —— 用 CSS 变量算，不在这里量 DOM。
       */}
       {zone5 && (
         <PaneResizer

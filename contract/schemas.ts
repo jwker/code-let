@@ -18,7 +18,7 @@ export const conversationsDeleteSchema = z.object({
   paths: z.array(z.string().min(1)).min(1)
 })
 
-/** 改名：名字可以是空串（清掉自定义名）；上限跟侧栏输入框一致 */
+/** 改名：名字可以是空串（清掉自定义名）；上限跟改名输入框一致 */
 export const conversationRenameSchema = z.object({
   path: z.string().min(1),
   name: z.string().max(80)

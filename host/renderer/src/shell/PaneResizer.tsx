@@ -4,8 +4,8 @@ interface PaneResizerProps {
   /** 缝在哪一侧：left = 左栏右缘，right = 右栏左缘 */
   edge: 'left' | 'right'
   /**
-   * 位置变体。不传就是传统两栏（侧栏 / 检视器）的位置；
-   * `zone5` 是窄轨之后那一列 —— 它的左缘要算上窄轨和侧栏的宽度。
+   * 位置变体。不传就是默认位置；
+   * `zone5` 是窄轨之后那一列 —— 它的左缘要算上窄轨和两处缝的宽度。
    */
   variant?: 'zone5'
   label: string

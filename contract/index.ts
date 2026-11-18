@@ -668,7 +668,7 @@ export interface GitDiff {
   error: string | null
 }
 
-/** 弹窗式临时对话；不写 session 文件，不进标签/侧栏 */
+/** 弹窗式临时对话；不写 session 文件，也不进窄轨 */
 export interface TemporaryChatState {
   id: string
   cwd: string
@@ -720,7 +720,7 @@ export interface HostSnapshot {
   /**
    * 用户选的项目清单（PLAN.md D4 修订）。
    *
-   * 侧栏只列这些项目的会话 —— 不是 Pi 聊过的所有项目。
+   * 会话清单只列这些项目的会话 —— 不是 Pi 聊过的所有项目。
    */
   projects: ProjectInfo[]
   /** 清单里这些项目的对话列表（按修改时间倒序） */
@@ -742,7 +742,7 @@ export interface HostSnapshot {
   files: FileTab[]
   /** 当前活动的文件（null = 没有） */
   activeFileId: string | null
-  /** 扩展加载 / 执行错误 —— 侧栏主区顶部会提示；清掉后为空 */
+  /** 扩展加载 / 执行错误 —— 主区顶部的提示条会显示；清掉后为空 */
   extensionErrors: ExtensionErrorInfo[]
   /** 当前临时对话；null 表示没有打开过，或已经彻底关闭 */
   temporaryChat: TemporaryChatState | null

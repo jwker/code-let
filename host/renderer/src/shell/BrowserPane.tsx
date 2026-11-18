@@ -40,6 +40,15 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
     [state]
   )
   const agent = state.agent
+  /**
+   * 这个面板是某个 agent 的预览，而不是窄轨里那个公共浏览器。
+   *
+   * 两者的空态不一样：公共浏览器空着就是空着，agent 的预览空着要说明
+   * 「这里在等什么」—— 产品 agent 的区域 6 一开始就是一块白板（D52）。
+   */
+  const isAgentHost = browserHost.startsWith('agent:')
+  /** 只有一张 about:blank 的空白标签：还没做出任何页面 */
+  const blankPreview = isAgentHost && (!active || active.url === 'about:blank')
 
   useEffect(() => {
     let cancelled = false
@@ -74,7 +83,7 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
     if (!addressFocused) setAddress(displayUrl(active))
   }, [active?.id, active?.url, addressFocused])
 
-  // 原生 view 的位置来自这块占位区的窗口坐标。面板拖动、侧栏收放、窗口缩放都走 ResizeObserver。
+  // 原生 view 的位置来自这块占位区的窗口坐标。面板拖动、窗口缩放都走 ResizeObserver。
   useEffect(() => {
     const node = pageRef.current
     if (!node) return
@@ -116,8 +125,15 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
    */
   const overlayCount = useStore((s) => s.overlayCount)
   useEffect(() => {
-    void host.setBrowserVisible(browserHost, Boolean(active) && !active?.error && overlayCount === 0)
-  }, [browserHost, active?.id, active?.error, overlayCount])
+    /*
+     * 空白预览也收起：原生 view 永远画在 DOM 之上，不收起来下面的空态文案
+     * 会被一张白色的 about:blank 盖得看不见。
+     */
+    void host.setBrowserVisible(
+      browserHost,
+      Boolean(active) && !active?.error && overlayCount === 0 && !blankPreview
+    )
+  }, [browserHost, active?.id, active?.url, active?.error, overlayCount, blankPreview])
 
   async function createTab(): Promise<void> {
     setCreating(true)
@@ -261,6 +277,16 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
             <div className="mb-2 text-[20px] text-fg-2">◎</div>
             <b className="mb-1 text-[13px] text-fg-2">还没有浏览器标签</b>
             点上方 ＋ 新建一个本地页面。
+          </div>
+        )}
+        {/* 产品 agent 的区域 6：说明这块地方在等什么，而不是给一块白板 */}
+        {blankPreview && !active?.error && !creating && (
+          <div className="flex h-full flex-col items-center justify-center px-5 text-center text-[12px] leading-6 text-fg-3">
+            <div className="mb-2 text-[20px] text-fg-2">◎</div>
+            <b className="mb-1 text-[13px] text-fg-2">这个 agent 还没有做出原型</b>
+            它做出页面并打开之后，这里会显示出来。
+            <br />
+            也可以在对话里让它「在右边打开 preview/…」。
           </div>
         )}
         {active?.error && (
