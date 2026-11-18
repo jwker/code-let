@@ -20,8 +20,7 @@ import { host } from './host'
 export type Theme = 'light' | 'dark'
 
 const EMPTY_SNAPSHOT: HostSnapshot = {
-  tabs: [],
-  activeTabId: null,
+  activeAgentId: null,
   projectTabs: [],
   activeProjectTabId: null,
   agents: [],
@@ -708,8 +707,8 @@ export const useStore = create<RendererStore>((set, get) => ({
 
   openModelPicker: (anchor) => {
     set({ modelPickerAnchor: anchor })
-    const tabId = get().snapshot.activeTabId
-    if (tabId) void get().loadModels(tabId)
+    const agentId = get().snapshot.activeAgentId
+    if (agentId) void get().loadModels(agentId)
   },
 
   closeModelPicker: () => set({ modelPickerAnchor: null }),

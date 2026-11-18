@@ -57,16 +57,16 @@ type ComposerNotice = { kind: 'info' | 'error'; text: string }
 export function ConversationArea() {
   const mode = useStore((s) => s.mode)
   const session = useStore((s) => s.snapshot.session)
-  const activeTabId = useStore((s) => s.snapshot.activeTabId)
+  const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
   // 内容流按标签存（D4 修订）—— 这里只读活动标签那一份
-  const items = useStore((s) => (s.snapshot.activeTabId ? s.items[s.snapshot.activeTabId] : undefined) ?? EMPTY_ITEMS)
+  const items = useStore((s) => (s.snapshot.activeAgentId ? s.items[s.snapshot.activeAgentId] : undefined) ?? EMPTY_ITEMS)
   const streaming = useStore(
-    (s) => (s.snapshot.activeTabId ? s.streaming[s.snapshot.activeTabId] : undefined) ?? false
+    (s) => (s.snapshot.activeAgentId ? s.streaming[s.snapshot.activeAgentId] : undefined) ?? false
   )
   const openPicker = useStore((s) => s.openModelPicker)
   const reloadTab = useStore((s) => s.reloadTab)
   const conversations = useStore((s) => s.snapshot.conversations)
-  const tabs = useStore((s) => s.snapshot.tabs)
+  const agents = useStore((s) => s.snapshot.agents)
   const requestRename = useStore((s) => s.requestRename)
   const requestNewConversation = useStore((s) => s.requestNewConversation)
   /**
@@ -75,7 +75,7 @@ export function ConversationArea() {
    * 不管「该不该显示停止中」—— 那是下面 `useIndicator` 的事。
    */
   const aborting = useStore(
-    (s) => (s.snapshot.activeTabId ? s.snapshot.aborting.includes(s.snapshot.activeTabId) : false)
+    (s) => (s.snapshot.activeAgentId ? s.snapshot.aborting.includes(s.snapshot.activeAgentId) : false)
   )
   /*
    * 「停止中」的显示时机。多数中止在几十毫秒内就结束，直接显示会闪一下 ——
@@ -89,8 +89,8 @@ export function ConversationArea() {
    * 这时候发消息会跟别处（比如 TUI）的写入冲突。
    */
   const stale = useStore((s) => {
-    const tabId = s.snapshot.activeTabId
-    return tabId ? (s.snapshot.tabs.find((t) => t.id === tabId)?.stale ?? false) : false
+    const agentId = s.snapshot.activeAgentId
+    return agentId ? (s.snapshot.agents.find((a) => a.id === agentId)?.stale ?? false) : false
   })
   const [reloading, setReloading] = useState(false)
   const [draft, setDraft] = useState('')
@@ -120,8 +120,8 @@ export function ConversationArea() {
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const attachmentsRef = useRef<ComposerAttachment[]>([])
-  const activeTabIdRef = useRef(activeTabId)
-  activeTabIdRef.current = activeTabId
+  const activeAgentIdRef = useRef(activeAgentId)
+  activeAgentIdRef.current = activeAgentId
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const caretAfterInsert = useRef<number | null>(null)
@@ -132,19 +132,21 @@ export function ConversationArea() {
   /** `@` 搜索的递增 id —— 每次 effect 一个，旧请求会被显式取消 */
   const searchSeq = useRef(0)
 
-  const activeTab = tabs.find((tab) => tab.id === activeTabId)
-  const cwd = activeTab?.cwd ?? session.cwd
-  const canRename = Boolean(activeTab?.path && conversations.some((c) => c.path === activeTab.path))
+  const agent = agents.find((item) => item.id === activeAgentId)
+  const cwd = agent?.cwd ?? session.cwd
+  const canRename = Boolean(
+    agent?.sessionPath && conversations.some((item) => item.path === agent.sessionPath)
+  )
 
   // `/` 的 Pi 命令按标签拉一次；runtime 还没就绪时是空数组，就绪后重拉
   useEffect(() => {
-    if (!activeTabId) {
+    if (!activeAgentId) {
       setPiCommands([])
       return
     }
     let cancelled = false
     host
-      .listCommands(activeTabId)
+      .listCommands(activeAgentId)
       .then((commands) => {
         if (!cancelled) setPiCommands(commands)
       })
@@ -154,11 +156,11 @@ export function ConversationArea() {
     return () => {
       cancelled = true
     }
-  }, [activeTabId, session.ready, session.sessionId])
+  }, [activeAgentId, session.ready, session.sessionId])
 
   // 扩展命令 / `/thinking` 的参数候选：输入空格后拉一次，60ms 去抖
   useEffect(() => {
-    if (menu?.kind !== 'argument' || !menu.commandName || !activeTabId) return
+    if (menu?.kind !== 'argument' || !menu.commandName || !activeAgentId) return
     let cancelled = false
     setArgumentLoading(true)
     setArgumentError(null)
@@ -168,12 +170,12 @@ export function ConversationArea() {
     const timer = setTimeout(() => {
       const request =
         name === 'thinking'
-          ? host.listThinkingLevels(activeTabId).then((levels) =>
+          ? host.listThinkingLevels(activeAgentId).then((levels) =>
               levels
                 .filter((level) => level.toLowerCase().startsWith(query.toLowerCase()))
                 .map((level) => ({ value: level, label: level }))
             )
-          : host.completeCommand(activeTabId, name, query)
+          : host.completeCommand(activeAgentId, name, query)
       request
         .then((items) => {
           if (cancelled) return
@@ -191,7 +193,7 @@ export function ConversationArea() {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [menu?.kind, menu?.commandName, menu?.query, activeTabId])
+  }, [menu?.kind, menu?.commandName, menu?.query, activeAgentId])
 
   // `/thinking` 的参数候选回来后，高亮当前等级；用户已经用方向键移动过就不动
   useEffect(() => {
@@ -209,7 +211,7 @@ export function ConversationArea() {
   useEffect(() => {
     if (menu?.kind !== 'file' || !cwd) return
     let cancelled = false
-    const requestId = `files-${activeTabId ?? 'none'}-${++searchSeq.current}`
+    const requestId = `files-${activeAgentId ?? 'none'}-${++searchSeq.current}`
     setFileLoading(true)
     setFileError(null)
     setFileItems([])
@@ -234,14 +236,14 @@ export function ConversationArea() {
       // 查询变了/菜单关了：让主进程别再扫这个请求（索引构建会继续）
       void host.cancelFileSearch(requestId).catch(() => {})
     }
-  }, [menu?.kind, menu?.query, cwd, activeTabId])
+  }, [menu?.kind, menu?.query, cwd, activeAgentId])
 
   useEffect(() => {
     setMenu(null)
     // 附件属于当前标签的 cwd；切标签就清掉，避免把 A 项目的路径发到 B 项目
     setAttachments([])
     attachmentsRef.current = []
-  }, [activeTabId])
+  }, [activeAgentId])
 
   // 状态里的附件是权威；ref 给异步的 attach / send 读最新值
   useEffect(() => {
@@ -389,11 +391,11 @@ export function ConversationArea() {
   async function attachFile(path: string): Promise<void> {
     if (!cwd) return
     if (attachmentsRef.current.some((item) => item.path === path)) return
-    const tabId = activeTabId
+    const tabId = activeAgentId
     try {
       const content = await host.readFile(cwd, path)
       // 读文件期间切了标签 —— 这个附件不属于现在这个会话
-      if (activeTabIdRef.current !== tabId) return
+      if (activeAgentIdRef.current !== tabId) return
       const checked = attachmentOf(path, content)
       if ('error' in checked) {
         showNotice('error', `不能添加附件：${checked.error}`)
@@ -440,12 +442,12 @@ export function ConversationArea() {
 
   /** 系统文件选择器：选中的文件只留在主进程，渲染层拿到 id 和元信息 */
   async function pickUploads(): Promise<void> {
-    if (!activeTabId || uploading) return
-    const tabId = activeTabId
+    if (!activeAgentId || uploading) return
+    const tabId = activeAgentId
     setUploading(true)
     try {
       const result = await host.pickAttachments()
-      if (activeTabIdRef.current !== tabId) return
+      if (activeAgentIdRef.current !== tabId) return
       for (const picked of result.attachments) {
         const attachment: ComposerAttachment = {
           path: picked.name,
@@ -475,7 +477,7 @@ export function ConversationArea() {
   function refreshMenu(text?: string, caret?: number, force = false): void {
     // onSelect 可能在 React 提交新值之前触发（拿到旧 DOM 值）—— 插入后短暂忽略
     if (!force && text === undefined && Date.now() < suppressRefreshUntil.current) return
-    if (stale || !activeTabId) {
+    if (stale || !activeAgentId) {
       setMenu(null)
       return
     }
@@ -594,10 +596,10 @@ export function ConversationArea() {
   }
 
   async function compact(): Promise<void> {
-    if (!activeTabId) return
+    if (!activeAgentId) return
     showNotice('info', '正在压缩上下文…')
     try {
-      await host.compactAgent(activeTabId)
+      await host.compactAgent(activeAgentId)
       showNotice('info', '上下文已压缩', 2500)
     } catch (error) {
       showNotice('error', error instanceof Error ? error.message : String(error))
@@ -605,12 +607,12 @@ export function ConversationArea() {
   }
 
   async function chooseThinking(level: ThinkingLevel): Promise<void> {
-    if (!activeTabId) return
+    if (!activeAgentId) return
     setMenu(null)
     setDraft('')
     setNotice(null)
     try {
-      await host.selectThinkingLevel(activeTabId, level)
+      await host.selectThinkingLevel(activeAgentId, level)
       showNotice('info', `思考等级：${level}`, 2200)
     } catch (error) {
       showNotice('error', error instanceof Error ? error.message : String(error))
@@ -643,7 +645,7 @@ export function ConversationArea() {
         return
       }
       case 'rename': {
-        const path = activeTab?.path
+        const path = agent?.sessionPath
         if (!path || !conversations.some((conversation) => conversation.path === path)) {
           showNotice('error', '这个对话还没有保存到磁盘，不能改名')
           return
@@ -672,13 +674,13 @@ export function ConversationArea() {
           showNotice('error', '等这一轮结束再重新加载')
           return
         }
-        if (!activeTabId) return
+        if (!activeAgentId) return
         setReloading(true)
         showNotice('info', '正在重新加载扩展和会话…')
         try {
-          await reloadTab(activeTabId)
+          await reloadTab(activeAgentId)
           // runtime 重建后命令集合可能变了；sessionId 不变时上面的 effect 不会重跑
-          setPiCommands(await host.listCommands(activeTabId))
+          setPiCommands(await host.listCommands(activeAgentId))
           showNotice('info', '已重新加载扩展和会话', 2500)
         } catch (error) {
           showNotice('error', error instanceof Error ? error.message : String(error))
@@ -707,10 +709,10 @@ export function ConversationArea() {
           showNotice('error', '等这一轮结束再改思考等级')
           return
         }
-        if (!activeTabId) return
+        if (!activeAgentId) return
         let levels: ThinkingLevel[] = []
         try {
-          levels = await host.listThinkingLevels(activeTabId)
+          levels = await host.listThinkingLevels(activeAgentId)
         } catch (error) {
           showNotice('error', error instanceof Error ? error.message : String(error))
           return
@@ -736,7 +738,7 @@ export function ConversationArea() {
 
   async function send(): Promise<void> {
     const text = draft.trim()
-    if (!text || !activeTabId || uploading) return
+    if (!text || !activeAgentId || uploading) return
     // 有外部更新时不让发 —— runtime 是旧上下文，发出去会跟别处冲突。
     // 例外是 `/reload`：它本身就是用来从这个状态恢复的。
     const codeletCommand = parseCodeletCommand(text)
@@ -769,7 +771,7 @@ export function ConversationArea() {
       const projectPaths = previousAttachments.filter((item) => !item.uploadId).map((item) => item.path)
       const uploadIds = previousAttachments.flatMap((item) => (item.uploadId ? [item.uploadId] : []))
       await host.prompt(
-        activeTabId,
+        activeAgentId,
         text,
         !isSlash && projectPaths.length > 0 ? projectPaths : undefined,
         !isSlash && uploadIds.length > 0 ? uploadIds : undefined
@@ -797,8 +799,8 @@ export function ConversationArea() {
   function stop(): void {
     // 看 `aborting` 而不是 `stopping`：后者是延迟显示的状态，
     // 在延迟期内它是 false，但实例上已经在中止了 —— 那会儿不该再发一次。
-    if (!activeTabId || aborting) return
-    void host.abortPrompt(activeTabId)
+    if (!activeAgentId || aborting) return
+    void host.abortPrompt(activeAgentId)
   }
 
   return (
@@ -813,7 +815,7 @@ export function ConversationArea() {
         {mode === 'normal' &&
           (items.length > 0 ? (
             <div className="conv-normal" ref={setRef}>
-              <NormalStream items={items} streaming={streaming} tabId={activeTabId} />
+              <NormalStream items={items} streaming={streaming} tabId={activeAgentId} />
             </div>
           ) : (
             <div className="conv-normal" ref={setRef}>
@@ -827,7 +829,7 @@ export function ConversationArea() {
         {mode === 'terminal' &&
           (items.length > 0 ? (
             <div className="conv-terminal" ref={setRef}>
-              <TerminalStream items={items} streaming={streaming} tabId={activeTabId} />
+              <TerminalStream items={items} streaming={streaming} tabId={activeAgentId} />
             </div>
           ) : (
             <div className="conv-terminal" ref={setRef}>
@@ -865,9 +867,9 @@ export function ConversationArea() {
                 type="button"
                 disabled={reloading}
                 onClick={() => {
-                  if (!activeTabId) return
+                  if (!activeAgentId) return
                   setReloading(true)
-                  void reloadTab(activeTabId).finally(() => setReloading(false))
+                  void reloadTab(activeAgentId).finally(() => setReloading(false))
                 }}
                 className="flex-none rounded-lg bg-warn px-2.5 py-0.5 text-[11.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-wait disabled:opacity-60"
               >
@@ -1221,7 +1223,7 @@ export function ConversationArea() {
               */}
               <button
                 type="button"
-                disabled={!activeTabId || stale || uploading}
+                disabled={!activeAgentId || stale || uploading}
                 onClick={() => void pickUploads()}
                 aria-label="上传文件或图片"
                 aria-busy={uploading}

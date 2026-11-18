@@ -3,7 +3,7 @@
  *
  * 一个 agent 就是一个会话（D53）。这里只放**推给渲染进程的形状**；
  * 落盘形状是 `host/main/agents.ts` 的 `AgentRecord`。
- * 跟 `TabInfo` / `StoredTab` 是同一个分法：磁盘格式归主进程，界面契约归 contract。
+ * 分法跟 `ProjectTabInfo` / `StoredProjectTab` 一样：磁盘格式归主进程，界面契约归 contract。
  *
  * 本文件不 import 任何运行时依赖（跟 contract 其他文件一样）。
  */
@@ -92,8 +92,8 @@ export function defaultAgentName(type: AgentType, instance: number): string {
 /**
  * 一个项目标签。
  *
- * 跟 `TabInfo` 是两回事：`TabInfo` 背后是一个 Pi 会话（现在退场了），
- * 这里背后是一整个项目 —— 里面可能有好几个 agent 在跑。
+ * 跟 `AgentInfo` 是两个层次：那边是一个 Pi 会话，这边背后是一整个项目 ——
+ * 里面可能有好几个 agent 在跑。
  */
 export interface ProjectTabInfo {
   /** 项目标签的 id，宿主发的。跟 cwd 分开：同一个目录将来可能被打开两次 */
@@ -111,8 +111,8 @@ export interface ProjectTabInfo {
 /**
  * 推给渲染进程的一个 agent。
  *
- * 前一半是落盘字段（`AgentRecord`），后一半是运行时状态，跟 `TabInfo` 的
- * `streaming` / `ready` 一个路子：界面要显示「在跑」，不能靠猜。
+ * 前一半是落盘字段（`AgentRecord`），后一半是运行时状态
+ * （`streaming` / `ready` / `stale`）：界面要显示「在跑」「落后了」，不能靠猜。
  */
 export interface AgentInfo {
   /** agent 的稳定 id —— runtime 以它为键（D58） */
@@ -138,8 +138,8 @@ export interface AgentInfo {
   /**
    * 会话文件路径。
    *
-   * 跟 `TabInfo.path` 同一条规则：Pi 在创建会话时就算出来了，
-   * **但文件要等第一条用户消息才真的建** —— 非 null 不代表磁盘上有这个文件。
+   * Pi 在创建会话时就算出来了，**但文件要等第一条用户消息才真的建** ——
+   * 非 null 不代表磁盘上有这个文件。
    */
   sessionPath: string | null
   /** 最后活动时间（毫秒）。自动归档按它算（D55） */
@@ -152,4 +152,14 @@ export interface AgentInfo {
   streaming: boolean
   /** 运行时：runtime 建好了没（懒加载的 agent 先不建） */
   ready: boolean
+  /**
+   * 运行时：这个会话文件在**别处**被改过（比如在裸 pi 的 TUI 里聊了几句）。
+   *
+   * Pi 的 `SessionManager.open()` 只在构造时把文件读进内存，之后不再重读 ——
+   * 所以别的进程写了，这个 agent 的内容流不知道。标出来让用户决定要不要重新加载，
+   * 不自动同步：Codelet 这边如果还基于旧上下文写，两边会冲突。
+   *
+   * 读它的地方只有一处：输入框（`stale` 时禁用发送，逼用户先 `/reload`）。
+   */
+  stale: boolean
 }

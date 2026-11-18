@@ -163,7 +163,7 @@ async function seed(
   text: string
 ): Promise<{ agentId: string; path: string }> {
   await host.newConversation(cwd)
-  const tabId = host.snapshot().activeTabId
+  const tabId = host.snapshot().activeAgentId
   if (!tabId) throw new Error('新标签没建出来')
   await pi.prompt(tabId, text)
   await host.refreshConversations()
@@ -197,7 +197,8 @@ describe('重命名会话', () => {
   it('没开着的会话 —— 打开文件追加 session_info，列表标题跟着变', async () => {
     const { env, state: host, pi } = await boot()
     const { agentId: tabId, path } = await seed(host, pi, env.cwd, '原始第一条消息')
-    await host.closeTab(tabId)
+    // 归档 = 关掉 runtime，会话文件留着 —— 这样它就成了「没开着的那条会话」
+    await host.archiveAgent(tabId)
 
     await host.renameConversation(path, '改过的名字')
 

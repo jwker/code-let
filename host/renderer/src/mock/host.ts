@@ -535,7 +535,8 @@ export function createMockApi(): CodeletApi {
       lastActiveAt: 0,
       turns: 0,
       streaming: tab.streaming,
-      ready: true
+      ready: true,
+      stale: false
     }))
     const cwds = [...new Set(tabs.map((tab) => tab.cwd))]
     return {
@@ -548,22 +549,7 @@ export function createMockApi(): CodeletApi {
       })),
       activeProjectTabId: `fake-project-${Math.max(1, cwds.indexOf(tabs.find((tab) => tab.id === activeTabId)?.cwd ?? cwds[0] ?? '') + 1)}`,
       agents: fakeAgents,
-      tabs: tabs.map((tab) => ({
-        id: tab.id,
-        sessionId: `s-${tab.id}`,
-        path: tab.path,
-        cwd: tab.cwd,
-        title: tab.title,
-        projectName: basenameOf(tab.cwd),
-        streaming: tab.streaming,
-        ready: true,
-        removed: !projects.some((p) => p.path === tab.cwd),
-        stale: false,
-        model: tab.model,
-        modelFallback: null,
-        error: null
-      })),
-      activeTabId,
+      activeAgentId: activeTabId,
       projects,
       conversations,
       refreshing: false,

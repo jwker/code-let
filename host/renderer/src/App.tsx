@@ -30,7 +30,7 @@ export function App() {
   const applySessionEvents = useStore((s) => s.applySessionEvents)
   const setItems = useStore((s) => s.setItems)
   const theme = useStore((s) => s.theme)
-  const activeTabId = useStore((s) => s.snapshot.activeTabId)
+  const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
   const sessionReady = useStore((s) => s.snapshot.session.ready)
   const pane = useStore((s) => s.pane)
   const agents = useStore((s) => s.snapshot.agents)
@@ -48,7 +48,7 @@ export function App() {
   const shellRef = useRef<HTMLDivElement>(null)
 
   // 区域 5 的宽度按入口各记一份，没记过就用分派表的默认值
-  const activeAgent = agents.find((agent) => agent.id === activeTabId) ?? null
+  const activeAgent = agents.find((agent) => agent.id === activeAgentId) ?? null
   const layout = paneLayoutFor(pane, activeAgent?.type ?? null)
   const zone5 = layout.zone5 !== null
   const zone5Width = zone5Widths[pane] ?? layout.zone5 ?? ZONE5_MIN
@@ -101,22 +101,22 @@ export function App() {
    * 只有这个 agent 还没加载过时才去读盘（懒加载的 agener 第一次点开才建 runtime）。
    */
   useEffect(() => {
-    if (!activeTabId) return
+    if (!activeAgentId) return
     /*
      * runtime 还没建好时 readEntries() 会返回空数组。
      * 等 session.ready 再读，否则空数组会被当成「这个对话没说过话」缓存下来，
      * 之后再也不会重读。
      */
     if (!sessionReady) return
-    if (useStore.getState().items[activeTabId]) return
+    if (useStore.getState().items[activeAgentId]) return
     let cancelled = false
-    void host.getAgentEntries(activeTabId).then((items) => {
-      if (!cancelled) setItems(activeTabId, items)
+    void host.getAgentEntries(activeAgentId).then((items) => {
+      if (!cancelled) setItems(activeAgentId, items)
     })
     return () => {
       cancelled = true
     }
-  }, [activeTabId, sessionReady, setItems])
+  }, [activeAgentId, sessionReady, setItems])
 
   // 宽度写在 shell 的 CSS 变量上，标题栏和下方几列共用同一份（见 .shell）
   useLayoutEffect(() => {
@@ -170,7 +170,7 @@ export function App() {
             models={models}
             current={currentModel}
             onPick={async (model, persist) => {
-              if (activeTabId) await selectModel(activeTabId, model.provider, model.id, persist)
+              if (activeAgentId) await selectModel(activeAgentId, model.provider, model.id, persist)
             }}
             onClose={closeModelPicker}
           />

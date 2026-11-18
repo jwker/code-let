@@ -78,7 +78,7 @@ export function Rail() {
   const pane = useStore((s) => s.pane)
   const setPane = useStore((s) => s.setPane)
   const agents = useStore((s) => s.snapshot.agents)
-  const activeAgentId = useStore((s) => s.snapshot.activeTabId)
+  const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
   const projectTabs = useStore((s) => s.snapshot.projectTabs)
   const activeProjectTabId = useStore((s) => s.snapshot.activeProjectTabId)
 

@@ -98,14 +98,14 @@ describe('新建对话的名字', () => {
     const { state, pi } = makeState()
     await state.newConversation('/tmp/project', '会话123')
     const snapshot = state.snapshot()
-    expect(snapshot.tabs[0]!.title).toBe('会话123')
-    expect(pi.named).toEqual([{ agentId: snapshot.tabs[0]!.id, name: '会话123' }])
+    expect(snapshot.agents[0]!.name).toBe('会话123')
+    expect(pi.named).toEqual([{ agentId: snapshot.agents[0]!.id, name: '会话123' }])
   })
 
   it('名字两头的空格会去掉', async () => {
     const { state, pi } = makeState()
     await state.newConversation('/tmp/project', '  会话007  ')
-    expect(state.snapshot().tabs[0]!.title).toBe('会话007')
+    expect(state.snapshot().agents[0]!.name).toBe('会话007')
     expect(pi.named[0]!.name).toBe('会话007')
   })
 
@@ -113,7 +113,7 @@ describe('新建对话的名字', () => {
     const { state, pi } = makeState()
     await state.newConversation('/tmp/project')
     // 没填名字的 agent 先用默认名（D53）；第一条消息落盘后由会话标题接管
-    expect(state.snapshot().tabs[0]!.title).toBe('通用 1')
+    expect(state.snapshot().agents[0]!.name).toBe('通用 1')
     expect(pi.named).toHaveLength(0)
   })
 

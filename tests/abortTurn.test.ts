@@ -133,7 +133,7 @@ describe('中止某个标签', () => {
     try {
       await state.init()
       await state.newConversation(dir)
-      const tabId = state.snapshot().activeTabId!
+      const tabId = state.snapshot().activeAgentId!
       pi.setStreaming(tabId, true)
 
       // 让 abortAgent 挂住，好在「进行中」这个时刻看快照
@@ -163,7 +163,7 @@ describe('中止某个标签', () => {
     try {
       await state.init()
       await state.newConversation(dir)
-      const tabId = state.snapshot().activeTabId!
+      const tabId = state.snapshot().activeAgentId!
       pi.setStreaming(tabId, true)
 
       let release!: () => void
@@ -191,7 +191,7 @@ describe('中止某个标签', () => {
     try {
       await state.init()
       await state.newConversation(dir)
-      const tabId = state.snapshot().activeTabId!
+      const tabId = state.snapshot().activeAgentId!
 
       await state.abortPrompt(tabId)
 
@@ -208,7 +208,7 @@ describe('中止某个标签', () => {
     try {
       await state.init()
       await state.newConversation(dir)
-      const tabId = state.snapshot().activeTabId!
+      const tabId = state.snapshot().activeAgentId!
       pi.setStreaming(tabId, true)
       pi.abortAgent = async () => {
         throw new Error('停止失败')

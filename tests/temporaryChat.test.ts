@@ -128,13 +128,13 @@ describe('临时对话宿主', () => {
     const { root, pi } = setup()
     await state!.init()
     await state!.newConversation(root)
-    const tabsBefore = state!.snapshot().tabs.map((tab) => tab.id)
+    const tabsBefore = state!.snapshot().agents.filter((item) => item.archivedAt === null).map((item) => item.id)
 
     const opened = await state!.openTemporaryChat()
     const temp = opened.temporaryChat
     expect(temp).not.toBeNull()
     expect(pi.tabs.get(temp!.id)?.inMemory).toBe(true)
-    expect(state!.snapshot().tabs.map((tab) => tab.id)).toEqual(tabsBefore)
+    expect(state!.snapshot().agents.filter((item) => item.archivedAt === null).map((item) => item.id)).toEqual(tabsBefore)
     expect(pi.models).toEqual([
       { agentId: temp!.id, provider: MODEL.provider, id: MODEL.id, persist: false }
     ])

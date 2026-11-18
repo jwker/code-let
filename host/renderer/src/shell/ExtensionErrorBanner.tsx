@@ -10,7 +10,10 @@ import { host } from '../host'
 export function ExtensionErrorBanner() {
   const errors = useStore((s) => s.snapshot.extensionErrors)
   const latest = errors[errors.length - 1]
-  const tab = useStore((s) => (latest?.agentId ? s.snapshot.tabs.find((item) => item.id === latest.agentId) : undefined))
+  // 出错的 agent 名字 —— 错误条上标出「是哪一个」比只给路径好认
+  const agentName = useStore((s) =>
+    latest?.agentId ? s.snapshot.agents.find((item) => item.id === latest.agentId)?.name : undefined
+  )
   if (!latest) return null
 
   const label = latest.kind === 'load' ? '加载失败' : '执行失败'
@@ -27,7 +30,7 @@ export function ExtensionErrorBanner() {
       </span>
       <span className="flex-none font-medium">扩展{label}</span>
       <span className="min-w-0 flex-1 truncate" title={`${detail}\n${latest.message}`}>
-        {tab ? `${tab.title} · ` : ''}
+        {agentName ? `${agentName} · ` : ''}
         {detail}：{latest.message}
       </span>
       {errors.length > 1 && <span className="flex-none opacity-70">共 {errors.length} 条</span>}

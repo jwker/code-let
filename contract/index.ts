@@ -301,58 +301,6 @@ export interface ProjectInfo {
   name: string
 }
 
-/**
- * 一个标签 = 一个会话（PLAN.md D4）。
- *
- * 标签可以跨项目 —— 每个标签自带自己的 cwd。标签 id 由宿主发，
- * 与会话 id 分开：`SessionManager.open()` 打开一个不存在的文件会生成新的会话 id，
- * 绑死的话重启后认不出这个标签。
- */
-export interface TabInfo {
-  /** 标签自己的 id —— 宿主发的，稳定的身份 */
-  id: string
-  /** 会话 id（当前会话的）。runtime 还没建时是 null */
-  sessionId: string | null
-  /**
-   * 会话文件路径。
-   *
-   * Pi 在创建会话时就算出了这个路径，但**文件要等第一条用户消息才真的建** ——
-   * 所以这里非 null 不代表磁盘上有这个文件。
-   */
-  path: string | null
-  /** 会话所在目录 */
-  cwd: string
-  /** 标签显示的标题 */
-  title: string
-  /** 目录名 —— 标签要能看出属于哪个项目 */
-  projectName: string
-  /** 这个标签的 agent 是不是正在跑 */
-  streaming: boolean
-  /** runtime 建好了没（懒加载：恢复出来的标签先不建） */
-  ready: boolean
-  /**
-   * 这个标签所属的项目已经从 Codelet 的项目清单里移除了。
-   *
-   * 标签还能点开、还能用 —— 移走的只是「这个项目出现在清单里」这件事，
-   * Pi 存的对话一个字都没动。
-   */
-  removed: boolean
-  /**
-   * 这个会话文件在**别处**被改过（比如在裸 pi 的 TUI 里聊了几句）。
-   *
-   * Pi 的 `SessionManager.open()` 只在构造时把文件读进内存，之后不再重读 ——
-   * 所以别的进程写了，这个标签的内容流不知道。标出来让用户决定要不要重新加载，
-   * 不自动同步：Codelet 这边如果还基于旧上下文写，两边会冲突。
-   */
-  stale: boolean
-  /** 这个标签用的模型 */
-  model: ModelOption | null
-  /** 恢复会话时没能恢复原模型的原因 */
-  modelFallback: string | null
-  /** 创建失败时的原因 */
-  error: string | null
-}
-
 /** 一条对话 = 一个 Pi 会话 */
 export interface ConversationInfo {
   id: string
@@ -383,8 +331,8 @@ export interface DeleteConversationsResult {
 /**
  * 一个打开的文件（PLAN.md D22）。
  *
- * **文件标签是全局的、跨项目的** —— 跟顶部那排会话标签是两套东西，
- * 所以不进 `TabInfo`，单独一个数组挂在快照上。
+ * **文件标签是全局的、跨项目的** —— 跟 agent 的会话是两套东西，
+ * 所以不挂在 agent 上，单独一个数组挂在快照上。
  */
 export interface FileTab {
   id: string
@@ -701,16 +649,12 @@ export interface SessionState {
 /** 宿主权威状态的完整快照 */
 export interface HostSnapshot {
   /**
-   * 兼容投影：每个项目标签把它**当前活动 agent** 装成一条旧形状的标签（按标签栏顺序）。
+   * 当前活动的 agent。`null` = 没有活动 agent。
    *
-   * 改造期间（PLAN.md D50/D53）旧界面还按它渲染，一个项目显示一条。
-   * 新界面（S6/S7）改用 `projectTabs` + `agents`，那时这份投影删掉。
-   *
-   * **它的 id 是 agent id**，不是项目标签 id —— 旧界面的所有调用都拿它当运行时键用。
+   * 这是渲染进程里所有按 agent 分发的东西的键：内容流（`items`）、
+   * 流式状态（`streaming`）、中止集合（`aborting`）、以及每个 IPC 调用。
    */
-  tabs: TabInfo[]
-  /** 当前活动的 agent（兼容投影：旧界面拿它跟 `tabs[].id` 比） */
-  activeTabId: string | null
+  activeAgentId: string | null
   /** 项目标签（新外壳用；一个项目一条） */
   projectTabs: ProjectTabInfo[]
   /** 当前活动的项目标签。`null` = 一条都没开 */

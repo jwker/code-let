@@ -115,7 +115,7 @@ describe('HostState.pickAttachments 的上传附件', () => {
     const { root, pi } = setup(async () => [textPath, imagePath])
     await state!.init()
     await state!.newConversation(root)
-    const tabId = state!.snapshot().activeTabId!
+    const tabId = state!.snapshot().activeAgentId!
 
     const picked = await state!.pickAttachments()
     expect(picked.errors).toEqual([])
@@ -138,7 +138,7 @@ describe('HostState.pickAttachments 的上传附件', () => {
     const { root } = setup(async () => [binaryPath])
     await state!.init()
     await state!.newConversation(root)
-    const tabId = state!.snapshot().activeTabId!
+    const tabId = state!.snapshot().activeAgentId!
     const picked = await state!.pickAttachments()
     expect(picked.attachments).toEqual([])
     expect(picked.errors[0]).toMatch(/二进制/)
@@ -152,7 +152,7 @@ describe('HostState.prompt 的附件', () => {
     const { root, pi } = setup()
     await state!.init()
     await state!.newConversation(root)
-    const tabId = state!.snapshot().activeTabId
+    const tabId = state!.snapshot().activeAgentId
     expect(tabId).toBeTruthy()
 
     await state!.prompt(tabId!, '看看', ['src/a.ts'])
@@ -171,7 +171,7 @@ describe('HostState.prompt 的附件', () => {
     const { root, pi } = setup()
     await state!.init()
     await state!.newConversation(root)
-    const tabId = state!.snapshot().activeTabId!
+    const tabId = state!.snapshot().activeAgentId!
 
     await expect(state!.prompt(tabId, '看看', ['nope.txt'])).rejects.toThrow(/附件/)
     expect(pi.prompts).toHaveLength(0)

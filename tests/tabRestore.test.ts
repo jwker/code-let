@@ -165,10 +165,10 @@ describe('标签落盘', () => {
     const pi = new FakePi()
     const state = new HostState({ pi, tabStore: new TabStore(tabFile), projects })
     await state.init()
-    const tab = state.snapshot().tabs[0]
-    expect(tab.path).toBeNull()
+    const agent = state.snapshot().agents[0]
+    expect(agent.sessionPath).toBeNull()
 
-    await state.activateTab(tab.id)
+    await state.activateAgent(agent.id)
     const agents = JSON.parse(readFileSync(join(dir, 'agents.json'), 'utf8')) as {
       agents: { sessionPath: string | null }[]
     }
@@ -191,12 +191,12 @@ describe('标签恢复', () => {
     const state = new HostState({ pi, tabStore: new TabStore(tabFile), projects })
     await state.init()
 
-    const tabs = state.snapshot().tabs
-    expect(tabs).toHaveLength(1)
+    const agents = state.snapshot().agents
+    expect(agents).toHaveLength(1)
     // 迁移之后 id 是 agent id（D58：runtime 以 agent 为键）
-    expect(tabs[0].id).toBe('agent-tab-real')
-    expect(tabs[0].path).toBe(realFile)
-    expect(tabs[0].title).toBe('聊过的')
+    expect(agents[0].id).toBe('agent-tab-real')
+    expect(agents[0].sessionPath).toBe(realFile)
+    expect(agents[0].name).toBe('聊过的')
     // 恢复出来是懒加载的 —— 不建 runtime
     expect(pi.opened[0].lazy).toBe(true)
 
@@ -215,11 +215,11 @@ describe('标签恢复', () => {
     const state = new HostState({ pi, tabStore: new TabStore(tabFile), projects })
     await state.init()
 
-    const tabs = state.snapshot().tabs
-    expect(tabs).toHaveLength(1)
-    expect(tabs[0].id).toBe('agent-tab-empty')
+    const agents = state.snapshot().agents
+    expect(agents).toHaveLength(1)
+    expect(agents[0].id).toBe('agent-tab-empty')
     // 重开的是新会话，所以路径先清空（激活时再补）
-    expect(tabs[0].path).toBeNull()
+    expect(agents[0].sessionPath).toBeNull()
 
     await state.dispose()
     rmSync(dir, { recursive: true, force: true })

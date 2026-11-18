@@ -229,18 +229,20 @@ describe('文件标签的落盘与恢复', () => {
     projects.add(dir)
     const state = new HostState({ pi: new FakePi(), tabStore: new TabStore(tabFile), projects })
     await state.init()
-    // init() 会开一个「退路标签」—— 先清掉，从空标签栏开始
-    for (const t of state.snapshot().tabs) await state.closeTab(t.id)
+    // init() 会开一个「退路 agent」—— 先归档掉，从空清单开始
+    for (const t of state.snapshot().agents) await state.archiveAgent(t.id)
 
     await state.newConversation(dir)
     await state.openFile(dir, a)
     const snap = state.snapshot()
-    expect(snap.tabs).toHaveLength(1) // 会话标签 1 个
+    expect(snap.agents.filter((item) => item.archivedAt === null)).toHaveLength(1) // agent 1 个
     expect(snap.files).toHaveLength(1) // 文件标签 1 个
 
-    // 关掉会话标签，文件标签还在
-    await state.closeTab(snap.tabs[0].id)
-    expect(state.snapshot().tabs).toHaveLength(0)
+    // 归档那个 agent，文件标签还在 —— agents[0] 可能是启动时那个（已归档），挑没归档的
+    const live = snap.agents.find((item) => item.archivedAt === null)
+    expect(live).toBeTruthy()
+    await state.archiveAgent(live!.id)
+    expect(state.snapshot().agents.filter((item) => item.archivedAt === null)).toHaveLength(0)
     expect(state.snapshot().files).toHaveLength(1)
 
     await state.dispose()

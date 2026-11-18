@@ -200,8 +200,7 @@ async function seed(
   text: string
 ): Promise<{ agentId: string; path: string }> {
   await host.newConversation(cwd)
-  // 活动标签的 id 就是 agent id（投影里 activeTabId 指向活动 agent）
-  const tabId = host.snapshot().activeTabId
+  const tabId = host.snapshot().activeAgentId
   if (!tabId) throw new Error('新标签没建出来')
   await pi.prompt(tabId, text)
   await host.refreshConversations()
@@ -241,7 +240,7 @@ describe('删除会话', () => {
     expect(trash.calls).toEqual([path])
     expect(existsSync(path)).toBe(false)
     expect(result).toEqual({ deleted: [path], failed: [] })
-    expect(host.snapshot().tabs.some((tab) => tab.id === tabId)).toBe(false)
+    expect(host.snapshot().agents.map((item) => item.id)).not.toContain(tabId)
     expect(host.snapshot().conversations).toHaveLength(0)
     // 顺序：关标签在移文件之前
     expect(trash.order.indexOf(`close:${tabId}`)).toBeLessThan(trash.order.indexOf(`trash:${path}`))
@@ -254,9 +253,9 @@ describe('删除会话', () => {
 
     await host.deleteConversations([first.path])
 
-    const tabs = host.snapshot().tabs
-    expect(tabs.some((tab) => tab.id === first.agentId)).toBe(false)
-    expect(tabs.some((tab) => tab.id === second.agentId)).toBe(true)
+    const agents = host.snapshot().agents
+    expect(agents.map((item) => item.id)).not.toContain(first.agentId)
+    expect(agents.map((item) => item.id)).toContain(second.agentId)
     expect(host.snapshot().conversations.map((c) => c.path)).toEqual([second.path])
   })
 
@@ -265,10 +264,10 @@ describe('删除会话', () => {
     const first = await seed(host, pi, env.cwd, '第一个会话')
     const second = await seed(host, pi, env.cwd, '第二个会话')
 
-    await host.activateTab(first.agentId)
+    await host.activateAgent(first.agentId)
     await host.deleteConversations([first.path])
 
-    expect(host.snapshot().activeTabId).toBe(second.agentId)
+    expect(host.snapshot().activeAgentId).toBe(second.agentId)
   })
 
   it('同路径的文件标签也一起关掉', async () => {

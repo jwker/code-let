@@ -129,7 +129,7 @@ describe('思考等级', () => {
     const { pi, host, cwd } = setup()
     await host.init()
     await host.newConversation(cwd)
-    const tabId = host.snapshot().activeTabId
+    const tabId = host.snapshot().activeAgentId
     if (!tabId) throw new Error('没有活动标签')
 
     expect(host.snapshot().session.thinkingLevel).toBe('medium')
@@ -155,7 +155,7 @@ describe('命令参数补全', () => {
     const { pi, host, cwd } = setup()
     await host.init()
     await host.newConversation(cwd)
-    const tabId = host.snapshot().activeTabId
+    const tabId = host.snapshot().activeAgentId
     if (!tabId) throw new Error('没有活动标签')
 
     expect(await host.completeCommand(tabId, 'deploy', 'st')).toEqual([

@@ -24,7 +24,6 @@ import type {
   SessionState,
   ThinkingLevel,
   StreamItem,
-  TabInfo,
   TemporaryChatState
 } from '@contract/index'
 import { ATTACHMENT_LIMITS } from '@contract/index'
@@ -240,9 +239,7 @@ export class HostState extends EventEmitter {
 
   snapshot(): HostSnapshot {
     return {
-      tabs: this.projectionTabs(),
-      // 兼容投影里这个是**活动 agent 的 id**，不是项目标签 id —— 旧界面拿它跟 tabs[].id 比
-      activeTabId: this.activeTab()?.activeAgentId ?? null,
+      activeAgentId: this.activeTab()?.activeAgentId ?? null,
       projectTabs: this.tabs.map((tab) => this.projectTabInfo(tab)),
       activeProjectTabId: this.activeTabId,
       agents: this.agentStore.list().map((agent) => this.agentInfo(agent)),
@@ -256,39 +253,6 @@ export class HostState extends EventEmitter {
       extensionErrors: this.extensionErrors,
       temporaryChat: this.temporaryChat ? { ...this.temporaryChat } : null,
       session: this.session
-    }
-  }
-
-  /**
-   * 兼容投影：每个项目标签把当前活动 agent 装成一条旧形状的标签。
-   *
-   * 改造期间旧界面还按它渲染（一个项目一条）。新界面改用 `projectTabs` + `agents`，
-   * 那时这个方法删掉 —— 见 `contract/index.ts` 里 `HostSnapshot.tabs` 的注释。
-   */
-  private projectionTabs(): TabInfo[] {
-    // 未归档的 agent 一条一个 —— 旧界面把「一个对话 = 一个标签」当契约，
-    // 只投影每项目一条的话，同一项目的第二个对话会把第一个挤掉
-    return this.agentStore.visible().map((agent) => this.agentAsTab(agent))
-  }
-
-  private agentAsTab(agent: AgentRecord): TabInfo {
-    const state = this.pi.agentState(agent.id)
-    const live = this.liveOf(agent.id)
-    return {
-      id: agent.id,
-      sessionId: state.sessionId,
-      path: agent.sessionPath,
-      cwd: agent.cwd,
-      title: agent.name,
-      projectName: basename(agent.cwd) || agent.cwd,
-      streaming: state.streaming,
-      ready: state.ready,
-      // 项目从清单里移走了 —— 还能用，但它不再「在清单里」
-      removed: !this.projects.has(agent.cwd),
-      stale: live.stale,
-      model: state.model,
-      modelFallback: state.modelFallback,
-      error: live.error
     }
   }
 
@@ -319,7 +283,9 @@ export class HostState extends EventEmitter {
       archivedAt: agent.archivedAt,
       turns: agent.turns,
       streaming: state.streaming,
-      ready: state.ready
+      ready: state.ready,
+      // 只读，不走 liveOf() —— 那个会顺手建一条 live 记录，快照每次都建就成泄漏了
+      stale: this.live.get(agent.id)?.stale ?? false
     }
   }
 
@@ -559,8 +525,8 @@ export class HostState extends EventEmitter {
   /**
    * 被归档 / 删除的那个 agent，位置该由谁来接。
    *
-   * 取**相邻**的那一个（先看后面，没有再看前面）—— 跟旧界面「关掉标签，活动标签
-   * 落到相邻一个」一致。不看相邻的话，关掉第三个会跳回第一个，眼睛会跟丢。
+   * 取**相邻**的那一个（先看后面，没有再看前面）。不看相邻的话，归档掉第三个会跳回
+   * 第一个，眼睛会跟丢。
    *
    * **必须在归档之前调用** —— 归档之后它就查不到自己了，也就不知道邻居是谁。
    */
@@ -794,7 +760,7 @@ export class HostState extends EventEmitter {
       tab.activeAgentId = successor
       if (!tab.activeAgentId) tab.pane = 'code'
       this.persistTabs()
-      // 活动标签换了人 —— 懒加载的这时才建 runtime，跟旧界面关标签的行为一致
+      // 活动标签换了人 —— 懒加载的这时才建 runtime，否则切过去是一块空白
       if (successor && tab.id === this.activeTabId) await this.pi.activateAgent(successor)
     }
     this.readSession()
@@ -847,15 +813,8 @@ export class HostState extends EventEmitter {
     return archived
   }
 
-  /**
-   * 切到某个项目标签（旧界面按标签切项目用）。
-   */
-  async activateTab(tabId: string): Promise<void> {
-    // 旧界面按投影标签切（id 是 agent id）；新界面按项目标签切
-    if (this.agentById(tabId)) {
-      await this.activateAgent(tabId)
-      return
-    }
+  /** 切到某个项目标签 */
+  async activateProjectTab(tabId: string): Promise<void> {
     const tab = this.tabById(tabId)
     if (!tab) throw new Error(`标签不存在：${tabId}`)
     this.activeTabId = tabId
@@ -890,24 +849,6 @@ export class HostState extends EventEmitter {
     if (tab?.activeAgentId) await this.pi.activateAgent(tab.activeAgentId)
     this.readSession()
     this.push()
-  }
-
-  /**
-   * 旧界面的「关标签」。改造期间 id 有两种可能：
-   * - 一个 agent id → 归档它（会话文件留着，设置里能找回）
-   * - 一个项目标签 id → 只收起页面
-   *
-   * S7 新界面接上之后，agent 那条路径删掉 —— 关标签不该顺手归档一个 agent。
-   */
-  async closeTab(id: string): Promise<void> {
-    const agent = this.agentById(id)
-    if (agent) {
-      // 旧界面的「关标签」= 关掉这个对话：先停稳，再归档（会话文件留着）
-      if (this.pi.agentState(id).streaming) await this.pi.abortAgent(id)
-      await this.doArchive(agent, this.neighborAgentFor(agent.cwd, id))
-      return
-    }
-    await this.closeProjectTab(id)
   }
 
   /**

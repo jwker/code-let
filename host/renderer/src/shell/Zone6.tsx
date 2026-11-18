@@ -21,7 +21,7 @@ import { hasZone5 } from './Zone5'
 export function Zone6() {
   const pane = useStore((s) => s.pane)
   const agents = useStore((s) => s.snapshot.agents)
-  const activeAgentId = useStore((s) => s.snapshot.activeTabId)
+  const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
   const files = useStore((s) => s.snapshot.files)
   const activeFileId = useStore((s) => s.snapshot.activeFileId)
   const change = useStore((s) => s.git.selected)

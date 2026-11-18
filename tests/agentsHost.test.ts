@@ -160,7 +160,7 @@ describe('一个项目一条标签', () => {
     expect(state.snapshot().projectTabs[0].activeAgentId).toBe(first.id)
 
     await state.setPane(tabId, 'agent')
-    expect(state.snapshot().activeTabId).toBe(first.id)
+    expect(state.snapshot().activeAgentId).toBe(first.id)
     await state.dispose()
   })
 })
@@ -199,12 +199,14 @@ describe('归档与恢复', () => {
     const archived = state.snapshot().agents.find((item) => item.id === agent.id)
     expect(archived?.archivedAt).toBeTruthy()
     expect(archived?.sessionPath).toBe(sessionPath)
-    // 窄轨（投影）里没有它了
-    expect(state.snapshot().tabs.some((tab) => tab.id === agent.id)).toBe(false)
+    // 窄轨里没有它了（窄轨只列未归档的）
+    expect(state.snapshot().agents.filter((item) => item.archivedAt === null).map((item) => item.id)).not.toContain(
+      agent.id
+    )
 
     await state.restoreAgent(agent.id)
     expect(state.snapshot().agents.find((item) => item.id === agent.id)?.archivedAt).toBeNull()
-    expect(state.snapshot().activeTabId).toBe(agent.id)
+    expect(state.snapshot().activeAgentId).toBe(agent.id)
     await state.dispose()
   })
 
@@ -228,8 +230,10 @@ describe('归档与恢复', () => {
     await state.archiveAgent(second.id)
 
     // 三个 agent 一条项目标签 —— 关掉中间那个，活动 agent 落到后面那个
-    expect(state.snapshot().activeTabId).toBe(third.id)
-    expect(state.snapshot().tabs.map((tab) => tab.id)).toEqual([first.id, third.id])
+    expect(state.snapshot().activeAgentId).toBe(third.id)
+    expect(
+      state.snapshot().agents.filter((item) => item.archivedAt === null).map((item) => item.id)
+    ).toEqual([first.id, third.id])
     await state.dispose()
   })
 
@@ -309,8 +313,9 @@ describe('删除 agent', () => {
     const dir = mkdtempSync(join(tmpdir(), 'codelet-agentshost-'))
     dirs.push(dir)
     const trashed: string[] = []
+    const pi = new FakePi()
     const state = new HostState({
-      pi: new FakePi(),
+      pi,
       tabStore: new TabStore(join(dir, 'tabs.json')),
       agentStore: new AgentStore(join(dir, 'agents.json')),
       projects: new ProjectStore(join(dir, 'projects.json')),
@@ -327,6 +332,28 @@ describe('删除 agent', () => {
     expect(state.snapshot().agents.some((item) => item.id === agent.id)).toBe(false)
     // 会话文件真存在时才移废纸篓；这个假 runtime 给的是 tmp 下的路径，不一定存在
     expect(trashed.every((path) => path === sessionPath)).toBe(true)
+    // 正在跑也照删：runtime 先收摊，再动文件（以前 closeTab 单独测过这件事）
+    expect(pi.calls).toContain(`close:${agent.id}`)
+    await state.dispose()
+  })
+
+  it('删掉活动 agent 之后，活动落到相邻的，重启不会把它捡回来', async () => {
+    const { dir, state, agentFile } = setup()
+    await state.init()
+    const first = await state.newAgent(dir, 'general')
+    const second = await state.newAgent(dir, 'general')
+    const third = await state.newAgent(dir, 'general')
+    await state.activateAgent(second.id)
+
+    await state.deleteAgent(second.id)
+
+    expect(state.snapshot().activeAgentId).toBe(third.id)
+    expect(
+      state.snapshot().agents.filter((item) => item.archivedAt === null).map((item) => item.id)
+    ).toEqual([first.id, third.id])
+    // agents.json 里也没有它了 —— 重启不该把它读回来
+    const saved = JSON.parse(readFileSync(agentFile, 'utf8')) as { agents: { id: string }[] }
+    expect(saved.agents.map((agent) => agent.id)).not.toContain(second.id)
     await state.dispose()
   })
 })
@@ -357,7 +384,7 @@ describe('启动时登记 runtime（真机回归）', () => {
     for (const agent of [first, second, third]) {
       await expect(restarted.activateAgent(agent.id)).resolves.toBeUndefined()
     }
-    expect(restarted.snapshot().activeTabId).toBe(third.id)
+    expect(restarted.snapshot().activeAgentId).toBe(third.id)
     await restarted.dispose()
   })
 
@@ -472,13 +499,13 @@ describe('重命名 agent（只改 agent 名）', () => {
 
     // 改名不写会话文件 → mtime 没动 → 不该被标成「在别处被改过」
     // （写文件的话 mtime 会变，而 mtime 正是 stale 的判据，输入框会跟着被禁用）
-    expect(state.snapshot().tabs[0]?.stale).toBe(false)
+    expect(state.snapshot().agents[0]?.stale).toBe(false)
 
     // 对照组：直接改文件才会被标出来
     await new Promise((resolve) => setTimeout(resolve, 20))
     writeFileSync(path as string, '{"x":1}\n')
     await state.refreshConversations()
-    expect(state.snapshot().tabs[0]?.stale).toBe(true)
+    expect(state.snapshot().agents[0]?.stale).toBe(true)
     await state.dispose()
   })
 

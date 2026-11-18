@@ -209,7 +209,7 @@ export function registerIpc(
 
   ipcMain.handle(IPC.projectsActivateTab, async (_event, payload: unknown) => {
     const { tabId } = projectTabIdSchema.parse(payload)
-    await state.activateTab(tabId)
+    await state.activateProjectTab(tabId)
     return state.snapshot()
   })
 

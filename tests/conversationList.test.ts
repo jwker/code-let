@@ -153,20 +153,20 @@ describe('宿主状态：新会话要自己出现在对话列表里', () => {
 
     // 在这个目录里新建会话 → 开成新标签
     await state.newConversation(CWD)
-    const tab = state.snapshot().tabs[0]
-    expect(tab).toBeTruthy()
+    const agent = state.snapshot().agents[0]
+    expect(agent).toBeTruthy()
     // 空会话不落盘（SDK 的规矩），所以列表里还没有它
     expect(state.snapshot().conversations).toHaveLength(0)
 
     // 说第一句话 —— 文件这时才落盘
-    await pi.prompt(tab.id, '你好，这是新会话的第一条消息')
+    await pi.prompt(agent.id, '你好，这是新会话的第一条消息')
 
     // 事件先于写盘发出，所以刷新得等一拍（去抖窗口）
     await new Promise((resolve) => setTimeout(resolve, 250))
 
     const conversations = state.snapshot().conversations
     expect(conversations).toHaveLength(1)
-    expect(conversations[0].id).toBe(tab.sessionId)
+    expect(conversations[0].path).toBe(state.snapshot().agents[0].sessionPath)
     // 标题取首条用户消息
     expect(conversations[0].title).toBe('你好，这是新会话的第一条消息')
 
@@ -188,8 +188,8 @@ describe('宿主状态：新会话要自己出现在对话列表里', () => {
 
     // 先跟 Pi 聊一句 —— 会话文件落盘了，但项目还没进清单
     await state.newConversation(CWD)
-    const tab = state.snapshot().tabs[0]
-    await pi.prompt(tab.id, '清单之外聊的一句')
+    const agent = state.snapshot().agents[0]
+    await pi.prompt(agent.id, '清单之外聊的一句')
     await new Promise((resolve) => setTimeout(resolve, 250))
     expect(state.snapshot().conversations).toHaveLength(0)
 

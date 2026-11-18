@@ -54,7 +54,7 @@ export function Zone5() {
   const pane = useStore((s) => s.pane)
   const mode = useStore((s) => s.codeMode)
   const agents = useStore((s) => s.snapshot.agents)
-  const activeAgentId = useStore((s) => s.snapshot.activeTabId)
+  const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
   const projectTabs = useStore((s) => s.snapshot.projectTabs)
   const activeProjectTabId = useStore((s) => s.snapshot.activeProjectTabId)
 
