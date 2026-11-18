@@ -941,14 +941,6 @@
   font-size: 10px;
   color: var(--fg-3);
 }
-/* 每个分类都标出「管到哪儿」—— 应用级和项目级混在一列里最容易误会 */
-.settings-list-scope {
-  flex: none;
-  font-family: var(--font-code);
-  font-size: 9.5px;
-  color: var(--fg-3);
-}
-
 .settings-body {
   flex: 1;
   min-height: 0;

@@ -23,14 +23,18 @@ export type SettingsCategory = 'agents' | 'conversations' | 'project'
 interface CategoryEntry {
   id: SettingsCategory
   title: string
-  /** 标题右侧的注脚：这个分类管到哪儿 */
-  scope: string
 }
 
+/**
+ * 项目设置的分类。
+ *
+ * **这里只放本项目的设置** —— 应用级的东西（归档天数、控制台入口）在全局设置窗口里。
+ * 所以分类行不再需要「本项目 / 所有项目」的注脚：全都是本项目。
+ */
 export const SETTINGS_PANES: CategoryEntry[] = [
-  { id: 'agents', title: '归档的 agent', scope: '本项目' },
-  { id: 'conversations', title: '会话管理', scope: '本项目' },
-  { id: 'project', title: '项目', scope: '本项目' }
+  { id: 'agents', title: '归档的 agent' },
+  { id: 'conversations', title: '会话管理' },
+  { id: 'project', title: '项目' }
 ]
 
 /** 区域 5：分类列表 */
@@ -57,7 +61,7 @@ export function SettingsList() {
           aria-current={category === entry.id}
           onClick={() => setCategory(entry.id)}
           className={['settings-list-row', category === entry.id ? 'is-active' : ''].join(' ')}
-          title={`${entry.title} · ${entry.scope}`}
+          title={entry.title}
         >
           <span className="settings-list-title">{entry.title}</span>
           {entry.id === 'agents' && archived.length > 0 && (
@@ -67,7 +71,6 @@ export function SettingsList() {
           {entry.id === 'conversations' && conversationCount > 0 && (
             <span className="settings-list-count">{conversationCount}</span>
           )}
-          <span className="settings-list-scope">{entry.scope}</span>
         </button>
       ))}
     </div>
