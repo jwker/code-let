@@ -90,7 +90,7 @@ export const IPC = {
   agentsNewFrom: 'host:agents:new-from',
   /** 切到某个 agent */
   agentsActivate: 'host:agents:activate',
-  /** 给 agent 改名（写进会话文件的 session_info，同时改清单里的名字） */
+  /** 给 agent 改名。**只改 `agents.json`**，不碰会话文件 —— 两个名字分开维护 */
   agentsRename: 'host:agents:rename',
   /** 把一条已有会话导入成通用 agent */
   agentsImport: 'host:agents:import',
@@ -854,7 +854,7 @@ export interface CodeletApi {
   newAgentFrom(agentId: string): Promise<HostSnapshot>
   /** 把一条已有会话导入成通用 agent */
   importConversation(path: string): Promise<HostSnapshot>
-  /** 给 agent 改名。名字写进会话文件，清单里的名字也跟着改 */
+  /** 给 agent 改名。**只改 `agents.json`**，不碰会话文件 —— 两个名字分开维护 */
   renameAgent(agentId: string, name: string): Promise<HostSnapshot>
   /** 归档某个 agent：只改状态，会话文件原地不动 */
   archiveAgent(agentId: string): Promise<HostSnapshot>
