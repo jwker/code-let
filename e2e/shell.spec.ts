@@ -68,7 +68,8 @@ test.describe.serial('新外壳：项目标签 / 窄轨 / 区域分派', () => {
     )
     /*
      * 三个 agent：本项目的通用与产品、另一个项目的通用。
-     * 产品 agent 的类型只能这样造 —— 新建对话框还不支持选类型。
+     * 这里直接写 agents.json 造数据，不走对话框 —— 断言的是区域分派，不是新建流程
+     * （新建流程在 newconv.spec.ts 里测）。
      */
     writeFileSync(
       join(userDataDir, 'agents.json'),

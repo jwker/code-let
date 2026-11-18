@@ -67,8 +67,6 @@ export function ConversationArea() {
   const reloadTab = useStore((s) => s.reloadTab)
   const conversations = useStore((s) => s.snapshot.conversations)
   const tabs = useStore((s) => s.snapshot.tabs)
-  const sidebarOpen = useStore((s) => s.sidebarOpen)
-  const toggleSidebar = useStore((s) => s.toggleSidebar)
   const requestRename = useStore((s) => s.requestRename)
   const requestNewConversation = useStore((s) => s.requestNewConversation)
   /**
@@ -650,7 +648,14 @@ export function ConversationArea() {
           showNotice('error', '这个对话还没有保存到磁盘，不能改名')
           return
         }
-        if (!sidebarOpen) toggleSidebar()
+        /*
+         * 侧栏退场之后改名对话框在「项目设置 → 会话管理」里（D63）。
+         * 这里先把界面切过去，再由那一页消费 `renameRequest` 打开对话框 ——
+         * 同一条 `/rename`，用户不用知道改名入口搬去了哪。
+         */
+        const store = useStore.getState()
+        store.setPane('settings')
+        store.setSettingsCategory('conversations')
         requestRename(path)
         return
       }

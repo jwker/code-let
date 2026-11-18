@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AGENT_TYPE_LABEL, type AgentInfo, type ConversationInfo } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
@@ -230,6 +230,8 @@ function ConversationList({ cwd }: { cwd: string }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [renaming, setRenaming] = useState<ConversationInfo | null>(null)
   const [pendingDelete, setPendingDelete] = useState<ConversationInfo | null>(null)
+  const renameRequest = useStore((s) => s.renameRequest)
+  const consumeRenameRequest = useStore((s) => s.consumeRenameRequest)
 
   const owned = new Set(
     agents.map((agent) => agent.sessionPath).filter((path): path is string => Boolean(path))
@@ -237,6 +239,23 @@ function ConversationList({ cwd }: { cwd: string }) {
   const items = conversations
     .filter((item) => item.cwd === cwd)
     .sort((a, b) => b.modified.localeCompare(a.modified))
+
+  /**
+   * 输入框的 `/rename` 改的就是会话名，所以请求落到这一页（D63）。
+   *
+   * 侧栏没退场之前这件事是侧栏做的：展开侧栏、进那一行的行内编辑。
+   * 现在由这里接 —— 打开同一个重命名对话框，用户不用知道入口搬了。
+   */
+  useEffect(() => {
+    if (!renameRequest) return
+    const target = conversations.find((item) => item.path === renameRequest.path)
+    if (!target) {
+      consumeRenameRequest()
+      return
+    }
+    setRenaming(target)
+    consumeRenameRequest()
+  }, [renameRequest, conversations, consumeRenameRequest])
 
   if (!cwd) return <div className="zone6-empty">没有打开的项目</div>
   if (items.length === 0) {

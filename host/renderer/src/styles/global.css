@@ -93,21 +93,10 @@
  * 位置写死（PLAN.md D5）。
  * ------------------------------------------------------------------------- */
 
-/* 左侧栏同一个套路：--side-w 是设计宽度，--side-track 是占位宽度 */
-@property --side-track {
-  syntax: '<length>';
-  inherits: true;
-  initial-value: 264px;
-}
-
 .shell {
-  /* 三栏宽度只在这里定义；拖拽时 App 往 shell 上写同样的变量，标题栏跟着走 */
+  /* 两栏宽度只在这里定义；区域 5 由 App 往 shell 上写，标题栏跟着走 */
   --rail-w: 56px;
-  /* 默认宽度 = 最小宽度（跟 paneSizes.ts 的 SIDEBAR_DEFAULT 一致）——
-     首屏 JS 还没跑时先按这个渲染，打开时把地方让给主区 */
-  --side-w: 200px;
-  --side-track: var(--side-w);
-  /* 窄轨固定 56；区域 5 由 App 往 shell 上写（按入口各记一份） */
+  /* 区域 5 的默认宽度；按入口各记一份，首屏 JS 还没跑时先按这个渲染 */
   --zone5-w: 268px;
   /* 侧栏左上角的圆角；分隔线按这个半径拐弯，改大改小只要动这里 */
   --panel-radius: 12px;
@@ -128,7 +117,6 @@
     'bar';
   height: 100vh;
   background: var(--canvas);
-  transition: --side-w 180ms ease;
 }
 
 /*
@@ -159,10 +147,6 @@
   overflow: hidden;
   min-width: 0;
   min-height: 0;
-}
-.shell-card.side {
-  flex: none;
-  width: var(--side-w);
 }
 .shell-card.main {
   flex: 1;
@@ -1206,24 +1190,18 @@
   flex: 1;
 }
 
-/* 区域 5 的拖动条：位置要算上侧栏（可能收起）+ 窄轨 */
+/*
+ * 区域 5 的拖动条：位置是「卡片区左边距 + 窄轨 + 两处缝 + 区域 5 宽度 + 半个缝」。
+ *
+ * 前两处 7px 是 .shell-deck 的 padding 和 gap，最后半个缝是因为拖动条用
+ * translateX(-50%) 压在自己 left 上 —— 要让它的中线落在两张卡中间的缝正中。
+ * 改 deck 的 gap 记得同步这两个 7px。
+ */
 .shell-grip-zone5 {
-  left: calc(7px + var(--side-track) + var(--rail-w) + var(--zone5-w));
+  left: calc(7px + var(--rail-w) + 7px + var(--zone5-w) + 3.5px);
 }
 .shell.is-zone5-hidden .shell-grip-zone5 {
   display: none;
-}
-
-/* 收起侧栏：卡片宽度归零、边框收掉，并把��条缝也吃掉 */
-.shell.is-side-hidden .shell-card.side {
-  width: 0;
-  border-width: 0;
-  margin-right: -7px;
-}
-
-
-.shell.is-side-hidden {
-  --side-w: 0px;
 }
 
 /* 拖拽中不要 180ms 过渡，否则宽度跟不上鼠标 */
@@ -1282,46 +1260,6 @@
   color: var(--fg-1);
   background: var(--sunken);
 }
-/*
- * 标题栏不画底边线：它和导航轨是同一块底槽（都是 --canvas 一档的灰），
- * 连成一片之后，侧栏和主区才像浮在上面的面板。
- * 面板之间的竖线还在（侧栏右侧、检视器左侧）—— 那两条是「两块面板的分界」，
- * 而底下这条是「底槽与面板的分界」，靠色阶和圆角就够，画上线反而把底槽切成两截。
- */
-.titlebar-left {
-  /* 左段（导航轨 + 侧栏）的占位。开关浮在标题栏上，不在这里 —— 见 .titlebar-side */
-  min-width: 0;
-  padding-left: 16px;
-}
-[data-platform='darwin'] .titlebar-left {
-  padding-left: var(--traffic-light-gutter);
-}
-/*
- * 侧栏开关：贴着红绿灯右边、垂直居中。
- *
- * 定位参照是标题栏本身（.shell-title 有 position: relative），不是左边那一格 ——
- * 那格会随侧栏收放缩到 56 宽，按钮挂进去就成了「溢出父元素」的画框，
- * Electron 会继续把它当拖动区，点不动。尺寸与右上角的检视器开关一致。
- * 另外它和检视器开关都必须排在标题栏 DOM 的最后，原因见 TitleBar.tsx。
- */
-.titlebar-side {
-  position: absolute;
-  top: calc((var(--titlebar-h) - 28px) / 2);
-  left: 14px;
-  width: 28px;
-  height: 28px;
-}
-[data-platform='darwin'] .titlebar-side {
-  left: var(--traffic-light-gutter);
-}
-/*
- * 侧栏收起后主栏顶到导航轨右边，标题会钻到红绿灯底下。
- * 把交通灯 + 开关占的那一段让回来，再加一个间距。
- * 让左边距跟着收放一起过渡 —— 不然收起末尾标题会突然往右跳一格。
- */
-[data-platform='darwin'] .shell.is-side-hidden .titlebar-content {
-  padding-left: calc(var(--traffic-light-gutter) + 28px + var(--sp-3));
-}
 .titlebar-main {
   min-width: 0;
 }
@@ -1363,27 +1301,10 @@
 }
 
 /*
- * 导航轨右侧不画竖线：它和标题栏、侧栏同属底槽，靠色阶区分就够了。
- * 画上线会把「图标列」从底槽里切出来，收起侧栏后还得多一步跟着改。
+ * 导航轨右侧不画竖线：它和标题栏同属底槽，靠色阶区分就够了。
+ * 画上线会把「图标列」从底槽里切出来。
  */
 
-.shell-side {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-/*
- * 面板本体：宽度固定成设计宽度，收起过程中只被裁、不重排 ——
- * 和检视器一样，滑出去的是整块面板，而不是每帧重新折行。
- */
-.side-panel {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  flex-direction: column;
-  background: var(--panel);
-}
 /*
  * 标签栏 —— 标题栏里的一段，标签是画布上的圆角药丸（照 pi-web 的做法）。
  *
@@ -1570,14 +1491,6 @@
   /* 标题栏是窗口拖动区，拖拽条得单独退出来 */
   -webkit-app-region: no-drag;
   outline: none;
-}
-/* 手柄贴在卡片的外缘：侧栏卡的右缘 */
-.shell-grip-left {
-  left: calc(7px + var(--side-w));
-}
-/* 收起的那一侧没有可拖的缝 */
-.shell.is-side-hidden .shell-grip-left {
-  display: none;
 }
 /* 悬停时把原有那条细线加粗一格，不另外画线，免得出现双线 */
 .shell-grip::after {

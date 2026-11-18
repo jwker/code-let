@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ConversationMode } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
-import { IconMoon, IconMore, IconPanelLeft, IconSettings, IconSun } from './icons'
+import { IconMoon, IconMore, IconSettings, IconSun } from './icons'
 import { ProjectTabs } from './ProjectTabs'
 
 const MODES: Array<{ key: ConversationMode; label: string }> = [
@@ -21,8 +21,6 @@ const MODES: Array<{ key: ConversationMode; label: string }> = [
 export function TitleBar() {
   const mode = useStore((s) => s.mode)
   const setMode = useStore((s) => s.setMode)
-  const sidebarOpen = useStore((s) => s.sidebarOpen)
-  const toggleSidebar = useStore((s) => s.toggleSidebar)
   const theme = useStore((s) => s.theme)
   const toggleTheme = useStore((s) => s.toggleTheme)
 
@@ -89,27 +87,13 @@ export function TitleBar() {
       {/* 红绿灯占的那一片 —— 拖动区 */}
       <div className="titlebar-gutter" />
 
-      {/* 左按钮板块 */}
-      <div className="titlebar-zone left no-drag">
-        <button
-          type="button"
-          aria-pressed={sidebarOpen}
-          aria-label={sidebarOpen ? '隐藏侧栏' : '显示侧栏'}
-          title={sidebarOpen ? '隐藏侧栏 ⌘B' : '显示侧栏 ⌘B'}
-          onClick={toggleSidebar}
-          className="titlebar-icon-btn"
-        >
-          <IconPanelLeft />
-        </button>
-      </div>
-
       {/* 标签板块：药丸标签 */}
       <ProjectTabs />
 
       {/* 右按钮板块 */}
       <div className="titlebar-zone right no-drag">
         {/*
-          主区永远是对话，「⋯」菜单（侧栏 / 主题 / 设置 / 模式切换）一直有意义。
+          主区永远是对话，「⋯」菜单（主题 / 设置 / 模式切换）一直有意义。
           以前它只在 nav === 'session' 时出现，因为主区会被导航换成别的视图。
         */}
         {(
@@ -141,19 +125,6 @@ export function TitleBar() {
                   className="no-drag absolute right-0 top-full z-50 mt-2 w-52 rounded-xl border border-hairline bg-raised p-1"
                   style={{ boxShadow: 'var(--sh-md)' }}
                 >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      closeMenu()
-                      toggleSidebar()
-                    }}
-                    className="flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[13px] text-fg-1 transition-colors hover:bg-sunken"
-                  >
-                    <span>{sidebarOpen ? '隐藏侧栏' : '显示侧栏'}</span>
-                    <span className="ml-auto font-mono text-[10.5px] text-fg-3">⌘B</span>
-                  </button>
-
                   <div className="my-1 h-px bg-hairline" />
 
                   {/* 原来在导航轨底部，轨去掉之后挪到这儿 */}

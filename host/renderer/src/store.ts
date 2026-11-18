@@ -99,7 +99,6 @@ const MODE_KEY = 'codelet:conversation-mode'
 const PANE_KEY = 'codelet:pane'
 const ZONE5_KEY = 'codelet:zone5-widths'
 
-const SIDEBAR_KEY = 'codelet:sidebar-open-v2'
 
 /** 代码区的两个 tab */
 export type CodeMode = 'files' | 'changes'
@@ -219,28 +218,6 @@ function saveZone5Widths(widths: Record<string, number>): void {
   }
 }
 
-/**
- * 左侧栏默认收起。
- *
- * 窄轨（S6）已经承担了导航，「按项目列会话」这条在 agent 化之后由窄轨接管，
- * 侧栏退成可选的抽屉（⌘B 打开）。旧键名带 v2，让已经存过 true 的机器也走一次新默认。
- */
-function loadSidebarOpen(): boolean {
-  try {
-    return localStorage.getItem(SIDEBAR_KEY) === '1'
-  } catch {
-    return true
-  }
-}
-
-function saveSidebarOpen(open: boolean): void {
-  try {
-    localStorage.setItem(SIDEBAR_KEY, open ? '1' : '0')
-  } catch {
-    // 存不下就算了
-  }
-}
-
 type ModeMap = Record<string, ConversationMode>
 
 function loadModes(): ModeMap {
@@ -310,8 +287,6 @@ interface RendererStore {
   settingsCategory: 'agents' | 'conversations' | 'project'
   /** 区域 5 的宽度，按入口各记一份 */
   zone5Widths: Record<string, number>
-  /** 左侧栏是否展开 */
-  sidebarOpen: boolean
   /** 从输入框发起的改名请求 —— 侧栏看到后进入行内编辑 */
   renameRequest: { path: string; nonce: number } | null
   /** 新建对话请求 —— App 看到后弹出「先起名再建」的对话框 */
@@ -373,7 +348,6 @@ interface RendererStore {
    */
   focusBrowser: () => void
   /** 展开 / 收起左侧栏 */
-  toggleSidebar: () => void
   /** 请求侧栏对某条对话进入行内改名 */
   requestRename: (path: string) => void
   /** 侧栏已经处理掉改名请求 */
@@ -440,7 +414,6 @@ export const useStore = create<RendererStore>((set, get) => ({
   overlayCount: 0,
   settingsCategory: 'agents',
   zone5Widths: loadZone5Widths(),
-  sidebarOpen: loadSidebarOpen(),
   renameRequest: null,
   newConversationRequest: null,
   modelPickerAnchor: null,
@@ -716,11 +689,7 @@ export const useStore = create<RendererStore>((set, get) => ({
     set({ pane: 'browser' })
   },
 
-  toggleSidebar: () => {
-    const next = !get().sidebarOpen
-    saveSidebarOpen(next)
-    set({ sidebarOpen: next })
-  },
+
 
   requestRename: (path) => {
     set((state) => ({

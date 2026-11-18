@@ -3,7 +3,6 @@ import { host } from './host'
 import { ModelPicker } from './shell/ModelPicker'
 import { PaneResizer } from './shell/PaneResizer'
 import { Rail } from './shell/Rail'
-import { Sidebar } from './shell/Sidebar'
 import { StatusBar } from './shell/StatusBar'
 import { TemporaryChat } from './shell/TemporaryChat'
 import { TitleBar } from './shell/TitleBar'
@@ -11,14 +10,6 @@ import { Zone5 } from './shell/Zone5'
 import { Zone6 } from './shell/Zone6'
 import { createBrowserFocusController } from './shell/browserFocus'
 import { NewAgentDialog } from './shell/NewAgentDialog'
-import {
-  SIDEBAR_DEFAULT,
-  SIDEBAR_MIN,
-  clampSidebar,
-  loadSidebarWidth,
-  saveSidebarWidth,
-  sidebarCeiling
-} from './shell/paneSizes'
 import { ZONE5_MAX, ZONE5_MIN, paneLayoutFor } from '@contract/index'
 import { useStore } from './store'
 
@@ -43,8 +34,6 @@ export function App() {
   const sessionReady = useStore((s) => s.snapshot.session.ready)
   const pane = useStore((s) => s.pane)
   const agents = useStore((s) => s.snapshot.agents)
-  const sidebarOpen = useStore((s) => s.sidebarOpen)
-  const toggleSidebar = useStore((s) => s.toggleSidebar)
   const zone5Widths = useStore((s) => s.zone5Widths)
   const setZone5Width = useStore((s) => s.setZone5Width)
   const pickerAnchor = useStore((s) => s.modelPickerAnchor)
@@ -57,7 +46,6 @@ export function App() {
   const [creating, setCreating] = useState(false)
 
   const shellRef = useRef<HTMLDivElement>(null)
-  const [sideWidth, setSideWidth] = useState(loadSidebarWidth)
 
   // 区域 5 的宽度按入口各记一份，没记过就用分派表的默认值
   const activeAgent = agents.find((agent) => agent.id === activeTabId) ?? null
@@ -66,9 +54,6 @@ export function App() {
   const zone5Width = zone5Widths[pane] ?? layout.zone5 ?? ZONE5_MIN
   const zone5Min = layout.zone5Min ?? ZONE5_MIN
 
-  // 拖拽时宽度只写 DOM、不动 state，所以窗口 resize 的回调要从这里读最新值
-  const layoutRef = useRef({ side: sideWidth, sideOpen: sidebarOpen })
-  layoutRef.current = { side: sideWidth, sideOpen: sidebarOpen }
 
   useEffect(() => {
     // macOS 的红绿灯压在标题栏顶上，躲开它
@@ -137,64 +122,20 @@ export function App() {
   useLayoutEffect(() => {
     const el = shellRef.current
     if (!el) return
-    el.style.setProperty('--side-w', `${sideWidth}px`)
     el.style.setProperty('--zone5-w', `${zone5Width}px`)
-  }, [sideWidth, zone5Width, sidebarOpen, zone5])
+  }, [zone5Width, zone5])
 
-  // ⌘B / Ctrl+B：跟编辑器一致，侧栏收放的快捷键
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent): void {
-      if (event.key.toLowerCase() !== 'b' || !(event.metaKey || event.ctrlKey)) return
-      event.preventDefault()
-      toggleSidebar()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [toggleSidebar])
-
-  // 窗口变窄：把侧栏收回上限之内，别把区域 6 挤没（收起的那一栏不占宽度）
-  useEffect(() => {
-    function fitToWindow(): void {
-      const { side, sideOpen } = layoutRef.current
-      const nextSide = clampSidebar(side, 0, window.innerWidth)
-      if (nextSide !== side) setSideWidth(nextSide)
-      // 区域 5 太宽也一样收 —— 它比侧栏更需要让位给内容
-      if (!sideOpen) return
-      void nextSide
-    }
-    window.addEventListener('resize', fitToWindow)
-    fitToWindow()
-    return () => window.removeEventListener('resize', fitToWindow)
-  }, [])
-
-  const shellClass = ['shell', sidebarOpen ? '' : 'is-side-hidden', zone5 ? '' : 'is-zone5-hidden']
-    .filter(Boolean)
-    .join(' ')
+  const shellClass = ['shell', zone5 ? '' : 'is-zone5-hidden'].filter(Boolean).join(' ')
 
   return (
     <div ref={shellRef} className={shellClass}>
       <TitleBar />
       <div className="shell-deck">
-        <Sidebar />
         <Rail />
         {zone5 && <Zone5 />}
         <Zone6 />
       </div>
       <StatusBar />
-
-      <PaneResizer
-        edge="left"
-        label="调整侧栏宽度"
-        width={sideWidth}
-        min={SIDEBAR_MIN}
-        defaultWidth={SIDEBAR_DEFAULT}
-        ceiling={() => sidebarCeiling(zone5 ? zone5Width : 0, window.innerWidth)}
-        onDrag={(next) => shellRef.current?.style.setProperty('--side-w', `${next}px`)}
-        onCommit={(next) => {
-          setSideWidth(next)
-          saveSidebarWidth(next)
-        }}
-      />
 
       {/*
         区域 5 的拖动条。位置跟着「窄轨 + 侧栏」走 —— 用 CSS 变量算，不在这里量 DOM。
