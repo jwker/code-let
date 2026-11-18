@@ -160,7 +160,7 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex h-[33px] flex-none items-end gap-1 overflow-x-auto border-b border-hairline bg-panel px-1.5 pt-1">
+      <div className="flex h-[36px] flex-none items-end gap-1 overflow-x-auto border-b border-hairline bg-panel px-1.5 pt-1">
         {state.tabs.map((tab) => {
           const selected = tab.id === active?.id
           return (
@@ -168,14 +168,14 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
               key={tab.id}
               type="button"
               onClick={() => void activateTab(tab.id)}
-              className={`flex h-[25px] max-w-[170px] flex-none items-center gap-1.5 rounded-t-md border border-b-0 px-1.5 text-[9px] ${
+              className={`flex h-[28px] max-w-[200px] flex-none items-center gap-1.5 rounded-t-md border border-b-0 px-2 text-[12px] ${
                 selected
                   ? 'border-hairline-strong bg-surface text-fg-1'
                   : 'border-transparent text-fg-3 hover:bg-sunken hover:text-fg-2'
               }`}
               title={tab.url}
             >
-              <span className="grid h-3 w-3 flex-none place-items-center rounded bg-sunken font-mono text-[7px] text-fg-3">
+              <span className="grid h-4 w-4 flex-none place-items-center rounded bg-sunken font-mono text-[9.5px] text-fg-3">
                 {tab.loading ? '◌' : tab.url.startsWith('file:') ? '▤' : '◈'}
               </span>
               <span className="min-w-0 truncate">{tab.title || tab.url || '新标签'}</span>
@@ -183,7 +183,7 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
                 role="button"
                 tabIndex={0}
                 aria-label="关闭标签"
-                className="ml-0.5 grid h-3.5 w-3.5 flex-none place-items-center rounded text-[12px] text-fg-3 hover:bg-sunken hover:text-fg-1"
+                className="ml-1 grid h-4 w-4 flex-none place-items-center rounded text-[13px] text-fg-3 hover:bg-sunken hover:text-fg-1"
                 onClick={(event) => {
                   event.stopPropagation()
                   void closeTab(tab.id)
@@ -204,7 +204,7 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
           type="button"
           onClick={() => void createTab()}
           disabled={creating}
-          className="mb-px grid h-6 w-6 flex-none place-items-center rounded text-[15px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-40"
+          className="mb-1 grid h-6 w-6 flex-none place-items-center rounded text-[15px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-40"
           aria-label="新建浏览器标签"
           title="新建标签"
         >
@@ -212,18 +212,18 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
         </button>
       </div>
 
-      <div className="flex h-[35px] flex-none items-center gap-0.5 border-b border-hairline px-1.5">
-        <button type="button" onClick={() => void goBack()} disabled={!active?.canGoBack} className="grid h-6 w-6 place-items-center rounded text-[13px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-30" aria-label="后退">
+      <div className="flex h-[40px] flex-none items-center gap-1 border-b border-hairline px-2">
+        <button type="button" onClick={() => void goBack()} disabled={!active?.canGoBack} className="grid h-7 w-7 place-items-center rounded text-[14px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-30" aria-label="后退">
           ‹
         </button>
-        <button type="button" onClick={() => void goForward()} disabled={!active?.canGoForward} className="grid h-6 w-6 place-items-center rounded text-[13px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-30" aria-label="前进">
+        <button type="button" onClick={() => void goForward()} disabled={!active?.canGoForward} className="grid h-7 w-7 place-items-center rounded text-[14px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-30" aria-label="前进">
           ›
         </button>
-        <button type="button" onClick={() => void reload()} disabled={!active} className="grid h-6 w-6 place-items-center rounded text-[13px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-30" aria-label="刷新">
+        <button type="button" onClick={() => void reload()} disabled={!active} className="grid h-7 w-7 place-items-center rounded text-[14px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-30" aria-label="刷新">
           ↻
         </button>
         <div className="flex h-[25px] min-w-0 flex-1 items-center gap-1.5 rounded-md border border-hairline bg-panel px-1.5 focus-within:border-hairline-strong">
-          <span className="font-mono text-[8px] text-fg-3">◎</span>
+          <span className="font-mono text-[10px] text-fg-3">◎</span>
           <input
             ref={addressRef}
             value={address}
@@ -238,44 +238,44 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
             placeholder="localhost:5173 或 file:///…"
             aria-label="浏览器地址"
             spellCheck={false}
-            className="min-w-0 flex-1 bg-transparent font-mono text-[8.5px] text-fg-2 outline-none placeholder:text-fg-3"
+            className="min-w-0 flex-1 bg-transparent font-mono text-[12px] text-fg-2 outline-none placeholder:text-fg-3"
           />
-          <span className="flex-none rounded-full border border-ok-line bg-ok-wash px-1.5 text-[7px] leading-4 text-ok">本地</span>
+          <span className="flex-none rounded-full border border-ok-line bg-ok-wash px-2 text-[10px] leading-5 text-ok">本地</span>
         </div>
-        <button type="button" onClick={() => void navigate()} disabled={!active} className="grid h-6 w-6 place-items-center rounded text-[13px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-30" aria-label="打开地址">
+        <button type="button" onClick={() => void navigate()} disabled={!active} className="grid h-7 w-7 place-items-center rounded text-[14px] text-fg-3 hover:bg-sunken hover:text-fg-1 disabled:opacity-30" aria-label="打开地址">
           ↵
         </button>
       </div>
 
       {agent && (
-        <div className="flex h-[22px] flex-none items-center gap-1.5 border-b border-hairline bg-warn-wash px-2 text-[8px] text-warn">
+        <div className="flex h-[26px] flex-none items-center gap-1.5 border-b border-hairline bg-warn-wash px-2 text-[11px] text-warn">
           <span className="h-1.5 w-1.5 flex-none animate-pulse rounded-full bg-warn" />
           <span className="min-w-0 truncate">Agent 正在操作 · {agent.label}</span>
-          <span className="ml-auto flex-none font-mono text-[7px] opacity-70">{agent.tool}</span>
+          <span className="ml-auto flex-none font-mono text-[10px] opacity-70">{agent.tool}</span>
         </div>
       )}
 
       <div ref={pageRef} className="relative min-h-0 flex-1 overflow-hidden bg-surface">
         {!active && !creating && (
-          <div className="flex h-full flex-col items-center justify-center px-5 text-center text-[10px] leading-6 text-fg-3">
+          <div className="flex h-full flex-col items-center justify-center px-5 text-center text-[12px] leading-6 text-fg-3">
             <div className="mb-2 text-[20px] text-fg-2">◎</div>
-            <b className="mb-1 text-[11px] text-fg-2">还没有浏览器标签</b>
+            <b className="mb-1 text-[13px] text-fg-2">还没有浏览器标签</b>
             点上方 ＋ 新建一个本地页面。
           </div>
         )}
         {active?.error && (
-          <div className="flex h-full flex-col items-center justify-center px-5 text-center text-[10px] leading-6 text-fg-3">
+          <div className="flex h-full flex-col items-center justify-center px-5 text-center text-[12px] leading-6 text-fg-3">
             <div className="mb-2 text-[20px] text-warn">!</div>
-            <b className="mb-1 text-[11px] text-fg-2">页面加载失败</b>
+            <b className="mb-1 text-[13px] text-fg-2">页面加载失败</b>
             <span className="max-w-full break-words">{active.error}</span>
-            <button type="button" onClick={() => void navigate()} className="mt-3 rounded border border-hairline-strong px-2 py-1 text-[9px] text-fg-2 hover:bg-sunken">
+            <button type="button" onClick={() => void navigate()} className="mt-3 rounded border border-hairline-strong px-2.5 py-1 text-[11.5px] text-fg-2 hover:bg-sunken">
               重试
             </button>
           </div>
         )}
       </div>
 
-      <div className="flex h-5 flex-none items-center gap-1.5 border-t border-hairline bg-panel px-2 text-[7.5px] text-fg-3">
+      <div className="flex h-6 flex-none items-center gap-1.5 border-t border-hairline bg-panel px-2 text-[11px] text-fg-3">
         <span>本地页面</span>
         <span>·</span>
         <span>独立 session</span>
