@@ -49,7 +49,7 @@ export function useAutoScroll(
       if (!node) return
       node.addEventListener('scroll', measure, { passive: true })
 
-      // 内容变长（流式输出、展开工具）、窗口变宽（收起检视器）都不触发 scroll 事件，
+      // 内容变长（流式输出、展开工具）、窗口变宽（拖宽区域 5）都不触发 scroll 事件，
       // 靠 ResizeObserver 兜住；容器本身和它的内容各看一个
       const observer = new ResizeObserver(measure)
       observer.observe(node)

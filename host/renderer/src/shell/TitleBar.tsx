@@ -44,7 +44,7 @@ export function TitleBar() {
 
   function openSub(): void {
     clearSubTimer()
-    // 一级菜单贴到窗口右边时（检视器收起），二级菜单再往右就出屏了
+    // 一级菜单贴到窗口右边时，二级菜单再往右就出屏了
     const rect = menuRef.current?.getBoundingClientRect()
     if (rect) setSubLeft(rect.right + SUB_W > window.innerWidth)
     setSubOpen(true)

@@ -89,8 +89,8 @@
 }
 
 /* ---------------------------------------------------------------------------
- * 应用骨架：导航轨 · 上下文侧栏 · 主工作区 · 右侧检视器 · 底部状态栏
- * 位置写死（PLAN.md D5）。
+ * 应用骨架：标题栏 · 卡片区（窄轨 + 可选区域 5 + 区域 6）· 状态栏
+ * 位置写死（PLAN.md D5；左右两栏在 D51 / D63 先后退场）。
  * ------------------------------------------------------------------------- */
 
 .shell {
@@ -106,8 +106,8 @@
   /*
    * 三行：标题栏 / 卡片区 / 状态栏，都铺满整宽。
    *
-   * 没有导航轨了 —— 导航入口挪到右侧面板顶部（见 Inspector）。
-   * 标题栏和状态栏都是画布色、直接写在背景上；卡片区里的三张卡浮在中间。
+   * 标题栏和状态栏都是画布色、直接写在背景上；卡片区里的卡浮在中间。
+   * 列宽不写在 grid 里 —— 卡是 flex 排的，宽度由各自的 CSS 变量给（见 .shell-deck）。
    */
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--titlebar-h) minmax(0, 1fr) var(--statusbar-h);
@@ -120,7 +120,7 @@
 }
 
 /*
- * 卡片区：侧栏 / 主对话区 / 右侧检视器各一张卡。
+ * 卡片区：窄轨、区域 5（可选）、区域 6（必填）各一张卡，横向排开。
  *
  * 卡之间 7px 的画布缝，窗口右边和下边也留 7px；顶上不留 ——
  * 卡片的上边框紧贴标题栏下沿（跟参考图一致）。
@@ -1003,71 +1003,6 @@
   font-family: var(--font-code);
   user-select: text;
 }
-.settings-number {
-  display: flex;
-  align-items: center;
-  flex: none;
-  height: 26px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-xs);
-  overflow: hidden;
-  background: var(--surface);
-}
-.settings-number input {
-  width: 56px;
-  padding: 0 8px;
-  border: 0;
-  background: transparent;
-  font-family: var(--font-code);
-  font-size: 12px;
-  color: var(--fg-1);
-  text-align: right;
-  outline: none;
-}
-.settings-number-unit {
-  padding: 0 8px;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  border-left: 1px solid var(--hairline);
-  background: var(--panel);
-  font-size: 11px;
-  color: var(--fg-3);
-}
-.settings-btn {
-  flex: none;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--hairline-strong);
-  font-size: 11.5px;
-  color: var(--fg-2);
-}
-.settings-btn:hover:not(:disabled) {
-  background: var(--sunken);
-  color: var(--fg-1);
-}
-.settings-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.settings-btn.is-primary {
-  border-color: var(--fg-1);
-  color: var(--fg-1);
-  font-weight: 500;
-}
-.settings-btn.is-danger {
-  color: var(--danger);
-  border-color: var(--danger-line);
-}
-.settings-btn.is-danger:hover:not(:disabled) {
-  background: var(--danger-wash);
-}
-.settings-message {
-  font-size: 11.5px;
-  color: var(--warn);
-}
-
 /* 归档列表 */
 .archive-row {
   display: flex;
@@ -1211,7 +1146,7 @@
 
 /*
  * 窗口标题栏：整条可拖动，内部按钮单独 no-drag。
- * 内部按「导航轨 + 侧栏 / 主区 / 检视器」切成三段，列宽跟 shell 共用变量。
+ * 内部跟卡片区共用列宽变量 —— 标题栏那段要跟下面的卡对齐。
  */
 .shell-title {
   grid-area: title;
@@ -1259,29 +1194,6 @@
 .titlebar-icon-btn:hover {
   color: var(--fg-1);
   background: var(--sunken);
-}
-.titlebar-main {
-  min-width: 0;
-}
-/* 顶栏中间段：标题贴左、菜单按钮贴右，跟下方主栏同宽同边界 */
-.titlebar-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  padding: 0 16px;
-  transition:
-    padding-right 180ms ease,
-    padding-left 180ms ease;
-}
-.titlebar-title {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
 }
 .titlebar-more {
   display: flex;
@@ -1397,8 +1309,7 @@
   container-type: inline-size;
 }
 @media (prefers-reduced-motion: reduce) {
-  .shell,
-  .titlebar-content {
+  .shell {
     transition: none;
   }
 }

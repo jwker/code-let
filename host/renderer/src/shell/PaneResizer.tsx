@@ -1,13 +1,11 @@
 import { useRef } from 'react'
 
 interface PaneResizerProps {
-  /** 缝在哪一侧：left = 左栏右缘，right = 右栏左缘 */
-  edge: 'left' | 'right'
   /**
-   * 位置变体。不传就是默认位置；
-   * `zone5` 是窄轨之后那一列 —— 它的左缘要算上窄轨和两处缝的宽度。
+   * 拖的是哪条缝。现在只剩区域 5 的右缘（`zone5`）——
+   * 左右两栏在 D51 / D63 先后退场，它们的缝也跟着没了。
    */
-  variant?: 'zone5'
+  variant: 'zone5'
   label: string
   /** 当前宽度（px）。拖拽过程中的实时值不走 React，见 onDrag */
   width: number
@@ -32,7 +30,6 @@ const STEP_LARGE = 32
  * 逐帧 setState 会让整棵树（含内容流里的 markdown）每帧重渲染。
  */
 export function PaneResizer({
-  edge,
   variant,
   label,
   width,
@@ -45,8 +42,6 @@ export function PaneResizer({
   const drag = useRef<{
     startX: number
     startWidth: number
-    /** 往右拖是变宽还是变窄 */
-    sign: 1 | -1
     max: number
     current: number
     shell: Element | null
@@ -72,7 +67,6 @@ export function PaneResizer({
     drag.current = {
       startX: event.clientX,
       startWidth: start,
-      sign: edge === 'left' ? 1 : -1,
       max,
       current: start,
       shell: event.currentTarget.closest('.shell')
@@ -85,8 +79,8 @@ export function PaneResizer({
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>): void {
     const state = drag.current
     if (!state) return
-    // 左栏越往右越宽，右栏反过来
-    const raw = state.startWidth + (event.clientX - state.startX) * state.sign
+    // 区域 5 在左边，越往右越宽
+    const raw = state.startWidth + (event.clientX - state.startX)
     const next = Math.min(Math.max(Math.round(raw), min), state.max)
     if (next === state.current) return
     state.current = next
@@ -103,9 +97,8 @@ export function PaneResizer({
     const forward = event.key === 'ArrowRight'
     if (!back && !forward) return
     event.preventDefault()
-    // 左栏：→ 变宽；右栏：← 变宽
-    const grow = edge === 'left' ? 1 : -1
-    const step = (back ? -1 : 1) * grow * (event.shiftKey ? STEP_LARGE : STEP)
+    // 区域 5 在左边：→ 变宽，← 变窄
+    const step = (back ? -1 : 1) * (event.shiftKey ? STEP_LARGE : STEP)
     const next = Math.min(Math.max(width + step, min), limit())
     if (next !== width) onCommit(next)
   }
@@ -120,7 +113,7 @@ export function PaneResizer({
       aria-valuenow={width}
       tabIndex={0}
       title={`${label}（双击复位）`}
-      className={`shell-grip shell-grip-${edge}${variant ? ` shell-grip-${variant}` : ''}`}
+      className={`shell-grip shell-grip-${variant}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

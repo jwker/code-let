@@ -106,41 +106,48 @@ const FAKE_GIT_STATUS: GitStatus = {
   ahead: 2,
   behind: 1,
   staged: [
-    { path: 'src/main/state.ts', status: 'M', additions: 18, deletions: 3 },
-    { path: 'src/shell/GitPane.tsx', status: 'A', additions: 212, deletions: 0 }
+    { path: 'host/main/state.ts', status: 'M', additions: 18, deletions: 3 },
+    { path: 'host/renderer/src/shell/GitChanges.tsx', status: 'A', additions: 212, deletions: 0 }
   ],
   unstaged: [
-    { path: 'src/shell/Inspector.tsx', status: 'M', additions: 8, deletions: 2 },
-    { path: 'src/legacy/old.git.ts', status: 'D', additions: 0, deletions: 64 }
+    { path: 'host/renderer/src/shell/Rail.tsx', status: 'M', additions: 8, deletions: 2 },
+    { path: 'host/renderer/src/shell/AgentContextMenu.tsx', status: 'D', additions: 0, deletions: 64 }
   ],
-  untracked: [{ path: 'src/shell/gitStatus.test.ts', status: '?' }],
+  untracked: [{ path: 'host/renderer/src/shell/agentMenuItems.ts', status: '?' }],
   conflicts: [],
   clean: false,
   truncated: false,
   error: null
 }
 
+/*
+ * 假 diff 的内容也要跟真仓库对得上 —— 预览模式里这份东西是给人看的，
+ * 写一个早就不存在的组件名，看的人会以为它还在。
+ */
 const FAKE_GIT_DIFF: GitDiff = {
-  path: 'src/shell/Inspector.tsx',
+  path: 'host/renderer/src/shell/Rail.tsx',
   scope: 'unstaged',
   patch: [
-    'diff --git a/src/shell/Inspector.tsx b/src/shell/Inspector.tsx',
-    '--- a/src/shell/Inspector.tsx',
-    '+++ b/src/shell/Inspector.tsx',
-    '@@ -18,6 +18,8 @@ export function Inspector() {',
-    '   const open = useStore((s) => s.inspectorOpen)',
-    '   const nav = useStore((s) => s.nav)',
-    '-  ',
-    '+  const [diffPath, setDiffPath] = useState<string | null>(null)',
-    '+  const git = useStore((s) => s.git)',
-    ' ',
+    'diff --git a/host/renderer/src/shell/Rail.tsx b/host/renderer/src/shell/Rail.tsx',
+    '--- a/host/renderer/src/shell/Rail.tsx',
+    '+++ b/host/renderer/src/shell/Rail.tsx',
+    '@@ -78,6 +78,8 @@ export function Rail() {',
+    '   const visible = agents.filter((agent) => agent.cwd === cwd && agent.archivedAt === null)',
+    '   const activeAgentId = useStore((s) => s.snapshot.activeAgentId)',
+    '-',
+    '+  const [menu, setMenu] = useState<{ agent: AgentInfo; x: number; y: number } | null>(null)',
+    '+',
     '   return (',
-    '@@ -32,7 +34,9 @@ export function Inspector() {',
-    '       {open && nav === "code" && <FilePane />}',
-    '       {open && nav === "browser" && <BrowserPane />}',
-    '+      {open && nav === "git" && <GitPane />}',
-    '-      {open && nav === "git" && <GitPlaceholder />}',
-    '     </aside>'
+    '@@ -180,7 +182,9 @@ export function Rail() {',
+    '         <button',
+    '           key={agent.id}',
+    '-          className="rail-agent"',
+    '+          className={["rail-agent", agent.streaming ? "is-running" : ""].join(" ")}',
+    '+          onContextMenu={(event) => {',
+    '+            setMenu({ agent, x: event.clientX, y: event.clientY })',
+    '+          }}',
+    '         >',
+    '           <AgentAvatar type={agent.type} />'
   ].join('\n'),
   binary: false,
   truncated: false,

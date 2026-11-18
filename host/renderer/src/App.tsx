@@ -142,7 +142,6 @@ export function App() {
       */}
       {zone5 && (
         <PaneResizer
-          edge="left"
           variant="zone5"
           label="调整区域 5 宽度"
           width={zone5Width}

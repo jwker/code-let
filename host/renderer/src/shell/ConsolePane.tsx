@@ -10,7 +10,7 @@ import { host } from '../host'
 import { ConfirmDialog } from './ConfirmDialog'
 
 /**
- * 右侧检视器的调试控制台。
+ * 调试控制台（独立窗口，PLAN.md D56）。
  *
  * 列表在窄面板里，详情是一层覆盖主区的抽屉 —— 一次请求的 transcript 动辄几百 KB，
  * 340px 的面板放不下全文。
