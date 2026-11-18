@@ -205,6 +205,23 @@
   padding: 12px 0;
   gap: 2px;
 }
+/*
+ * 窄轨顶部的 logo。
+ *
+ * 标记 32px、左右各 12px（(56-32)/2）；窄轨的上内边距也是 12px —— 三边距离相同。
+ * 这里不再加 padding，位置由 `.rail` 的内边距和这一行的居中决定。
+ */
+.rail-brand {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  flex: none;
+  margin-bottom: 8px;
+}
+.app-mark {
+  display: block;
+}
+
 .rail-zone {
   display: flex;
   flex-direction: column;
@@ -1250,12 +1267,6 @@
 }
 .titlebar-zone.right {
   margin-left: auto;
-}
-.titlebar-app {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--fg-1);
-  white-space: nowrap;
 }
 .titlebar-icon-btn {
   width: 28px;

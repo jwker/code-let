@@ -3,6 +3,7 @@ import type { AgentInfo, ProjectPane } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
 import { AgentAvatar } from './AgentAvatar'
+import { AppMark } from './AppMark'
 import { AgentContextMenu, RenameAgentDialog, type AgentMenuAnchor } from './AgentContextMenu'
 import { IconBrowser, IconCode, IconDoc, IconPlus, IconSettings } from './icons'
 
@@ -118,6 +119,14 @@ export function Rail() {
 
   return (
     <nav className="shell-card rail" aria-label="项目导航">
+      {/*
+        logo 在功能区上面。32px 的标记配 12px 的左右内边距（56 - 32）/ 2，
+        跟窄轨自己 12px 的上下内边距一致 —— 左、右、上三边的间距相同。
+      */}
+      <div className="rail-brand">
+        <AppMark size={32} />
+      </div>
+
       <div className="rail-zone">
         {FUNCTIONS.map((entry) => {
           const IconComponent = entry.icon

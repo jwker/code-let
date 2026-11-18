@@ -101,7 +101,6 @@ export function TitleBar() {
         >
           <IconPanelLeft />
         </button>
-        <span className="titlebar-app">Codelet</span>
       </div>
 
       {/* 标签板块：药丸标签 */}
