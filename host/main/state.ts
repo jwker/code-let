@@ -701,9 +701,13 @@ export class HostState extends EventEmitter {
    * 也当 agent 名。名字在会话文件还没建的时候只存在内存里，
    * 等第一条消息落盘时一并写出去 —— Pi 就是这么设计的，不用额外处理。
    */
-  async newConversation(cwd: string, name?: string): Promise<void> {
+  async newConversation(cwd: string, name?: string, type?: AgentType): Promise<void> {
     const trimmed = name?.trim() ?? ''
-    const agent = await this.createAgent({ cwd, ...(trimmed ? { name: trimmed } : {}) })
+    const agent = await this.createAgent({
+      cwd,
+      ...(type ? { type } : {}),
+      ...(trimmed ? { name: trimmed } : {})
+    })
     if (!trimmed) return
     await this.pi.setSessionName(agent.id, trimmed)
     this.readSession()

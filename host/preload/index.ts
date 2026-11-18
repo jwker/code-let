@@ -48,8 +48,8 @@ const api: CodeletApi = {
   renameConversation: (path, name) =>
     ipcRenderer.invoke(IPC.conversationsRename, { path, name }) as Promise<HostSnapshot>,
   openConversation: (path, cwd) => ipcRenderer.invoke(IPC.agentsOpen, { path, cwd }) as Promise<HostSnapshot>,
-  newConversation: (cwd, name) =>
-    ipcRenderer.invoke(IPC.agentsCreate, { cwd, name }) as Promise<HostSnapshot>,
+  newConversation: (cwd, name, type) =>
+    ipcRenderer.invoke(IPC.agentsCreate, { cwd, name, type }) as Promise<HostSnapshot>,
   activateAgent: (agentId) =>
     ipcRenderer.invoke(IPC.agentsActivate, { agentId }) as Promise<HostSnapshot>,
   newAgentFrom: (agentId) =>

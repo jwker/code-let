@@ -56,7 +56,7 @@ import type {
   ConsoleListResult,
   ConsoleStats
 } from './console'
-import type { AgentInfo, ProjectPaneView, ProjectTabInfo } from './agents'
+import type { AgentInfo, AgentType, ProjectPaneView, ProjectTabInfo } from './agents'
 import type { BrowserHost } from './browser'
 import type {
   ModelAuthEvent,
@@ -903,7 +903,7 @@ export interface CodeletApi {
   /** 打开一个已有会话 → 开成新标签 */
   openConversation(path: string, cwd: string): Promise<HostSnapshot>
   /** 在某个目录里新建会话 → 开成新标签。name 为空时标题退回首条用户消息 */
-  newConversation(cwd: string, name?: string): Promise<HostSnapshot>
+  newConversation(cwd: string, name?: string, type?: AgentType): Promise<HostSnapshot>
   /** 切到某个标签 */
   activateAgent(agentId: string): Promise<HostSnapshot>
   /** 以此 agent 新建实例：配置照搬，会话是新的 */

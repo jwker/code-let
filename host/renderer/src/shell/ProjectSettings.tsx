@@ -205,6 +205,25 @@ function ArchiveList({ agents }: { agents: ReturnType<typeof useStore.getState>[
  * 是否已导入是**算出来的**（有没有 agent 的 sessionPath 指向它），
  * 没有单独的一份「已导入」标记 —— 两处各记一次迟早不一致。
  */
+/** 「新建 agent」这一行 —— 空态里也要有，否则新项目没有入口 */
+function NewAgentRow({ cwd }: { cwd: string }) {
+  return (
+    <div className="settings-row">
+      <div className="settings-row-text">
+        <div className="settings-row-label">新建 agent</div>
+        <div className="settings-row-desc">跟窄轨的「＋」、输入框的 /new 打开同一个对话框。</div>
+      </div>
+      <button
+        type="button"
+        className="settings-btn is-primary"
+        onClick={() => useStore.getState().requestNewConversation(cwd)}
+      >
+        新建 agent
+      </button>
+    </div>
+  )
+}
+
 function ConversationList({ cwd }: { cwd: string }) {
   const conversations = useStore((s) => s.snapshot.conversations)
   const agents = useStore((s) => s.snapshot.agents)
@@ -222,10 +241,13 @@ function ConversationList({ cwd }: { cwd: string }) {
   if (!cwd) return <div className="zone6-empty">没有打开的项目</div>
   if (items.length === 0) {
     return (
-      <div className="zone6-empty">
-        这个项目里还没有会话。
-        <br />
-        在终端里用裸 pi 聊出来的会话也会出现在这里（标着「未导入」）。
+      <div className="settings-body">
+        <NewAgentRow cwd={cwd} />
+        <div className="zone6-empty">
+          这个项目里还没有会话。
+          <br />
+          在终端里用裸 pi 聊出来的会话也会出现在这里（标着「未导入」）。
+        </div>
       </div>
     )
   }
@@ -236,6 +258,8 @@ function ConversationList({ cwd }: { cwd: string }) {
         「导入」只是给它建一个通用 agent（会话文件不动）；「改名」改的是<strong>会话名</strong>，
         写进会话文件，裸 pi 也看得到 —— 跟窄轨里那个 agent 名是两回事。
       </div>
+
+      <NewAgentRow cwd={cwd} />
 
       {items.map((item) => (
         <div key={item.path} className="archive-row">

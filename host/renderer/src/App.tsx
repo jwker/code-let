@@ -10,7 +10,7 @@ import { TitleBar } from './shell/TitleBar'
 import { Zone5 } from './shell/Zone5'
 import { Zone6 } from './shell/Zone6'
 import { createBrowserFocusController } from './shell/browserFocus'
-import { NewConversationDialog, randomConversationName } from './shell/NewConversationDialog'
+import { NewAgentDialog } from './shell/NewAgentDialog'
 import {
   SIDEBAR_DEFAULT,
   SIDEBAR_MIN,
@@ -54,13 +54,7 @@ export function App() {
   const currentModel = useStore((s) => s.snapshot.session.model)
   const newConversationRequest = useStore((s) => s.newConversationRequest)
   const consumeNewConversationRequest = useStore((s) => s.consumeNewConversationRequest)
-  /** 新建对话对话框的默认名字 —— 每开一次新拟一个 */
-  const [newName, setNewName] = useState(randomConversationName)
   const [creating, setCreating] = useState(false)
-
-  useEffect(() => {
-    if (newConversationRequest) setNewName(randomConversationName())
-  }, [newConversationRequest])
 
   const shellRef = useRef<HTMLDivElement>(null)
   const [sideWidth, setSideWidth] = useState(loadSidebarWidth)
@@ -246,15 +240,15 @@ export function App() {
 
       {/* 新建对话：先起名，再建 */}
       {newConversationRequest && (
-        <NewConversationDialog
+        <NewAgentDialog
           project={newConversationRequest.cwd}
-          initialName={newName}
+          agents={agents.filter((agent) => agent.cwd === newConversationRequest.cwd)}
           busy={creating}
           onCancel={consumeNewConversationRequest}
-          onCreate={(name) => {
+          onCreate={({ type, name }) => {
             setCreating(true)
             void host
-              .newConversation(newConversationRequest.cwd, name)
+              .newConversation(newConversationRequest.cwd, name, type)
               .then(() => {
                 consumeNewConversationRequest()
               })

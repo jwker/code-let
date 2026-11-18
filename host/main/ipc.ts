@@ -149,8 +149,8 @@ export function registerIpc(
   })
 
   ipcMain.handle(IPC.agentsCreate, async (_event, payload: unknown) => {
-    const { cwd, name } = agentCreateSchema.parse(payload)
-    await state.newConversation(cwd, name)
+    const { cwd, name, type } = agentCreateSchema.parse(payload)
+    await state.newConversation(cwd, name, type)
     return state.snapshot()
   })
 

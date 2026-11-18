@@ -111,10 +111,15 @@ export function Rail() {
     await host.activateAgent(agentId)
   }
 
-  async function newAgent(): Promise<void> {
+  /**
+   * 新建 agent：打开对话框，不直接建。
+   *
+   * 以前这里是「直接建一个通用 agent」—— 三个入口（这里、`/new`、项目设置）
+   * 三种行为。现在统一走 `requestNewConversation`，由 App 渲染同一个对话框。
+   */
+  function newAgent(): void {
     if (!cwd) return
-    await host.newConversation(cwd)
-    setPane('agent')
+    useStore.getState().requestNewConversation(cwd)
   }
 
   return (

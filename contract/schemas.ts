@@ -78,8 +78,13 @@ export const agentOpenSchema = z.object({
 export const agentCreateSchema = z.object({
   /** 会话要建在哪个目录 */
   cwd: z.string().min(1),
-  /** 新建时定的名字；不给就用默认名，首条消息落盘后跟着变 */
-  name: z.string().optional()
+  /** 新建时定的名字；不给就用默认名 */
+  name: z.string().optional(),
+  /**
+   * 基础 agent 的类型（D62）。不给就是通用 —— 老调用方（比如测试）不用改。
+   * **创建后不可改**：它决定区域 5/6 的布局，也决定实例编号。
+   */
+  type: z.enum(['general', 'dev', 'product']).optional()
 })
 
 /** 导入会话：只要会话文件路径，cwd 从会话清单里查 */

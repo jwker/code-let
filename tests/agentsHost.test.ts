@@ -491,6 +491,29 @@ describe('重命名 agent（只改 agent 名）', () => {
   })
 })
 
+describe('新建 agent（D62）', () => {
+  it('newConversation 带上类型 —— 建出来的 agent 就是那个类型', async () => {
+    const { dir, state } = setup()
+    await state.init()
+
+    await state.newConversation(dir, '结账页第二版', 'product')
+
+    const created = state.snapshot().agents.find((agent) => agent.name === '结账页第二版')
+    expect(created?.type).toBe('product')
+    // 名字里带的类型与 instance 对得上（产品 1）
+    expect(created?.instance).toBe(1)
+    await state.dispose()
+  })
+
+  it('不给类型就是通用 —— 老调用方不用改', async () => {
+    const { dir, state } = setup()
+    await state.init()
+    await state.newConversation(dir)
+    expect(state.snapshot().agents[0]?.type).toBe('general')
+    await state.dispose()
+  })
+})
+
 describe('导入外部会话（D59）', () => {
   it('导入不在会话清单里的路径会被拒绝', async () => {
     const { state } = setup()
