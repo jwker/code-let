@@ -371,8 +371,34 @@ function ConversationList({ cwd }: { cwd: string }) {
 /** 本项目 *//** 本项目 */
 function ProjectPanel({ cwd, title }: { cwd: string; title: string }) {
   const [pendingRemove, setPendingRemove] = useState(false)
+  const project = useStore((s) => s.snapshot.projects.find((item) => item.path === cwd))
+  /** 输入框里的草稿；保存成功后跟主进程规范化后的值对齐 */
+  const [prototypeDir, setPrototypeDir] = useState(project?.prototypeDir ?? '')
+  const [saving, setSaving] = useState(false)
+  const [prototypeError, setPrototypeError] = useState<string | null>(null)
+  const [prototypeNotice, setPrototypeNotice] = useState<string | null>(null)
+
+  useEffect(() => {
+    setPrototypeDir(project?.prototypeDir ?? '')
+  }, [project?.prototypeDir, cwd])
 
   if (!cwd) return <div className="zone6-empty">没有打开的项目</div>
+
+  async function savePrototypeDir(): Promise<void> {
+    setSaving(true)
+    setPrototypeError(null)
+    try {
+      await host.setProjectPrototypeDir(cwd, prototypeDir)
+      setPrototypeNotice('原型图目录已保存。已开着的 agent 要 /reload 或新开 agent 之后才用新的目录。')
+    } catch (error) {
+      setPrototypeNotice(null)
+      // Electron 把 IPC 里的抛错包成 "Error invoking remote method '…': Error: 真正的原因"
+      const message = error instanceof Error ? error.message : String(error)
+      setPrototypeError(message.replace(/^Error invoking remote method '[^']*': Error: /, ''))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="settings-body">
@@ -382,6 +408,61 @@ function ProjectPanel({ cwd, title }: { cwd: string; title: string }) {
           <div className="settings-row-desc selectable">{cwd}</div>
         </div>
       </div>
+
+      <div className="settings-row">
+        <div className="settings-row-text">
+          <div className="settings-row-label">原型图目录</div>
+          <div className="settings-row-desc">
+            产品 agent 把原型写在这里，预览没有可恢复的地址时也从这里挑。项目内的相对路径，
+            默认 <code>.codelet/prototype</code>。目录不会自动创建，由 agent 写文件时生成。
+            改动在 <code>/reload</code> 或新开 agent 之后生效。
+          </div>
+        </div>
+        <div className="flex flex-none items-center gap-2">
+          <input
+            aria-label="原型图目录"
+            value={prototypeDir}
+            spellCheck={false}
+            onChange={(event) => {
+              setPrototypeDir(event.target.value)
+              setPrototypeNotice(null)
+              setPrototypeError(null)
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return
+              event.preventDefault()
+              void savePrototypeDir()
+            }}
+            placeholder=".codelet/prototype"
+            className="w-[200px] rounded-md border border-hairline bg-surface px-2 py-1 font-mono text-[12px] text-fg-2 outline-none placeholder:text-fg-3 focus:border-hairline-strong"
+          />
+          <button
+            type="button"
+            className="settings-btn is-primary"
+            disabled={saving}
+            onClick={() => void savePrototypeDir()}
+          >
+            {saving ? '保存中…' : '保存'}
+          </button>
+        </div>
+      </div>
+
+      {prototypeError && (
+        <div
+          role="alert"
+          className="rounded-md border border-hairline bg-danger-wash px-3 py-2 text-[11.5px] leading-relaxed text-danger"
+        >
+          {prototypeError}
+        </div>
+      )}
+      {prototypeNotice && (
+        <div
+          role="status"
+          className="rounded-md border border-hairline bg-sunken px-3 py-2 text-[11.5px] leading-relaxed text-fg-2"
+        >
+          {prototypeNotice}
+        </div>
+      )}
 
       <div className="settings-row">
         <div className="settings-row-text">

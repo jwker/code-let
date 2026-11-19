@@ -50,7 +50,7 @@ import {
   searchFiles as searchProjectFiles
 } from './files'
 import { PiRuntime, type PiEvent, type PiRuntimePort } from './pi/runtime'
-import { ProjectStore } from './projects'
+import { normalizePrototypeDir, ProjectStore } from './projects'
 import {
   AgentStore,
   dueForArchive,
@@ -702,6 +702,19 @@ export class HostState extends EventEmitter {
   async addProject(path: string): Promise<void> {
     this.projects.add(path)
     await this.refreshConversations()
+    this.push()
+  }
+
+  /**
+   * 设置一个项目的原型图目录。
+   *
+   * 只改项目清单，**不创建目录** —— 目录由 agent 写文件时自然出现。
+   * 已开着的产品 agent 的提示不会立刻变：`/reload` 或新开 agent 之后生效。
+   */
+  async setProjectPrototypeDir(cwd: string, input: string): Promise<void> {
+    const checked = normalizePrototypeDir(cwd, input)
+    if (checked.dir === undefined) throw new Error(checked.error)
+    this.projects.setPrototypeDir(cwd, checked.dir)
     this.push()
   }
 

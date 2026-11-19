@@ -92,6 +92,8 @@ export const IPC = {
   projectsOpen: 'host:projects:open',
   /** 从清单里移除一个项目（对话文件不动） */
   projectsRemove: 'host:projects:remove',
+  /** 设置一个项目的原型图目录（项目内相对路径） */
+  projectsPrototypeDir: 'host:projects:prototype-dir',
   /** 删除会话（会话文件移入系统废纸篓，顺带关掉引用它的标签） */
   conversationsDelete: 'host:conversations:delete',
   /** 给会话改名（写进会话文件的 session_info 条目） */
@@ -328,6 +330,13 @@ export interface ProjectInfo {
   path: string
   /** 目录名，作为显示名 */
   name: string
+  /**
+   * 原型图目录：项目内的相对路径，默认 `.codelet/prototype`。
+   *
+   * 产品 agent 把原型写在这里；预览没有可恢复的地址时也从这个目录里挑。
+   * 目录本身由 agent 写文件时创建，Codelet 不主动创建。
+   */
+  prototypeDir: string
 }
 
 /** 一条对话 = 一个 Pi 会话 */
@@ -859,6 +868,12 @@ export interface CodeletApi {
    * **Pi 存的对话不动** —— 只是这个目录不再出现在清单里。
    */
   removeProject(path: string): Promise<HostSnapshot>
+  /**
+   * 设置一个项目的原型图目录（项目内相对路径）。空串恢复默认。
+   *
+   * 改动在下一次 `/reload` 或新开 agent 之后对已开着的 agent 生效。
+   */
+  setProjectPrototypeDir(cwd: string, prototypeDir: string): Promise<HostSnapshot>
   /**
    * 删除一批会话：会话文件移入系统废纸篓，引用它们的标签一起关掉。
    *

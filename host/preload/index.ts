@@ -46,6 +46,8 @@ const api: CodeletApi = {
   getSnapshot: () => ipcRenderer.invoke(IPC.snapshotGet) as Promise<HostSnapshot>,
   openProject: () => ipcRenderer.invoke(IPC.projectsOpen) as Promise<HostSnapshot>,
   removeProject: (path) => ipcRenderer.invoke(IPC.projectsRemove, { path }) as Promise<HostSnapshot>,
+  setProjectPrototypeDir: (cwd, prototypeDir) =>
+    ipcRenderer.invoke(IPC.projectsPrototypeDir, { cwd, prototypeDir }) as Promise<HostSnapshot>,
   deleteConversations: (paths) =>
     ipcRenderer.invoke(IPC.conversationsDelete, { paths }) as Promise<DeleteConversationsResult>,
   renameConversation: (path, name) =>

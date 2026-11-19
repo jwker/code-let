@@ -35,6 +35,7 @@ import {
   filesSearchSchema,
   modelSelectSchema,
   projectPathSchema,
+  projectPrototypeDirSchema,
   promptAbortSchema,
   promptSchema,
   agentIdSchema,
@@ -134,6 +135,12 @@ export function registerIpc(
   ipcMain.handle(IPC.projectsRemove, async (_event, payload: unknown) => {
     const { path } = projectPathSchema.parse(payload)
     await state.removeProject(path)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.projectsPrototypeDir, async (_event, payload: unknown) => {
+    const { cwd, prototypeDir } = projectPrototypeDirSchema.parse(payload)
+    await state.setProjectPrototypeDir(cwd, prototypeDir)
     return state.snapshot()
   })
 
@@ -490,6 +497,7 @@ export function registerIpc(
     ipcMain.removeHandler(IPC.snapshotGet)
     ipcMain.removeHandler(IPC.projectsOpen)
     ipcMain.removeHandler(IPC.projectsRemove)
+    ipcMain.removeHandler(IPC.projectsPrototypeDir)
     ipcMain.removeHandler(IPC.conversationsDelete)
     ipcMain.removeHandler(IPC.conversationsRename)
     ipcMain.removeHandler(IPC.agentsOpen)

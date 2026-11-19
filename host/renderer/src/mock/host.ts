@@ -184,9 +184,9 @@ const FAKE_GIT_DIFF: GitDiff = {
 }
 
 const FAKE_PROJECTS: ProjectInfo[] = [
-  { path: '/Users/demo/Projects/codelet', name: 'codelet' },
-  { path: '/Users/demo/Projects/pi-sdk', name: 'pi-sdk' },
-  { path: '/Users/demo/Projects/web', name: 'web' }
+  { path: '/Users/demo/Projects/codelet', name: 'codelet', prototypeDir: '.codelet/prototype' },
+  { path: '/Users/demo/Projects/pi-sdk', name: 'pi-sdk', prototypeDir: '.codelet/prototype' },
+  { path: '/Users/demo/Projects/web', name: 'web', prototypeDir: '.codelet/prototype' }
 ]
 
 /** 调试控制台的假记录 —— 预览模式里列表有东西可看 */
@@ -676,6 +676,13 @@ export function createMockApi(): CodeletApi {
       return publish()
     },
 
+    setProjectPrototypeDir: async (cwd, prototypeDir) => {
+      projects = projects.map((project) =>
+        project.path === cwd ? { ...project, prototypeDir } : project
+      )
+      return publish()
+    },
+
     deleteConversations: async (paths) => {
       const deleted = paths.filter((path) => conversations.some((c) => c.path === path))
       const wanted = new Set(deleted)
@@ -735,7 +742,10 @@ export function createMockApi(): CodeletApi {
 
     newConversation: async (cwd, name) => {
       if (!projects.some((p) => p.path === cwd)) {
-        projects = [{ path: cwd, name: basenameOf(cwd) }, ...projects]
+        projects = [
+          { path: cwd, name: basenameOf(cwd), prototypeDir: '.codelet/prototype' },
+          ...projects
+        ]
       }
       addTab({ cwd, title: name?.trim() || '新对话' })
       return publish()

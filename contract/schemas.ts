@@ -13,6 +13,12 @@ export const projectPathSchema = z.object({
   path: z.string().min(1)
 })
 
+/** 设置项目的原型图目录：空串表示恢复默认 */
+export const projectPrototypeDirSchema = z.object({
+  cwd: z.string().min(1),
+  prototypeDir: z.string().max(200)
+})
+
 /** 删除会话：只传会话文件路径；路径还要在主进程里跟当前会话列表对一遍 */
 export const conversationsDeleteSchema = z.object({
   paths: z.array(z.string().min(1)).min(1)
