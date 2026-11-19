@@ -31,6 +31,7 @@ import {
   type ModelSettingsChange,
   type ProviderInfo,
   type PickAttachmentsResult,
+  type PreviewEntry,
   type SessionEvent,
   type StreamItem,
   type ThinkingLevel
@@ -112,6 +113,8 @@ const api: CodeletApi = {
    * 标注（只有 `agent:<id>` 宿主有内容）。跟浏览器一样，每条调用都带 host ——
    * 少传参数 TypeScript 不报错，靠 tests/preload.test.ts 的源码断言守着。
    */
+  getPreviewEntry: (host) =>
+    ipcRenderer.invoke(IPC.previewEntry, { host }) as Promise<PreviewEntry>,
   getAnnotation: (host) => ipcRenderer.invoke(IPC.annotationGet, { host }) as Promise<AnnotationState>,
   setAnnotation: (host, enabled) =>
     ipcRenderer.invoke(IPC.annotationSet, { host, enabled }) as Promise<AnnotationState>,

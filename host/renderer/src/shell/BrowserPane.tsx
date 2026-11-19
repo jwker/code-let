@@ -1,5 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AnnotationState, BlockCitation, BrowserState, BrowserTabState } from '@contract/index'
+import type {
+  AnnotationState,
+  BlockCitation,
+  BrowserState,
+  BrowserTabState,
+  PreviewEntry
+} from '@contract/index'
 import { blockKey, blockLabel } from '@contract/index'
 import { isAgentBrowserHost, type BrowserHost } from '@contract/browser'
 import { host } from '../host'
@@ -15,6 +21,14 @@ import { useStore } from '../store'
 function displayUrl(tab: BrowserTabState | null): string {
   if (!tab || tab.url === 'about:blank') return ''
   return tab.url
+}
+
+/** 原型列表里的修改时间：紧凑到分钟，够排序对照就行 */
+function formatPrototypeTime(ms: number): string {
+  const date = new Date(ms)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 /** 没有引用时的空数组 —— 保持引用稳定，免得角标同步 effect 每帧都跑 */
@@ -95,26 +109,40 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
   const citations = useStore((s) => (agentId ? (s.citations[agentId] ?? NO_CITATIONS) : NO_CITATIONS))
   /** 标注清单展开着吗 —— 纯界面状态，切到另一个宿主的预览时收起来 */
   const [listOpen, setListOpen] = useState(false)
+  /** 没有可恢复的地址时，预览区该显示什么（原型目录的列表或空态） */
+  const [entry, setEntry] = useState<PreviewEntry | null>(null)
   /** 只有一张 about:blank 的空白标签：还没做出任何页面 */
   const blankPreview = isAgentHost && (!active || active.url === 'about:blank')
 
   useEffect(() => {
     let cancelled = false
-    void host.getBrowserState(browserHost).then((next) => {
+    setEntry(null)
+    void (async () => {
+      const next = await host.getBrowserState(browserHost)
       if (cancelled) return
       setState(next)
-      if (next.tabs.length === 0) {
-        setCreating(true)
-        void host.createBrowserTab(browserHost, 'about:blank').then((created) => {
-          if (!cancelled) {
-            setState(created)
-            setCreating(false)
-          }
-        }).catch(() => {
-          if (!cancelled) setCreating(false)
-        })
+      if (next.tabs.length > 0) return
+      if (isAgentHost) {
+        // 有可恢复的地址就开回来；否则拿到目录列表 / 空态
+        const preview = await host.getPreviewEntry(browserHost)
+        if (cancelled) return
+        if (preview.kind === 'restore') {
+          const restored = await host.getBrowserState(browserHost)
+          if (!cancelled) setState(restored)
+          return
+        }
+        setEntry(preview)
       }
-    })
+      setCreating(true)
+      try {
+        const created = await host.createBrowserTab(browserHost, 'about:blank')
+        if (!cancelled) setState(created)
+      } catch {
+        // 建不出标签就留着列表/空态，别把整块地方变成白板
+      } finally {
+        if (!cancelled) setCreating(false)
+      }
+    })()
     const off = host.onBrowserState((event) => {
       // 两个宿主各推各的 —— 只收自己那一份
       if (cancelled || event.host !== browserHost) return
@@ -235,6 +263,25 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
   async function activateTab(tabId: string): Promise<void> {
     const next = await host.activateBrowserTab(browserHost, tabId)
     setState(next)
+  }
+
+  /** 从原型列表里打开一个文件 —— 用空白标签导航，不在旁边再堆一个标签 */
+  async function openPrototype(url: string): Promise<void> {
+    const blank = state.tabs.find((tab) => tab.url === 'about:blank')
+    setEntry(null)
+    try {
+      const next = blank
+        ? await host.navigateBrowser(browserHost, blank.id, url)
+        : await host.createBrowserTab(browserHost, url)
+      setState(next)
+    } catch {
+      // 打开失败就把列表拿回来，让用户重选
+      setEntry(await host.getPreviewEntry(browserHost))
+    }
+  }
+
+  async function refreshPreviewEntry(): Promise<void> {
+    setEntry(await host.getPreviewEntry(browserHost))
   }
 
   async function navigate(): Promise<void> {
@@ -425,21 +472,88 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
       )}
 
       <div ref={pageRef} className="relative min-h-0 flex-1 overflow-hidden bg-surface">
-        {!active && !creating && (
+        {!active && !creating && !isAgentHost && (
           <div className="flex h-full flex-col items-center justify-center px-5 text-center text-[12px] leading-6 text-fg-3">
             <div className="mb-2 text-[20px] text-fg-2">◎</div>
             <b className="mb-1 text-[13px] text-fg-2">还没有浏览器标签</b>
             点上方 ＋ 新建一个本地页面。
           </div>
         )}
-        {/* 产品 agent 的区域 6：说明这块地方在等什么，而不是给一块白板 */}
+        {/*
+          产品 agent 的区域 6：没有可恢复的地址时，列出项目的原型目录；
+          目录空着或不存在，就说清楚是哪一种 —— 不再统一说成「还没做出原型」。
+        */}
         {blankPreview && !active?.error && !creating && (
-          <div className="flex h-full flex-col items-center justify-center px-5 text-center text-[12px] leading-6 text-fg-3">
-            <div className="mb-2 text-[20px] text-fg-2">◎</div>
-            <b className="mb-1 text-[13px] text-fg-2">这个 agent 还没有做出原型</b>
-            它做出页面并打开之后，这里会显示出来。
-            <br />
-            也可以在对话里让它「在右边打开 preview/…」。
+          <div className="flex h-full flex-col items-center justify-center px-5 py-4 text-center text-[12px] leading-6 text-fg-3">
+            {entry?.kind === 'list' ? (
+              <>
+                <div className="mb-2 text-[20px] text-fg-2">◫</div>
+                <b className="mb-0.5 text-[13px] text-fg-2">
+                  原型目录里有 {entry.listing.files.length} 个页面
+                </b>
+                <div className="mb-3 max-w-full break-all font-mono text-[10.5px]">
+                  {entry.listing.dir}
+                </div>
+                <div
+                  aria-label="原型文件"
+                  className="flex max-h-[70%] w-full max-w-[420px] flex-col gap-1 overflow-y-auto"
+                >
+                  {entry.listing.files.map((file) => (
+                    <button
+                      key={file.path}
+                      type="button"
+                      title={file.path}
+                      onClick={() => void openPrototype(file.url)}
+                      className="flex flex-none items-center gap-2 rounded-md border border-hairline bg-raised px-2.5 py-1.5 text-left text-[12px] text-fg-2 transition-colors hover:border-hairline-strong hover:bg-sunken"
+                    >
+                      <span className="flex-none text-fg-3">&lt;&gt;</span>
+                      <span className="min-w-0 flex-1 truncate font-mono">{file.name}</span>
+                      <span className="flex-none font-mono text-[10px] text-fg-3">
+                        {formatPrototypeTime(file.modified)}
+                      </span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => void refreshPreviewEntry()}
+                    className="mt-1 flex-none rounded-md border border-dashed border-hairline px-2.5 py-1 text-[11px] text-fg-3 hover:border-hairline-strong hover:text-fg-2"
+                  >
+                    重新查找
+                  </button>
+                </div>
+              </>
+            ) : entry?.kind === 'empty' ? (
+              entry.listing.exists ? (
+                <>
+                  <div className="mb-2 text-[20px] text-fg-2">◫</div>
+                  <b className="mb-1 text-[13px] text-fg-2">原型目录里还没有页面</b>
+                  <div className="mb-2 max-w-full break-all font-mono text-[10.5px]">
+                    {entry.listing.dir}
+                  </div>
+                  让 agent 生成一个，或者把 .html 放进去。
+                  <br />
+                  放好之后点下面重新找一次。
+                  <button
+                    type="button"
+                    onClick={() => void refreshPreviewEntry()}
+                    className="mt-2 rounded border border-hairline-strong px-2.5 py-1 text-[11.5px] text-fg-2 hover:bg-sunken"
+                  >
+                    重新查找
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="mb-2 text-[20px] text-fg-2">◇</div>
+                  <b className="mb-1 text-[13px] text-fg-2">这个项目还没有原型</b>
+                  <div className="mb-1 max-w-full break-all font-mono text-[10.5px]">
+                    {entry.listing.dir || '项目的原型目录'}
+                  </div>
+                  产品 agent 做出原型之后会写到这里；
+                  <br />
+                  也可以在对话里让它「做一个原型」。
+                </>
+              )
+            ) : null}
           </div>
         )}
         {active?.error && (

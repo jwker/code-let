@@ -17,6 +17,7 @@ export type {
   BlockCitation,
   PreviewBlock
 } from './annotation'
+export type { PreviewEntry, PrototypeFile, PrototypeListing } from './preview'
 export {
   blockCitationPayload,
   blockKey,
@@ -71,6 +72,7 @@ import type {
 } from './console'
 import type { AgentInfo, AgentType, ProjectPaneView, ProjectTabInfo } from './agents'
 import type { AnnotationEvent, AnnotationState, BlockCitation } from './annotation'
+import type { PreviewEntry } from './preview'
 import type { BrowserHost } from './browser'
 import type {
   ModelAuthEvent,
@@ -206,6 +208,8 @@ export const IPC = {
   annotationFocus: 'host:annotation:focus',
   /** 标注：发送前把引用按最新登记解析一遍（临时号转正） */
   annotationResolve: 'host:annotation:resolve',
+  /** 预览：该显示什么（恢复上次的地址 / 列原型目录 / 空态） */
+  previewEntry: 'host:preview:entry',
   /** 列当前模型可用的思考等级 */
   thinkingLevels: 'host:thinking:levels',
   /** 设置某个标签的思考等级 */
@@ -992,6 +996,12 @@ export interface CodeletApi {
   resolveCitations(host: BrowserHost, citations: BlockCitation[]): Promise<BlockCitation[]>
   /** 订阅标注状态。事件带宿主 —— 只有 `agent:<id>` 会有内容 */
   onAnnotation(listener: (event: AnnotationEvent) => void): () => void
+  /**
+   * 预览区该显示什么：上次的本地文件还能用就恢复，否则列项目的原型目录。
+   *
+   * 只在产品 agent 的预览宿主上有内容；项目级浏览器返回空态。
+   */
+  getPreviewEntry(host: BrowserHost): Promise<PreviewEntry>
   /** 订阅浏览器标签状态。事件带宿主 —— 两个宿主的池是分开的 */
   onBrowserState(listener: (event: BrowserEvent) => void): () => void
   /** 某个目录的 Git 状态；只读。Git 是项目级的东西，按目录取而不是按 agent */

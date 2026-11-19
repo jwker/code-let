@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { existsSync, statSync } from 'node:fs'
-import { basename, dirname, join, normalize, relative } from 'node:path'
+import { basename, dirname, join, normalize, relative, resolve } from 'node:path'
 import type {
   AgentInfo,
   AgentType,
@@ -37,6 +37,8 @@ import { DebugConsoleStore, type ConsoleRecordInput } from './debugConsole'
 import type { BrowserManager } from './browser'
 import { formatAnchorBreaks } from './anchorCheck'
 import { agentBrowserHost, agentIdOfHost, type BrowserHost } from '@contract/browser'
+import type { PreviewEntry } from '@contract/index'
+import { choosePreviewEntry, listPrototypeFiles } from './prototypeFiles'
 import { emptyGitStatus, readGitDiff, readGitStatus } from './git'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
@@ -262,16 +264,23 @@ export class HostState extends EventEmitter {
   }
 
   /**
-   * 产品 agent 的预览该不该恢复 —— 渲染层来要浏览器状态时顺手做一次。
+   * 预览区该显示什么：上次的地址还能用就恢复，否则列项目的原型目录。
    *
-   * 只对产品 agent；项目级浏览器与通用 / 开发 agent 不参与。
+   * 只对产品 agent 的预览宿主有意义；项目级浏览器与通用 / 开发 agent 一律空态。
+   * `restorePreviewOnce` 保证「一次运行只恢复一次」—— 用户自己关掉的预览标签
+   * 不会因为切回来又冒出来，这时给的是目录列表。
    */
-  async restorePreview(host: BrowserHost): Promise<void> {
+  async previewEntry(host: BrowserHost): Promise<PreviewEntry> {
     const agentId = agentIdOfHost(host)
-    if (!agentId) return
-    const agent = this.agentStore.get(agentId)
-    if (!agent || agent.type !== 'product') return
-    await this.browser?.restorePreview(host, agent.previewUrl)
+    const agent = agentId ? this.agentStore.get(agentId) : null
+    const project = agent ? this.projects.list().find((item) => item.path === agent.cwd) : null
+    if (!agent || agent.type !== 'product' || !project) {
+      return { kind: 'empty', listing: { dir: '', exists: false, files: [] } }
+    }
+    const restored = await this.browser?.restorePreviewOnce(host, agent.previewUrl)
+    if (restored) return { kind: 'restore', url: restored }
+    const listing = await listPrototypeFiles(resolve(agent.cwd, project.prototypeDir))
+    return choosePreviewEntry(null, listing)
   }
 
   // ---------------------------------------------------------------------

@@ -953,6 +953,30 @@ export function createMockApi(): CodeletApi {
     setBrowserVisible: async () => undefined,
     onBrowserState: () => () => undefined,
 
+    getPreviewEntry: async (host) =>
+      host.startsWith('agent:')
+        ? {
+            kind: 'list',
+            listing: {
+              dir: '/Users/demo/Projects/codelet/.codelet/prototype',
+              exists: true,
+              files: [
+                {
+                  name: 'pricing.html',
+                  path: '/Users/demo/Projects/codelet/.codelet/prototype/pricing.html',
+                  url: 'file:///Users/demo/Projects/codelet/.codelet/prototype/pricing.html',
+                  modified: Date.now() - 2 * 60 * 1000
+                },
+                {
+                  name: 'onboarding.html',
+                  path: '/Users/demo/Projects/codelet/.codelet/prototype/onboarding.html',
+                  url: 'file:///Users/demo/Projects/codelet/.codelet/prototype/onboarding.html',
+                  modified: Date.now() - 60 * 60 * 1000
+                }
+              ]
+            }
+          }
+        : { kind: 'empty', listing: { dir: '', exists: false, files: [] } },
     getAnnotation: async (host) => fakeAnnotation(host),
     setAnnotation: async (host, enabled) => fakeAnnotation(host, enabled),
     setAnnotationBadges: async () => undefined,

@@ -171,7 +171,7 @@ test.describe.serial('原型预览的恢复', () => {
     await launch()
 
     // 还没有任何记录 —— 预览是空态
-    await expect(page.getByText('这个 agent 还没有做出原型')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('这个项目还没有原型')).toBeVisible({ timeout: 10_000 })
 
     const addressBar = page.getByLabel('浏览器地址')
     await addressBar.fill(prototypeUrl)
@@ -195,7 +195,7 @@ test.describe.serial('原型预览的恢复', () => {
     // 没点任何东西，预览已经在原来的文件上
     await expect(page.getByRole('button', { name: /原型/ })).toBeVisible({ timeout: 10_000 })
     await expect.poll(() => evalPreviewPage<string>('document.body.innerText')).toContain('专业版')
-    await expect(page.getByText('这个 agent 还没有做出原型')).toHaveCount(0)
+    await expect(page.getByText('这个项目还没有原型')).toHaveCount(0)
     await expect.poll(async () => (await blocksOf('agent-p1')).map((item) => item.block)).toEqual([1, 2])
 
     // 项目级浏览器不会被恢复成这个原型
@@ -216,7 +216,7 @@ test.describe.serial('原型预览的恢复', () => {
 
     // 另一个产品 agent 没有记录 —— 空态，不会串到它
     await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '产品 2' }).click()
-    await expect(page.getByText('这个 agent 还没有做出原型')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('这个项目还没有原型')).toBeVisible({ timeout: 10_000 })
     const other = await app!.evaluate(async () => {
       const manager = (
         globalThis as unknown as {

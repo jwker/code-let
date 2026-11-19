@@ -681,20 +681,20 @@ export class BrowserManager {
   }
 
   /**
-   * 产品 agent 的预览从记录里恢复。
+   * 产品 agent 的预览从记录里恢复，返回真正恢复的地址（没恢复就是 null）。
    *
-   * 只在宿主还没有标签时做，而且一次运行只尝试一次 —— 用户自己关掉了
-   * 预览标签，切回来的时候不该又冒出来。
-   * 没有记录、记录不是本地文件、或者文件已经不在，都什么都不做（渲染层走空态）。
+   * 一次运行只尝试一次 —— 用户自己关掉了预览标签，切回来的时候不该又冒出来。
+   * 没有记录、记录不是本地文件、或者文件已经不在，都什么都不做（调用方走目录/空态）。
    */
-  async restorePreview(host: BrowserHost, url: string | null): Promise<void> {
-    if (!isAgentBrowserHost(host)) return
-    if (this.previewRestored.has(host)) return
+  async restorePreviewOnce(host: BrowserHost, url: string | null): Promise<string | null> {
+    if (!isAgentBrowserHost(host)) return null
+    if (this.previewRestored.has(host)) return null
     this.previewRestored.add(host)
-    if (this.pools.list(host).length > 0) return
+    if (this.pools.list(host).length > 0) return null
     const usable = restorablePreviewUrl(url)
-    if (!usable) return
+    if (!usable) return null
     await this.create(host, usable)
+    return usable
   }
 
   /**

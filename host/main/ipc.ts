@@ -347,9 +347,12 @@ export function registerIpc(
 
   ipcMain.handle(IPC.browserGet, async (_event, payload: unknown) => {
     const { host } = browserStateSchema.parse(payload ?? {})
-    // 产品 agent 的预览按上次的记录恢复；渲染层第一次要状态时顺手做
-    await state.restorePreview(host)
     return (await getBrowser()?.getState(host)) ?? emptyBrowser(host)
+  })
+
+  ipcMain.handle(IPC.previewEntry, async (_event, payload: unknown) => {
+    const { host } = browserStateSchema.parse(payload ?? {})
+    return state.previewEntry(host)
   })
 
   ipcMain.handle(IPC.browserCreate, async (_event, payload: unknown) => {
@@ -525,6 +528,7 @@ export function registerIpc(
     ipcMain.removeHandler(IPC.modelsList)
     ipcMain.removeHandler(IPC.attachmentsPick)
     ipcMain.removeHandler(IPC.browserGet)
+    ipcMain.removeHandler(IPC.previewEntry)
     ipcMain.removeHandler(IPC.browserCreate)
     ipcMain.removeHandler(IPC.browserClose)
     ipcMain.removeHandler(IPC.browserActivate)
