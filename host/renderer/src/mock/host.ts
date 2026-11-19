@@ -947,6 +947,7 @@ export function createMockApi(): CodeletApi {
     setAnnotation: async (host, enabled) => fakeAnnotation(host, enabled),
     setAnnotationBadges: async () => undefined,
     focusAnnotation: async () => undefined,
+    resolveCitations: async (_host, citations) => citations,
     onAnnotation: () => () => undefined,
 
     // —— 调试控制台（预览模式里是假数据）——

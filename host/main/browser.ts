@@ -5,6 +5,7 @@ import {
   BROWSER_ANNOTATION_CHANNEL,
   type AnnotationEvent,
   type AnnotationState,
+  type BlockCitation,
   type BrowserAgentActivity,
   type BrowserBounds,
   type BrowserState,
@@ -18,6 +19,12 @@ import {
   type BrowserHost
 } from './browserPools'
 import { ANNOTATION_SCRIPT } from './annotationScript'
+import {
+  assignTemp,
+  resolveBlockKey,
+  resolveCitation,
+  type TempAssignment
+} from './annotation'
 
 /**
  * 右侧浏览器会话。
@@ -55,21 +62,22 @@ interface AnnotationRecord {
   badges: string[]
   /** 编号显示着吗；关掉后角标与描边全隐，号还在 */
   numbers: boolean
+  /** 临时号的分配表：只活在本次运行里，不写进用户的文件 */
+  temps: TempAssignment[]
 }
 
 /**
  * 把页面报上来的块洗干净。
  *
  * 页面是 agent 写出来的东西，不能当可信输入：块号必须是正整数，
- * 选择器和文字都要截断。认不出来就丢掉。
+ * 选择器和文字都要截断。认不出来、或者选择器为空就丢掉。
  */
-export function readPreviewBlock(value: unknown): PreviewBlock | null {
+function sanitizeBlock(value: unknown): PreviewBlock | null {
   if (!value || typeof value !== 'object') return null
   const raw = value as Record<string, unknown>
   const block =
     typeof raw.block === 'number' && Number.isInteger(raw.block) && raw.block > 0 ? raw.block : null
   const temp = typeof raw.temp === 'string' && raw.temp ? raw.temp.slice(0, 12) : null
-  if (block === null && temp === null) return null
   const selector = typeof raw.selector === 'string' ? raw.selector.trim().slice(0, 2000) : ''
   if (!selector) return null
   return {
@@ -84,6 +92,24 @@ export function readPreviewBlock(value: unknown): PreviewBlock | null {
     selector,
     text: typeof raw.text === 'string' ? raw.text.replace(/\s+/g, ' ').trim().slice(0, 160) : ''
   }
+}
+
+/** 块登记里的一项：必须已经有身份（块号或临时号） */
+export function readPreviewBlock(value: unknown): PreviewBlock | null {
+  const block = sanitizeBlock(value)
+  return block && (block.block !== null || block.temp !== null) ? block : null
+}
+
+/**
+ * 用户点中的一块：还没有锚点的块在分配临时号之前也没有身份，
+ * 但选择器和文字已经有了 —— 照样收下来。
+ *
+ * 页面报上来的临时号一律丢掉：号只能由主进程分配（分配表也在主进程），
+ * 页面自己写一个 T1 会被当成别人那一块。
+ */
+export function readBlockCandidate(value: unknown): PreviewBlock | null {
+  const block = sanitizeBlock(value)
+  return block ? { ...block, temp: null } : null
 }
 
 /** 从页面 URL 算出引用载荷里的「文件」：项目内的本地文件用相对路径 */
@@ -214,7 +240,8 @@ export class BrowserManager {
       file: null,
       blocks: [],
       badges: [],
-      numbers: true
+      numbers: true,
+      temps: []
     }
     this.annotations.set(host, created)
     return created
@@ -272,15 +299,28 @@ export class BrowserManager {
    */
   async focusAnnotation(host: BrowserHost, key: string): Promise<void> {
     if (!isAgentBrowserHost(host)) return
+    const record = this.annotationRecord(host)
     const tab = this.pools.active(host)
     if (!tab) return
-    await this.runAnnotation(tab, `focus(${JSON.stringify(key)})`)
+    // 临时号转正之后按块号找；还没转正就还是 T1（页面按选择器找）
+    const resolved = resolveBlockKey(key, record.temps, record.blocks)
+    await this.runAnnotation(tab, `focus(${JSON.stringify(resolved)})`)
   }
 
+  /**
+   * 把角标推给页面。
+   *
+   * 键先按最新登记解析：临时号转正之后画的是正式块号；还没转正的临时块
+   * 没有 `data-block` 可找，所以连选择器一起给页面。
+   */
   private async pushBadges(tab: Tab, record: AnnotationRecord): Promise<void> {
+    const entries = record.badges.map((key) => ({
+      key: resolveBlockKey(key, record.temps, record.blocks),
+      selector: record.temps.find((item) => item.temp === key)?.selector ?? null
+    }))
     await this.runAnnotation(
       tab,
-      `setBadges(${JSON.stringify(record.badges)}, ${record.numbers ? 'true' : 'false'})`
+      `setBadges(${JSON.stringify(entries)}, ${record.numbers ? 'true' : 'false'})`
     )
   }
 
@@ -304,7 +344,7 @@ export class BrowserManager {
     }
     const record = this.annotationRecord(tab.host)
     await this.runAnnotation(tab, `setMode(${record.enabled ? 'true' : 'false'})`)
-    await this.pushBadges(tab, record)
+    // scan 结束时会按最新登记推角标
     await this.scanAnnotation(tab.host, tab)
     this.emitAnnotation(tab.host)
   }
@@ -321,6 +361,22 @@ export class BrowserManager {
           .filter((item): item is PreviewBlock => item !== null)
       : []
     record.file = previewFileOf(tab.view.webContents.getURL() || tab.url, this.cwdForHost(host))
+    /*
+     * 登记重建之后立刻重推角标：临时号如果因为这个选择器拿到了锚点，
+     * 页面上的 T1 要当场变成正式块号（输入框里的引用文字不动）。
+     */
+    await this.pushBadges(tab, record)
+  }
+
+  /**
+   * 发送时按最新登记解析引用 —— 临时号转正了就换成正式块号。
+   *
+   * 渲染层在展开载荷之前调它；项目级宿主没有登记，原样返回。
+   */
+  resolveCitations(host: BrowserHost, citations: BlockCitation[]): BlockCitation[] {
+    if (!isAgentBrowserHost(host)) return citations
+    const record = this.annotationRecord(host)
+    return citations.map((citation) => resolveCitation(citation, record.temps, record.blocks))
   }
 
   /** 页面点了一块：块信息以主进程的登记为准，页面报的只当回去的线索 */
@@ -339,9 +395,22 @@ export class BrowserManager {
       return
     }
     if (payload.type !== 'pick') return
-    const reported = readPreviewBlock(payload.block)
+    const reported = readBlockCandidate(payload.block)
     if (!reported) return
     const record = this.annotationRecord(host)
+    // 没有锚点的块：主进程分配临时号（同一选择器复用，重复点不重号）
+    if (reported.block === null) {
+      const temp = assignTemp(record.temps, reported.selector)
+      if (!record.temps.some((item) => item.selector === reported.selector)) {
+        record.temps.push({ temp, selector: reported.selector })
+      }
+      this.onAnnotation({
+        host,
+        state: this.annotationState(host),
+        picked: { ...reported, temp, block: null, anchor: null }
+      })
+      return
+    }
     const known = record.blocks.find(
       (block) =>
         (reported.block !== null && block.block === reported.block) ||

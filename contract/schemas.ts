@@ -202,6 +202,22 @@ export const annotationFocusSchema = z.object({
   key: z.string().min(1).max(20)
 })
 
+/** 输入框里的一条引用（渲染层回传时按这个形状收） */
+const blockCitationSchema = z.object({
+  file: z.string().min(1).max(4096),
+  block: z.number().int().positive().nullable(),
+  temp: z.string().min(1).max(12).nullable(),
+  anchor: z.string().max(200).nullable(),
+  selector: z.string().min(1).max(2000),
+  text: z.string().max(400)
+})
+
+/** 发送前解析引用：临时号转正之后换成正式块号 */
+export const annotationResolveSchema = z.object({
+  host: browserHostSchema,
+  citations: z.array(blockCitationSchema).max(50)
+})
+
 /** Git 是项目级的东西 —— 按目录取，不按 agent */
 export const gitCwdSchema = z.object({
   cwd: z.string().min(1)

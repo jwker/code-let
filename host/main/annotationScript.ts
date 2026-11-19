@@ -31,7 +31,7 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
   ].join('\n')
   document.documentElement.appendChild(style)
 
-  var state = { enabled: false, badges: [], numbers: true, hover: null }
+  var state = { enabled: false, badges: [], selectors: {}, numbers: true, hover: null }
   var frame = 0
   var layer = null
 
@@ -42,6 +42,32 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
 
   function blockOf(el) {
     return el && el.closest ? el.closest('[data-block]') : null
+  }
+
+  /** 哪些标签算「一块」的容器 —— 没有锚点的页面靠它找最内层的块 */
+  var CONTAINERS = {
+    SECTION: 1, ARTICLE: 1, HEADER: 1, FOOTER: 1, NAV: 1, MAIN: 1, ASIDE: 1,
+    FORM: 1, FIGURE: 1, BLOCKQUOTE: 1, UL: 1, OL: 1, LI: 1,
+    TABLE: 1, THEAD: 1, TBODY: 1, TR: 1, TD: 1, TH: 1, DIV: 1
+  }
+
+  /**
+   * 点到的是哪一块。
+   *
+   * 有锚点就按最近的锚点祖先算（嵌套取最内层）；没有锚点就取最内层的块级容器，
+   * 连容器都没有（光秃秃的页面）就取点中的元素本身。
+   * 分配临时号是主进程的事，这里只负责说清楚「是哪一块」。
+   */
+  function pickFor(target) {
+    if (!target || target.nodeType !== 1) return null
+    var anchored = blockOf(target)
+    if (anchored && blockNumberOf(anchored) !== null) return { el: anchored, anchored: true }
+    var node = target
+    while (node && node.nodeType === 1) {
+      if (CONTAINERS[node.tagName] === 1) return { el: node, anchored: false }
+      node = node.parentElement
+    }
+    return { el: target, anchored: false }
   }
 
   function blockNumberOf(el) {
@@ -88,25 +114,25 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
     return parts.join(' > ')
   }
 
-  function describe(el) {
-    var block = blockNumberOf(el)
-    if (block === null) return null
+  /** 描述一块：有锚点时带上块号和锚点原文，没有时两者都是 null */
+  function describe(el, anchored) {
+    var block = anchored ? blockNumberOf(el) : null
     return {
       block: block,
       temp: null,
-      anchor: 'data-block="' + el.getAttribute('data-block') + '"',
+      anchor: block !== null ? 'data-block="' + el.getAttribute('data-block') + '"' : null,
       selector: selectorOf(el),
       text: textOf(el)
     }
   }
 
-  /** 页面上所有的块（只读 data-block，不自己分配号） */
+  /** 页面上所有带锚点的块（只读 data-block，不自己分配号） */
   function blocks() {
     var all = document.querySelectorAll('[data-block]')
     var out = []
     for (var i = 0; i < all.length; i += 1) {
-      var described = describe(all[i])
-      if (described) out.push(described)
+      if (blockNumberOf(all[i]) === null) continue
+      out.push(describe(all[i], true))
     }
     return out
   }
@@ -128,7 +154,8 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
 
   function badgeNode(rect, key, translucent) {
     var node = document.createElement('div')
-    node.className = BADGE + (translucent ? ' hover' : '')
+    // 临时号用警示色，跟正式块号一眼分得开
+    node.className = BADGE + (key.charAt(0) === 'T' ? ' temp' : '') + (translucent ? ' hover' : '')
     node.textContent = key
     node.style.left = Math.round(rect.left + 4) + 'px'
     node.style.top = Math.round(rect.top + 4) + 'px'
@@ -136,11 +163,19 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
   }
 
   function findBlock(key) {
+    var wanted = String(key)
     var all = document.querySelectorAll('[data-block]')
     for (var i = 0; i < all.length; i += 1) {
-      if (String(blockNumberOf(all[i])) === key) return all[i]
+      if (String(blockNumberOf(all[i])) === wanted) return all[i]
     }
-    return null
+    // 临时块没有 data-block：主进程把它的选择器一起送过来
+    var selector = state.selectors[wanted]
+    if (!selector) return null
+    try {
+      return document.querySelector(selector)
+    } catch (error) {
+      return null
+    }
   }
 
   /** 重画浮层：常驻角标 + 悬停候选 */
@@ -174,8 +209,10 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
 
     if (state.enabled && state.hover && state.hover.el && state.hover.el.isConnected) {
       var hoverRect = state.hover.el.getBoundingClientRect()
-      layer.appendChild(outlineNode(hoverRect, Boolean(annotated[state.hover.key])))
-      layer.appendChild(badgeNode(hoverRect, state.hover.key, !annotated[state.hover.key]))
+      var hoverKey = state.hover.key
+      layer.appendChild(outlineNode(hoverRect, Boolean(hoverKey && annotated[hoverKey])))
+      // 没有锚点的块要点下去才拿到临时号；悬停时只画描边，不编一个号出来
+      if (hoverKey) layer.appendChild(badgeNode(hoverRect, hoverKey, !annotated[hoverKey]))
     }
   }
 
@@ -187,10 +224,9 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
       }
       return
     }
-    var el = blockOf(event.target)
-    var block = el ? blockNumberOf(el) : null
-    if (el && block === null) el = null
-    var next = el ? { el: el, key: String(block) } : null
+    var picked = pickFor(event.target)
+    var key = picked && picked.anchored ? String(blockNumberOf(picked.el)) : null
+    var next = picked ? { el: picked.el, key: key } : null
     if (next && state.hover && state.hover.el === next.el) return
     if (!next && !state.hover) return
     state.hover = next
@@ -199,18 +235,22 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
 
   function onClick(event) {
     if (!state.enabled) return
-    var el = blockOf(event.target)
-    if (!el) return
-    var described = describe(el)
-    if (!described) return
+    var picked = pickFor(event.target)
+    if (!picked) return
+    var described = describe(picked.el, picked.anchored)
     // 标注模式下点击归标注：拦掉原型自己的交互（捕获阶段，先于页面自己的监听器）
     event.preventDefault()
     event.stopImmediatePropagation()
     event.stopPropagation()
-    var key = String(described.block)
-    if (state.badges.indexOf(key) < 0) state.badges = state.badges.concat(key)
-    state.hover = { el: el, key: key }
-    schedule()
+    if (described.block !== null) {
+      var key = String(described.block)
+      if (state.badges.indexOf(key) < 0) state.badges = state.badges.concat(key)
+      state.hover = { el: picked.el, key: key }
+      schedule()
+    } else {
+      // 临时号由主进程分配；这一步只把「点的是这一块」报上去
+      state.hover = { el: picked.el, key: null }
+    }
     post({ type: 'pick', block: described })
   }
 
@@ -222,8 +262,19 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
       else document.documentElement.removeAttribute('data-codelet-annotating')
       schedule()
     },
-    setBadges: function (keys, numbers) {
-      state.badges = (keys || []).map(String)
+    setBadges: function (entries, numbers) {
+      var keys = []
+      var selectors = {}
+      var list = entries || []
+      for (var i = 0; i < list.length; i += 1) {
+        var entry = list[i]
+        var key = typeof entry === 'string' ? entry : entry && entry.key
+        if (!key) continue
+        keys.push(String(key))
+        if (entry && entry.selector) selectors[String(key)] = String(entry.selector)
+      }
+      state.badges = keys
+      state.selectors = selectors
       if (typeof numbers === 'boolean') state.numbers = numbers
       schedule()
     },

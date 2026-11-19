@@ -37,13 +37,14 @@ interface PageAnnotationState {
   numbers: boolean
 }
 
-test.describe.serial('原型标注', () => {
-  test.beforeAll(async () => {
-    projectDir = mkdtempSync(join(tmpdir(), 'codelet-annotation-e2e-project-'))
-    userDataDir = mkdtempSync(join(tmpdir(), 'codelet-annotation-e2e-userdata-'))
-    writeFileSync(
-      join(projectDir, 'pricing.html'),
-      `<!doctype html>
+/**
+ * 测试用的原型页面。
+ *
+ * `quoteBlock` 是评价块上的锚点：空串 = 没有锚点（要点出来一个临时号），
+ * 给个数字 = 模拟 agent 给它补上了 `data-block`（转正）。
+ */
+function prototypeHtml(quoteBlock = ''): string {
+  return `<!doctype html>
 <html><head><meta charset="utf-8"><title>原型</title>
 <style>
   body { margin: 0; font: 14px/1.6 -apple-system, sans-serif; }
@@ -54,6 +55,7 @@ test.describe.serial('原型标注', () => {
   #buy { padding: 6px 14px; }
   .m-filler { height: 1600px; background: #fafbfc; }
   .m-foot { padding: 18px; background: #eef0f2; }
+  .m-quote { padding: 18px; background: #fff7e6; }
 </style></head>
 <body>
   <div class="m-nav" data-block="1">顶部导航 产品 定价 文档</div>
@@ -64,7 +66,7 @@ test.describe.serial('原型标注', () => {
       <button id="buy">升级</button>
     </div>
   </div>
-  <div class="m-quote" data-temp="T1">客户评价（没有锚点，这一轮不参与登记）</div>
+  <div class="m-quote"${quoteBlock ? ` data-block="${quoteBlock}"` : ''}>客户评价 以前这件事要开三个窗口</div>
   <div class="m-filler"></div>
   <div class="m-foot" data-block="5">页脚 © 2026 隐私 条款</div>
   <script>
@@ -76,7 +78,13 @@ test.describe.serial('原型标注', () => {
   </script>
 </body></html>
 `
-    )
+}
+
+test.describe.serial('原型标注', () => {
+  test.beforeAll(async () => {
+    projectDir = mkdtempSync(join(tmpdir(), 'codelet-annotation-e2e-project-'))
+    userDataDir = mkdtempSync(join(tmpdir(), 'codelet-annotation-e2e-userdata-'))
+    writeFileSync(join(projectDir, 'pricing.html'), prototypeHtml())
     prototypeUrl = pathToFileURL(join(projectDir, 'pricing.html')).toString()
 
     const now = Date.now()
@@ -136,7 +144,11 @@ test.describe.serial('原型标注', () => {
     app = await electron.launch({
       args: ['.'],
       cwd: repoRoot,
-      env: { ...process.env, CODELET_USER_DATA: userDataDir },
+      /*
+       * CODELET_ECHO_PROMPT：主进程记下发出去的消息就返回，不调模型。
+       * 标注的用例只关心「发出去的是什么」，不该为此请求真实 provider。
+       */
+      env: { ...process.env, CODELET_USER_DATA: userDataDir, CODELET_ECHO_PROMPT: '1' },
       timeout: 30_000
     })
     page = await app.firstWindow()
@@ -209,6 +221,48 @@ test.describe.serial('原型标注', () => {
       `(() => { const r = document.querySelector('.m-filler').getBoundingClientRect(); return { x: r.left + 30, y: r.top + 40 } })()`
     )
     await mouseAt(point.x, point.y, false)
+  }
+
+  /** 某个选择器里的一个安全点（大块只取靠上的位置，保证在视野里） */
+  async function pointIn(selector: string): Promise<{ x: number; y: number }> {
+    return evalPage<{ x: number; y: number }>(
+      `(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: r.left + Math.min(40, r.width / 2), y: r.top + Math.min(40, r.height / 2) } })()`
+    )
+  }
+
+  /**
+   * 主进程在交给 Pi 之前记下的最后一条消息正文。
+   *
+   * 没有真模型可发 —— 这个钩子（`host/main/ipc.ts`）让用例能断言「发出去的是什么」。
+   */
+  function lastPrompt(): Promise<string | null> {
+    return app!.evaluate(
+      () =>
+        (globalThis as unknown as { __codeletLastPrompt?: { text: string } }).__codeletLastPrompt
+          ?.text ?? null
+    )
+  }
+
+  /** 在输入框里写一句、回车发送，等主进程收到 */
+  async function sendMessage(text: string): Promise<void> {
+    const composer = page.locator('textarea').first()
+    await composer.fill(text)
+    await composer.press('Enter')
+    await expect.poll(lastPrompt).toContain(text)
+  }
+
+  /** 页面上画着的常驻角标都写着什么 */
+  function badgeTexts(): Promise<string[]> {
+    return evalPage<string[]>(
+      `Array.from(document.querySelectorAll('#codelet-annotation-layer .codelet-annotation-badge:not(.hover)')).map((node) => node.textContent)`
+    )
+  }
+
+  /** 其中用警示色画的那几个（临时号） */
+  function tempBadgeTexts(): Promise<string[]> {
+    return evalPage<string[]>(
+      `Array.from(document.querySelectorAll('#codelet-annotation-layer .codelet-annotation-badge.temp:not(.hover)')).map((node) => node.textContent)`
+    )
   }
 
   /** 页面上真的画着几个常驻角标 */
@@ -292,19 +346,7 @@ test.describe.serial('原型标注', () => {
   })
 
   test('发送带引用的消息时，载荷附在消息末尾', async () => {
-    const composer = page.locator('textarea').first()
-    await composer.fill('把 #4 的按钮换成实心')
-    await composer.press('Enter')
-
-    const lastPrompt = (): Promise<string | null> =>
-      app!.evaluate(
-        () =>
-          (globalThis as unknown as { __codeletLastPrompt?: { text: string } }).__codeletLastPrompt
-            ?.text ?? null
-      )
-
-    // 没有真模型可发；主进程在交给 Pi 之前记下了这一条消息的正文（测试钩子）
-    await expect.poll(lastPrompt).toContain('[引用] 原型块')
+    await sendMessage('把 #4 的按钮换成实心')
     const text = (await lastPrompt()) ?? ''
     expect(text.startsWith('把 #4 的按钮换成实心\n\n---\n[引用] 原型块\n')).toBe(true)
     expect(text).toContain('文件    pricing.html')
@@ -408,5 +450,77 @@ test.describe.serial('原型标注', () => {
 
     await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '浏览器', exact: true }).click()
     await expect(page.getByRole('button', { name: '标注' })).toHaveCount(0)
+  })
+
+  test('没有锚点的块拿临时号，补上锚点后转正', async () => {
+    // 回到产品 agent 的预览；标注模式还开着（主进程记着）
+    await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '产品 1' }).click()
+    await expect(page.getByRole('button', { name: /原型/ })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/标注模式 · 点击选块/)).toBeVisible()
+    await evalPage('window.scrollTo(0, 0)')
+
+    // 点没有 data-block 的评价块 → T1，chip 与角标都是警示色
+    const quote = await pointIn('.m-quote')
+    await mouseAt(quote.x, quote.y, true)
+    const t1Chip = page.getByLabel('移除引用「#T1」')
+    await expect(t1Chip).toBeVisible()
+    await expect(t1Chip.locator('..')).toHaveClass(/text-warn/)
+    await expect.poll(badgeTexts).toEqual(['4', 'T1'])
+    await expect.poll(tempBadgeTexts).toEqual(['T1'])
+
+    // 再点另一个没有锚点的块 → T2，不重号
+    const filler = await pointIn('.m-filler')
+    await mouseAt(filler.x, filler.y, true)
+    await expect(page.getByLabel('移除引用「#T2」')).toBeVisible()
+    await expect(page.getByLabel('移除引用「#T1」')).toHaveCount(1)
+    await expect(page.getByLabel('移除引用「#T3」')).toHaveCount(0)
+
+    // 重复点 T1 那一块：不多一个引用，也不再分配号
+    await mouseAt(quote.x, quote.y, true)
+    await expect(page.getByLabel('移除引用「#T1」')).toHaveCount(1)
+    await expect(page.getByLabel('移除引用「#T3」')).toHaveCount(0)
+
+    // 发送：临时号那一段写明「无锚点」，不出现锚点行、也不编块号
+    await sendMessage('把评价那段改大一号')
+    const tempPayload = (await lastPrompt()) ?? ''
+    const sections = tempPayload.split('\n\n')
+    const t1Section = sections.find((part) => part.includes('临时号')) ?? ''
+    expect(t1Section).toContain('临时号  T1（无锚点，凭文字和选择器找）')
+    expect(t1Section).not.toContain('锚点    ')
+    expect(t1Section).not.toContain('块号    ')
+    expect(sections.some((part) => part.includes('块号    4'))).toBe(true)
+    expect(tempPayload).toContain('临时号  T2（无锚点，凭文字和选择器找）')
+
+    // agent 给那一块补上 data-block，页面重建块登记 → 同一个选择器转正
+    writeFileSync(join(projectDir, 'pricing.html'), prototypeHtml('7'))
+    await app!.evaluate(({ webContents }) => {
+      const contents = webContents
+        .getAllWebContents()
+        .find((item) => item.getURL().includes('pricing.html'))
+      contents?.reload()
+    })
+    await expect.poll(async () => (await hookState()).blocks.map((block) => block.block)).toEqual([1, 3, 4, 7, 5])
+
+    // 角标换成正式块号；输入框里已经写下的 #T1 不改写
+    await expect.poll(badgeTexts).toEqual(['4', '7', 'T2'])
+    await expect.poll(tempBadgeTexts).toEqual(['T2'])
+    await expect(page.getByLabel('移除引用「#T1」')).toBeVisible()
+    expect((await hookState()).blocks.find((block) => block.block === 7)?.selector).toContain('m-quote')
+
+    // 清单里点 #T1 也能滚到那一块 —— 转正之后按块号找
+    await page.getByRole('button', { name: '清单' }).click()
+    await evalPage('window.scrollTo(0, document.documentElement.scrollHeight)')
+    await expect.poll(() => evalPage<number>('window.scrollY')).toBeGreaterThan(500)
+    await page.getByLabel('标注清单').getByRole('button').filter({ hasText: '#T1' }).click()
+    await expect.poll(() => evalPage<number>('window.scrollY')).toBeLessThan(500)
+
+    // 发送时按最新登记解析：T1 那段变成块号 7 与锚点，T2 仍是临时号
+    await sendMessage('评价那块再窄一点')
+    const promoted = (await lastPrompt()) ?? ''
+    const promotedSection = promoted.split('\n\n').find((part) => part.includes('块号    7')) ?? ''
+    expect(promotedSection).toContain('锚点    data-block="7"')
+    expect(promotedSection).toContain('选择器  ')
+    expect(promotedSection).not.toContain('临时号')
+    expect(promoted).toContain('临时号  T2（无锚点，凭文字和选择器找）')
   })
 })

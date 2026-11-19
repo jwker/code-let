@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { BROWSER_ANNOTATION_CHANNEL } from '@contract/index'
-import { previewFileOf, readPreviewBlock } from '../host/main/browser'
+import { previewFileOf, readBlockCandidate, readPreviewBlock } from '../host/main/browser'
 
 /**
  * 块登记的两处纯逻辑：载荷里的「文件」怎么算，页面报上来的块怎么洗。
@@ -68,6 +68,32 @@ describe('页面报上来的块', () => {
   it('不是对象就当没报', () => {
     expect(readPreviewBlock(null)).toBeNull()
     expect(readPreviewBlock('4')).toBeNull()
+  })
+
+  it('页面没有锚点时也收下来当候选 —— 临时号由主进程分配', () => {
+    expect(
+      readBlockCandidate({ block: null, anchor: null, selector: 'div.m-quote', text: '评价' })
+    ).toEqual({
+      block: null,
+      temp: null,
+      anchor: null,
+      selector: 'div.m-quote',
+      text: '评价'
+    })
+  })
+
+  it('页面自己报的临时号不算数', () => {
+    const candidate = readBlockCandidate({
+      block: null,
+      temp: 'T9',
+      selector: 'div.m-quote',
+      text: '评价'
+    })
+    expect(candidate?.temp).toBeNull()
+  })
+
+  it('块登记不收没有身份的块', () => {
+    expect(readPreviewBlock({ block: null, selector: 'div.m-quote', text: 'x' })).toBeNull()
   })
 })
 

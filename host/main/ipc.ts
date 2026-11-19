@@ -13,6 +13,7 @@ import type { BrowserHost } from '@contract/browser'
 import {
   annotationBadgesSchema,
   annotationFocusSchema,
+  annotationResolveSchema,
   annotationSetSchema,
   browserBoundsSchema,
   browserNavigateSchema,
@@ -237,11 +238,15 @@ export function registerIpc(
     /*
      * 测试钩子：E2E 要断言「发出去的消息里带着展开后的引用载荷」，
      * 但真模型在测试里不可用。只在设置了 CODELET_USER_DATA 的测试环境里记一份。
+     *
+     * CODELET_ECHO_PROMPT 是给「只关心发出去的是什么」的用例用的：记下来就返回，
+     * 不调模型 —— 这类用例不该为了看一条消息去请求一个真实 provider。
      */
     if (process.env.CODELET_USER_DATA) {
       ;(
         globalThis as unknown as { __codeletLastPrompt?: { agentId: string; text: string } }
       ).__codeletLastPrompt = { agentId, text }
+      if (process.env.CODELET_ECHO_PROMPT) return
     }
     await state.prompt(agentId, text, attachments, uploads)
   })
@@ -413,6 +418,11 @@ export function registerIpc(
     await getBrowser()?.focusAnnotation(host, key)
   })
 
+  ipcMain.handle(IPC.annotationResolve, async (_event, payload: unknown) => {
+    const { host, citations } = annotationResolveSchema.parse(payload)
+    return getBrowser()?.resolveCitations(host, citations) ?? citations
+  })
+
   ipcMain.handle(IPC.gitStatus, async (_event, payload: unknown) => {
     const { cwd } = gitCwdSchema.parse(payload)
     return state.getGitStatus(cwd)
@@ -518,6 +528,7 @@ export function registerIpc(
     ipcMain.removeHandler(IPC.annotationSet)
     ipcMain.removeHandler(IPC.annotationBadges)
     ipcMain.removeHandler(IPC.annotationFocus)
+    ipcMain.removeHandler(IPC.annotationResolve)
     ipcMain.removeHandler(IPC.gitStatus)
     ipcMain.removeHandler(IPC.gitDiff)
     ipcMain.removeHandler(IPC.temporaryOpen)

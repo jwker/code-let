@@ -93,7 +93,7 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
   /** 编号显示着吗（关掉后角标与描边全隐，号还在） */
   const numbersVisible = annotation?.numbers !== false
   const citations = useStore((s) => (agentId ? (s.citations[agentId] ?? NO_CITATIONS) : NO_CITATIONS))
-  /** 标注清单展开着吗 —— 纯界面状态，跟着这个面板走 */
+  /** 标注清单展开着吗 —— 纯界面状态，切到另一个宿主的预览时收起来 */
   const [listOpen, setListOpen] = useState(false)
   /** 只有一张 about:blank 的空白标签：还没做出任何页面 */
   const blankPreview = isAgentHost && (!active || active.url === 'about:blank')
@@ -154,6 +154,11 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
       numbersVisible
     )
   }, [browserHost, isAgentHost, citations, numbersVisible])
+
+  // 切换宿主时 React 会复用同一个组件实例（props 变了而已）：清单要跟着收起来
+  useEffect(() => {
+    setListOpen(false)
+  }, [browserHost])
 
   useEffect(() => {
     if (!addressFocused) setAddress(displayUrl(active))

@@ -4,6 +4,7 @@ import {
   IPC_EVENTS,
   type AnnotationEvent,
   type AnnotationState,
+  type BlockCitation,
   type ConsoleEvent,
   type ConsoleExportRequest,
   type ConsoleExportResult,
@@ -116,6 +117,8 @@ const api: CodeletApi = {
     ipcRenderer.invoke(IPC.annotationBadges, { host, keys, numbers }) as Promise<void>,
   focusAnnotation: (host, key) =>
     ipcRenderer.invoke(IPC.annotationFocus, { host, key }) as Promise<void>,
+  resolveCitations: (host, citations) =>
+    ipcRenderer.invoke(IPC.annotationResolve, { host, citations }) as Promise<BlockCitation[]>,
   getGitStatus: (cwd) => ipcRenderer.invoke(IPC.gitStatus, { cwd }) as Promise<GitStatus>,
   getGitDiff: (cwd, path, scope) =>
     ipcRenderer.invoke(IPC.gitDiff, { cwd, path, scope }) as Promise<GitDiff>,

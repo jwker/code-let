@@ -70,7 +70,7 @@ import type {
   ConsoleStats
 } from './console'
 import type { AgentInfo, AgentType, ProjectPaneView, ProjectTabInfo } from './agents'
-import type { AnnotationEvent, AnnotationState } from './annotation'
+import type { AnnotationEvent, AnnotationState, BlockCitation } from './annotation'
 import type { BrowserHost } from './browser'
 import type {
   ModelAuthEvent,
@@ -202,6 +202,8 @@ export const IPC = {
   annotationBadges: 'host:annotation:badges',
   /** 标注：滚到某一块（点标注清单里的条目） */
   annotationFocus: 'host:annotation:focus',
+  /** 标注：发送前把引用按最新登记解析一遍（临时号转正） */
+  annotationResolve: 'host:annotation:resolve',
   /** 列当前模型可用的思考等级 */
   thinkingLevels: 'host:thinking:levels',
   /** 设置某个标签的思考等级 */
@@ -966,6 +968,13 @@ export interface CodeletApi {
   setAnnotationBadges(host: BrowserHost, keys: string[], numbers: boolean): Promise<void>
   /** 滚到某一块 —— 标注清单里的条目点一下就用它 */
   focusAnnotation(host: BrowserHost, key: string): Promise<void>
+  /**
+   * 发送前把引用按最新登记解析一遍。
+   *
+   * 临时号在那块被补上锚点、页面重建登记之后换成正式块号；
+   * 输入框里的 `#T1` 文字不改写，改的只是发出去的那份载荷。
+   */
+  resolveCitations(host: BrowserHost, citations: BlockCitation[]): Promise<BlockCitation[]>
   /** 订阅标注状态。事件带宿主 —— 只有 `agent:<id>` 会有内容 */
   onAnnotation(listener: (event: AnnotationEvent) => void): () => void
   /** 订阅浏览器标签状态。事件带宿主 —— 两个宿主的池是分开的 */

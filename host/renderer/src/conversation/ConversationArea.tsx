@@ -8,6 +8,7 @@ import type {
   ThinkingLevel
 } from '@contract/index'
 import { blockKey, blockLabel, composeMessageWithCitations } from '@contract/index'
+import { agentBrowserHost } from '@contract/browser'
 import { useStore } from '../store'
 import { host } from '../host'
 import { useIndicator } from '../shell/useIndicator'
@@ -788,11 +789,19 @@ export function ConversationArea() {
       /*
        * 引用在这里展开成载荷附在消息末尾 —— chip 只是给人看的，
        * agent 收到的是文件、块号、锚点、选择器、文字摘要（不带源码片段）。
+       * 发之前按最新登记解析一遍：临时号（#T1）那块如果已经被补上锚点，
+       * 载荷里写的就是正式块号；解析不了就原样发，别把消息卡住。
        * 引用不清空：角标跟着它常驻，下一句还能接着用同一个号。
        */
+      const outgoing =
+        citations.length > 0
+          ? await host
+              .resolveCitations(agentBrowserHost(activeAgentId), citations)
+              .catch(() => citations)
+          : citations
       await host.prompt(
         activeAgentId,
-        composeMessageWithCitations(text, citations),
+        composeMessageWithCitations(text, outgoing),
         !isSlash && projectPaths.length > 0 ? projectPaths : undefined,
         !isSlash && uploadIds.length > 0 ? uploadIds : undefined
       )
