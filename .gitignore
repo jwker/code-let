@@ -16,7 +16,11 @@ blob-report/
 
 # AI 产物（设计稿、计划、缺陷记录、任务文档）统一放 .ai/，不进仓库。
 # 仓库里只留 README。
+# 例外：docs/adr（决策记录）和 docs/agents（技能配置）要进仓库 —— 换台机器技能还得读得到。
 .ai/
 .ai.bak-*/
 .agents/
-docs/
+docs/*
+!docs/adr/
+!docs/agents/
+.scratch/
