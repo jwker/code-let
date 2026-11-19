@@ -232,6 +232,20 @@ describe('重命名会话', () => {
     expect(host.snapshot().agents.find((agent) => agent.id === tabId)?.sessionTitle).toBe('新标题')
   })
 
+  it('改名动的是会话文件，但不能把自己标成「在别处改过」', async () => {
+    const { env, state: host, pi } = await boot()
+    const { agentId, path } = await seed(host, pi, env.cwd, '要改名的会话')
+    // 正常聊完一轮：这一轮自己写的东西算「已看到」
+    host.handleSessionEvent({ type: 'agent_settled', data: {}, agentId })
+    expect(host.snapshot().agents.find((agent) => agent.id === agentId)?.stale).toBe(false)
+
+    // 拉开一点时间，保证下一次写入的 mtime 确实更新
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await host.renameConversation(path, '改过的名字')
+
+    expect(host.snapshot().agents.find((agent) => agent.id === agentId)?.stale).toBe(false)
+  })
+
   it('空名字 —— 清掉自定义名，标题退回首条用户消息', async () => {
     const { env, state: host, pi } = await boot()
     const { path } = await seed(host, pi, env.cwd, '原始第一条消息')

@@ -490,6 +490,15 @@ export class PiRuntime implements PiRuntimePort {
       agentDir,
       sessionManager
     })
+    /*
+     * 把会话文件记在记录上。
+     *
+     * 新建的 agent 建 runtime 时还没有路径 —— 文件要等第一条消息才写出来。
+     * 不补上的话，/reload（或 stale 之后的重新加载）会走 `SessionManager.create`，
+     * 误开一条全新的空会话：界面上看就是历史忽然空了。
+     */
+    const sessionFile = record.runtime.session.sessionFile ?? null
+    if (sessionFile) record.path = sessionFile
   }
 
   /**

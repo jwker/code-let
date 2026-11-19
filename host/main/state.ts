@@ -417,6 +417,12 @@ export class HostState extends EventEmitter {
         content,
         display: true
       })
+      /*
+       * 这条提示是我们自己写进会话的。不把「已看到」推上去的话，文件 mtime
+       * 会比 seenMtime 新，下一次 stale 检查就把自己的写入当成「别处改过」——
+       * 界面上会冒出「这个会话在别处有更新」，用户点重新加载才发现是虚惊。
+       */
+      this.markWritten(agentId)
     } catch {
       // runtime 已经关了、提示发不出去 —— 不能拖垮轮结束
     }
@@ -1148,8 +1154,11 @@ export class HostState extends EventEmitter {
     const agent = this.agentStore.get(agentId)
     if (!agent?.sessionPath) return
     const live = this.liveOf(agentId)
+    const wasStale = live.stale
     live.seenMtime = mtimeOf(agent.sessionPath)
     live.stale = false
+    // 刚才如果已经被标成「别处改过」，现在要把它收回 —— 只改状态不推，界面会一直挂着
+    if (wasStale) this.push()
   }
 
   /**
@@ -1625,6 +1634,14 @@ export class HostState extends EventEmitter {
     const conversation = this.conversations.find((item) => normalize(item.path) === target)
     if (!conversation) throw new Error(`不在当前对话列表里：${path}`)
     await this.pi.renameSession(conversation.path, name.trim())
+    /*
+     * 改名也是我们自己往会话文件里写东西 —— 把「已看到」推到当下。
+     * 不推的话，紧接着的刷新会把这次改名当成「在别处改过」，
+     * 输入框会突然被禁用，还冒出一条重新加载的提示。
+     */
+    for (const agent of this.agentStore.list()) {
+      if (agent.sessionPath && normalize(agent.sessionPath) === target) this.markWritten(agent.id)
+    }
     /*
      * **不顺手改 agent 名**（两个名字分开维护）。
      *
