@@ -112,8 +112,10 @@ const api: CodeletApi = {
   getAnnotation: (host) => ipcRenderer.invoke(IPC.annotationGet, { host }) as Promise<AnnotationState>,
   setAnnotation: (host, enabled) =>
     ipcRenderer.invoke(IPC.annotationSet, { host, enabled }) as Promise<AnnotationState>,
-  setAnnotationBadges: (host, keys) =>
-    ipcRenderer.invoke(IPC.annotationBadges, { host, keys }) as Promise<void>,
+  setAnnotationBadges: (host, keys, numbers) =>
+    ipcRenderer.invoke(IPC.annotationBadges, { host, keys, numbers }) as Promise<void>,
+  focusAnnotation: (host, key) =>
+    ipcRenderer.invoke(IPC.annotationFocus, { host, key }) as Promise<void>,
   getGitStatus: (cwd) => ipcRenderer.invoke(IPC.gitStatus, { cwd }) as Promise<GitStatus>,
   getGitDiff: (cwd, path, scope) =>
     ipcRenderer.invoke(IPC.gitDiff, { cwd, path, scope }) as Promise<GitDiff>,

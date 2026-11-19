@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { AnnotationState, BlockCitation, BrowserState, BrowserTabState } from '@contract/index'
-import { blockKey } from '@contract/index'
+import { blockKey, blockLabel } from '@contract/index'
 import { isAgentBrowserHost, type BrowserHost } from '@contract/browser'
 import { host } from '../host'
 import { useStore } from '../store'
@@ -19,6 +19,41 @@ function displayUrl(tab: BrowserTabState | null): string {
 
 /** 没有引用时的空数组 —— 保持引用稳定，免得角标同步 effect 每帧都跑 */
 const NO_CITATIONS: BlockCitation[] = []
+
+/** 预览工具栏上的一个小按钮（标注 / 编号 / 清单共用一套样式） */
+function AnnotationToolButton({
+  label,
+  icon,
+  title,
+  pressed,
+  disabled,
+  onClick
+}: {
+  label: string
+  icon: string
+  title: string
+  pressed: boolean
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      aria-pressed={pressed}
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex h-[23px] flex-none items-center gap-1 rounded border px-2 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        pressed
+          ? 'border-accent bg-accent text-accent-fg'
+          : 'border-transparent text-fg-3 hover:bg-sunken hover:text-fg-1'
+      }`}
+    >
+      {icon} {label}
+    </button>
+  )
+}
 
 /**
  * 浏览器面板（PLAN.md D57）。
@@ -55,7 +90,11 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
   const agentId = isAgentHost ? browserHost.slice('agent:'.length) : ''
   const annotation: AnnotationState | null = useStore((s) => s.annotations[browserHost] ?? null)
   const annotationEnabled = annotation?.enabled === true
+  /** 编号显示着吗（关掉后角标与描边全隐，号还在） */
+  const numbersVisible = annotation?.numbers !== false
   const citations = useStore((s) => (agentId ? (s.citations[agentId] ?? NO_CITATIONS) : NO_CITATIONS))
+  /** 标注清单展开着吗 —— 纯界面状态，跟着这个面板走 */
+  const [listOpen, setListOpen] = useState(false)
   /** 只有一张 about:blank 的空白标签：还没做出任何页面 */
   const blankPreview = isAgentHost && (!active || active.url === 'about:blank')
 
@@ -109,8 +148,12 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
   /** 角标跟着输入框里的引用走：加一个多一个，删掉一起撤 */
   useEffect(() => {
     if (!isAgentHost) return
-    void host.setAnnotationBadges(browserHost, citations.map((item) => blockKey(item)))
-  }, [browserHost, isAgentHost, citations])
+    void host.setAnnotationBadges(
+      browserHost,
+      citations.map((item) => blockKey(item)),
+      numbersVisible
+    )
+  }, [browserHost, isAgentHost, citations, numbersVisible])
 
   useEffect(() => {
     if (!addressFocused) setAddress(displayUrl(active))
@@ -301,25 +344,38 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
           <span className="min-w-0 truncate font-mono text-[11px] text-fg-3" title={annotation?.file ?? ''}>
             {annotation?.file ?? '还没有原型文件'}
           </span>
-          <button
-            type="button"
-            aria-pressed={annotationEnabled}
-            aria-label="标注"
-            title="打开后，页面里的点击用来选块；再点一次把点击还给原型"
-            onClick={() => {
-              void host.setAnnotation(browserHost, !annotationEnabled).then((next) => {
-                useStore.getState().setAnnotation(next)
-              })
-            }}
-            disabled={blankPreview}
-            className={`ml-auto flex h-[23px] flex-none items-center gap-1 rounded border px-2 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-              annotationEnabled
-                ? 'border-accent bg-accent text-accent-fg'
-                : 'border-transparent text-fg-3 hover:bg-sunken hover:text-fg-1'
-            }`}
-          >
-            ✎ 标注
-          </button>
+          <div className="ml-auto flex flex-none items-center gap-0.5">
+            <AnnotationToolButton
+              label="标注"
+              icon="✎"
+              title="打开后，页面里的点击用来选块；再点一次把点击还给原型"
+              pressed={annotationEnabled}
+              disabled={blankPreview}
+              onClick={() => {
+                void host.setAnnotation(browserHost, !annotationEnabled).then((next) => {
+                  useStore.getState().setAnnotation(next)
+                })
+              }}
+            />
+            <AnnotationToolButton
+              label="编号"
+              icon="≡"
+              title="关掉之后画面干净，号还在"
+              pressed={numbersVisible}
+              disabled={!annotation}
+              onClick={() => {
+                if (!annotation) return
+                useStore.getState().setAnnotation({ ...annotation, numbers: !numbersVisible })
+              }}
+            />
+            <AnnotationToolButton
+              label="清单"
+              icon="☰"
+              title="列出这一页标过的块，点一条滚到那一块"
+              pressed={listOpen}
+              onClick={() => setListOpen((open) => !open)}
+            />
+          </div>
         </div>
       )}
 
@@ -327,6 +383,31 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
         <div className="flex h-[26px] flex-none items-center gap-1.5 border-b border-hairline bg-accent-wash px-2 text-[11px] text-fg-2">
           <span className="h-1.5 w-1.5 flex-none rounded-full bg-fg-1" />
           <span className="min-w-0 truncate">标注模式 · 点击选块，不触发原型自己的交互 · Esc 退出</span>
+        </div>
+      )}
+
+      {isAgentHost && listOpen && (
+        <div
+          role="group"
+          aria-label="标注清单"
+          className="flex max-h-[78px] flex-none flex-wrap items-center gap-1 overflow-y-auto border-b border-hairline bg-panel px-2 py-1.5"
+        >
+          {citations.length === 0 ? (
+            <span className="text-[11px] text-fg-3">这一页还没有标过的块</span>
+          ) : (
+            citations.map((citation) => (
+              <button
+                key={`${citation.file}:${blockKey(citation)}`}
+                type="button"
+                title={citation.selector}
+                onClick={() => void host.focusAnnotation(browserHost, blockKey(citation))}
+                className="flex h-[21px] max-w-[260px] items-center gap-1.5 rounded-full border border-info-line bg-info-wash px-2 text-[10.5px] text-info transition-colors hover:border-info"
+              >
+                <span className="flex-none font-mono">{blockLabel(citation)}</span>
+                <span className="min-w-0 truncate">{citation.text || citation.selector}</span>
+              </button>
+            ))
+          )}
         </div>
       )}
 

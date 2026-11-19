@@ -31,7 +31,7 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
   ].join('\n')
   document.documentElement.appendChild(style)
 
-  var state = { enabled: false, badges: [], hover: null }
+  var state = { enabled: false, badges: [], numbers: true, hover: null }
   var frame = 0
   var layer = null
 
@@ -153,20 +153,23 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
       document.documentElement.appendChild(layer)
     }
     layer.textContent = ''
-    if (!state.enabled && state.badges.length === 0) return
+    if (state.badges.length === 0 && !state.enabled) return
 
     var annotated = {}
     for (var i = 0; i < state.badges.length; i += 1) annotated[state.badges[i]] = true
 
-    for (var key in annotated) {
-      if (!Object.prototype.hasOwnProperty.call(annotated, key)) continue
-      if (state.enabled && state.hover && state.hover.key === key) continue
-      var el = findBlock(key)
-      if (!el) continue
-      var rect = el.getBoundingClientRect()
-      if (rect.width < 1 && rect.height < 1) continue
-      layer.appendChild(outlineNode(rect, true))
-      layer.appendChild(badgeNode(rect, key, false))
+    // 编号关掉时，已经标注的块不画角标也不画描边 —— 画面回到干净的原型
+    if (state.numbers) {
+      for (var key in annotated) {
+        if (!Object.prototype.hasOwnProperty.call(annotated, key)) continue
+        if (state.enabled && state.hover && state.hover.key === key) continue
+        var el = findBlock(key)
+        if (!el) continue
+        var rect = el.getBoundingClientRect()
+        if (rect.width < 1 && rect.height < 1) continue
+        layer.appendChild(outlineNode(rect, true))
+        layer.appendChild(badgeNode(rect, key, false))
+      }
     }
 
     if (state.enabled && state.hover && state.hover.el && state.hover.el.isConnected) {
@@ -219,9 +222,15 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
       else document.documentElement.removeAttribute('data-codelet-annotating')
       schedule()
     },
-    setBadges: function (keys) {
+    setBadges: function (keys, numbers) {
       state.badges = (keys || []).map(String)
+      if (typeof numbers === 'boolean') state.numbers = numbers
       schedule()
+    },
+    /** 标注清单点了一条：把那一块滚到视野中间 */
+    focus: function (key) {
+      var el = findBlock(String(key))
+      if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center', behavior: 'smooth' })
     },
     blocks: blocks,
     /** 给端到端测试读回页面状态：模式、悬停的是哪一块、哪些块带着角标 */
@@ -229,7 +238,8 @@ export const ANNOTATION_SCRIPT = String.raw`(function () {
       return {
         enabled: state.enabled,
         hover: state.hover ? state.hover.key : null,
-        badges: state.badges.slice()
+        badges: state.badges.slice(),
+        numbers: state.numbers
       }
     }
   }

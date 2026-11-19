@@ -59,11 +59,12 @@ const FAKE_BROWSER: BrowserState = {
 /** 假的原型标注状态：只到「长得像」为止 —— 页面里的角标要真宿主才有 */
 function fakeAnnotation(host: string, enabled = false) {
   if (!host.startsWith('agent:')) {
-    return { host, enabled: false, file: null, blocks: [] }
+    return { host, enabled: false, numbers: true, file: null, blocks: [] }
   }
   return {
     host,
     enabled,
+    numbers: true,
     file: 'preview/pricing.html',
     blocks: [
       {
@@ -945,6 +946,7 @@ export function createMockApi(): CodeletApi {
     getAnnotation: async (host) => fakeAnnotation(host),
     setAnnotation: async (host, enabled) => fakeAnnotation(host, enabled),
     setAnnotationBadges: async () => undefined,
+    focusAnnotation: async () => undefined,
     onAnnotation: () => () => undefined,
 
     // —— 调试控制台（预览模式里是假数据）——

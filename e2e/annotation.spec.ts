@@ -34,6 +34,7 @@ interface PageAnnotationState {
   enabled: boolean
   hover: string | null
   badges: string[]
+  numbers: boolean
 }
 
 test.describe.serial('原型标注', () => {
@@ -51,6 +52,8 @@ test.describe.serial('原型标注', () => {
   .m-card { flex: 1; border: 1px solid #ccc; border-radius: 8px; padding: 16px; }
   .m-card.pro { border-color: #356a9a; }
   #buy { padding: 6px 14px; }
+  .m-filler { height: 1600px; background: #fafbfc; }
+  .m-foot { padding: 18px; background: #eef0f2; }
 </style></head>
 <body>
   <div class="m-nav" data-block="1">顶部导航 产品 定价 文档</div>
@@ -62,6 +65,8 @@ test.describe.serial('原型标注', () => {
     </div>
   </div>
   <div class="m-quote" data-temp="T1">客户评价（没有锚点，这一轮不参与登记）</div>
+  <div class="m-filler"></div>
+  <div class="m-foot" data-block="5">页脚 © 2026 隐私 条款</div>
   <script>
     window.clicks = 0
     document.getElementById('buy').addEventListener('click', function () {
@@ -198,6 +203,21 @@ test.describe.serial('原型标注', () => {
     }, { id, keyCode })
   }
 
+  /** 把鼠标移到页面空白处，清掉悬停候选（不然它会顶掉那一块的常驻角标） */
+  async function clearHover(): Promise<void> {
+    const point = await evalPage<{ x: number; y: number }>(
+      `(() => { const r = document.querySelector('.m-filler').getBoundingClientRect(); return { x: r.left + 30, y: r.top + 40 } })()`
+    )
+    await mouseAt(point.x, point.y, false)
+  }
+
+  /** 页面上真的画着几个常驻角标 */
+  function badgeCount(): Promise<number> {
+    return evalPage<number>(
+      `document.querySelectorAll('#codelet-annotation-layer .codelet-annotation-badge:not(.hover)').length`
+    )
+  }
+
   function hookState(): Promise<HookAnnotationState> {
     return app!.evaluate(
       (_electron, host) =>
@@ -237,7 +257,7 @@ test.describe.serial('原型标注', () => {
 
     const state = await hookState()
     expect(state.file).toBe('pricing.html')
-    expect(state.blocks.map((block) => block.block)).toEqual([1, 3, 4])
+    expect(state.blocks.map((block) => block.block)).toEqual([1, 3, 4, 5])
     // 没有锚点的块这一轮不登记（临时号是下一票的事）
     expect(state.blocks.every((block) => block.anchor?.startsWith('data-block='))).toBe(true)
     expect(state.blocks.find((block) => block.block === 4)?.selector).toContain('.m-card')
@@ -310,6 +330,7 @@ test.describe.serial('原型标注', () => {
 
     // 角标还留着（关掉标注模式不撤号），也没有新引用
     await expect.poll(async () => (await pageState()).badges).toEqual(['4'])
+    await expect.poll(badgeCount).toBe(1)
     await expect(page.locator('[aria-label="移除引用「#4」"]')).toHaveCount(1)
 
     // 再打开，然后在页面里按 Esc 退出 —— 不用回去点工具栏
@@ -318,6 +339,52 @@ test.describe.serial('原型标注', () => {
     await pressKey('Escape')
     await expect(page.getByText(/标注模式 · 点击选块/)).toHaveCount(0)
     await expect.poll(async () => (await pageState()).enabled).toBe(false)
+  })
+
+  test('编号能整体隐藏角标，「清单」列出标过的块并能滚过去', async () => {
+    await page.getByRole('button', { name: '标注' }).click()
+    await expect(page.getByText(/标注模式 · 点击选块/)).toBeVisible()
+    await clearHover()
+    await expect.poll(badgeCount).toBe(1)
+
+    // 关掉编号：角标全隐，引用还在（号不丢）
+    await page.getByRole('button', { name: '编号' }).click()
+    await expect.poll(badgeCount).toBe(0)
+    await expect.poll(async () => (await pageState()).numbers).toBe(false)
+    await expect(page.locator('[aria-label="移除引用「#4」"]')).toHaveCount(1)
+
+    // 再打开：全部回来
+    await page.getByRole('button', { name: '编号' }).click()
+    await expect.poll(badgeCount).toBe(1)
+    await expect.poll(async () => (await pageState()).numbers).toBe(true)
+
+    // 滚到底部，把页脚也标上
+    await evalPage('window.scrollTo(0, document.documentElement.scrollHeight)')
+    const foot = await blockCenter(5)
+    await mouseAt(foot.x, foot.y, true)
+    await expect(page.getByLabel('移除引用「#5」')).toBeVisible()
+    await clearHover()
+    await expect.poll(badgeCount).toBe(2)
+
+    // 清单：块号 + 文字摘要，点一条滚到那一块
+    await page.getByRole('button', { name: '清单' }).click()
+    const list = page.getByLabel('标注清单')
+    await expect(list).toBeVisible()
+    await expect(list.getByRole('button')).toHaveCount(2)
+    await expect(list).toContainText('#4')
+    await expect(list).toContainText('专业版')
+    await expect(list).toContainText('#5')
+    await expect(list).toContainText('页脚')
+
+    await evalPage('window.scrollTo(0, 0)')
+    await expect.poll(() => evalPage<number>('window.scrollY')).toBe(0)
+    await list.getByRole('button').filter({ hasText: '#5' }).click()
+    await expect.poll(() => evalPage<number>('window.scrollY')).toBeGreaterThan(500)
+
+    // 删掉 #5 的引用：角标和清单里那一条一起消失
+    await page.getByLabel('移除引用「#5」').click()
+    await expect(list.getByRole('button')).toHaveCount(1)
+    await expect.poll(badgeCount).toBe(1)
   })
 
   test('项目级浏览器的页面点不出标注', async () => {

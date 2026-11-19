@@ -198,8 +198,10 @@ export const IPC = {
   annotationGet: 'host:annotation:get',
   /** 标注：开 / 关标注模式 */
   annotationSet: 'host:annotation:set',
-  /** 标注：同步「哪些块显示常驻角标」 */
+  /** 标注：同步「哪些块显示常驻角标」，以及编号是否显示 */
   annotationBadges: 'host:annotation:badges',
+  /** 标注：滚到某一块（点标注清单里的条目） */
+  annotationFocus: 'host:annotation:focus',
   /** 列当前模型可用的思考等级 */
   thinkingLevels: 'host:thinking:levels',
   /** 设置某个标签的思考等级 */
@@ -956,8 +958,14 @@ export interface CodeletApi {
   getAnnotation(host: BrowserHost): Promise<AnnotationState>
   /** 开 / 关标注模式。项目级浏览器的页面不参与标注，恒为关 */
   setAnnotation(host: BrowserHost, enabled: boolean): Promise<AnnotationState>
-  /** 同步「哪些块显示常驻角标」—— 键是块号或临时号，跟着输入框里的引用走 */
-  setAnnotationBadges(host: BrowserHost, keys: string[]): Promise<void>
+  /**
+   * 同步「哪些块显示常驻角标」，以及编号显示着没有。
+   *
+   * 键是块号或临时号，跟着输入框里的引用走；numbers 为假时角标与描边全隐。
+   */
+  setAnnotationBadges(host: BrowserHost, keys: string[], numbers: boolean): Promise<void>
+  /** 滚到某一块 —— 标注清单里的条目点一下就用它 */
+  focusAnnotation(host: BrowserHost, key: string): Promise<void>
   /** 订阅标注状态。事件带宿主 —— 只有 `agent:<id>` 会有内容 */
   onAnnotation(listener: (event: AnnotationEvent) => void): () => void
   /** 订阅浏览器标签状态。事件带宿主 —— 两个宿主的池是分开的 */

@@ -53,6 +53,8 @@ interface AnnotationRecord {
   blocks: PreviewBlock[]
   /** 哪些块该显示常驻角标（键是块号或临时号） */
   badges: string[]
+  /** 编号显示着吗；关掉后角标与描边全隐，号还在 */
+  numbers: boolean
 }
 
 /**
@@ -207,7 +209,13 @@ export class BrowserManager {
   private annotationRecord(host: BrowserHost): AnnotationRecord {
     const found = this.annotations.get(host)
     if (found) return found
-    const created: AnnotationRecord = { enabled: false, file: null, blocks: [], badges: [] }
+    const created: AnnotationRecord = {
+      enabled: false,
+      file: null,
+      blocks: [],
+      badges: [],
+      numbers: true
+    }
     this.annotations.set(host, created)
     return created
   }
@@ -215,10 +223,16 @@ export class BrowserManager {
   annotationState(host: BrowserHost): AnnotationState {
     // 标注只作用于产品 agent 的预览宿主，项目级浏览器不参与
     if (!isAgentBrowserHost(host)) {
-      return { host, enabled: false, file: null, blocks: [] }
+      return { host, enabled: false, numbers: true, file: null, blocks: [] }
     }
     const record = this.annotationRecord(host)
-    return { host, enabled: record.enabled, file: record.file, blocks: record.blocks }
+    return {
+      host,
+      enabled: record.enabled,
+      numbers: record.numbers,
+      file: record.file,
+      blocks: record.blocks
+    }
   }
 
   /** 开 / 关标注模式。项目级宿主恒为关 */
@@ -237,16 +251,37 @@ export class BrowserManager {
   }
 
   /**
-   * 同步常驻角标的集合。
+   * 同步常驻角标的集合与编号的显隐。
    *
    * 键跟着输入框里的引用走：加一个引用多一个角标，删掉引用角标一起撤掉。
+   * numbers 是「编号」开关：关掉只是不画，号与引用都还在。
    */
-  async setAnnotationBadges(host: BrowserHost, keys: string[]): Promise<void> {
+  async setAnnotationBadges(host: BrowserHost, keys: string[], numbers: boolean): Promise<void> {
     if (!isAgentBrowserHost(host)) return
     const record = this.annotationRecord(host)
     record.badges = [...new Set(keys.filter((key) => key.length > 0))].slice(0, 500)
+    record.numbers = numbers
     const tab = this.pools.active(host)
-    if (tab) await this.runAnnotation(tab, `setBadges(${JSON.stringify(record.badges)})`)
+    if (tab) await this.pushBadges(tab, record)
+  }
+
+  /**
+   * 滚到某一块 —— 标注清单里的条目点一下就用它。
+   *
+   * 块不在当前页面上（agent 重写过原型）时页面里什么也不会发生。
+   */
+  async focusAnnotation(host: BrowserHost, key: string): Promise<void> {
+    if (!isAgentBrowserHost(host)) return
+    const tab = this.pools.active(host)
+    if (!tab) return
+    await this.runAnnotation(tab, `focus(${JSON.stringify(key)})`)
+  }
+
+  private async pushBadges(tab: Tab, record: AnnotationRecord): Promise<void> {
+    await this.runAnnotation(
+      tab,
+      `setBadges(${JSON.stringify(record.badges)}, ${record.numbers ? 'true' : 'false'})`
+    )
   }
 
   /** 在原型页面里执行一段 `__codeletAnnotation` 调用；页面没注入过时安静地失败 */
@@ -269,7 +304,7 @@ export class BrowserManager {
     }
     const record = this.annotationRecord(tab.host)
     await this.runAnnotation(tab, `setMode(${record.enabled ? 'true' : 'false'})`)
-    await this.runAnnotation(tab, `setBadges(${JSON.stringify(record.badges)})`)
+    await this.pushBadges(tab, record)
     await this.scanAnnotation(tab.host, tab)
     this.emitAnnotation(tab.host)
   }

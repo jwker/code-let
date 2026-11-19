@@ -12,6 +12,7 @@ import {
 import type { BrowserHost } from '@contract/browser'
 import {
   annotationBadgesSchema,
+  annotationFocusSchema,
   annotationSetSchema,
   browserBoundsSchema,
   browserNavigateSchema,
@@ -387,6 +388,7 @@ export function registerIpc(
   const emptyAnnotation = (host: BrowserHost): AnnotationState => ({
     host,
     enabled: false,
+    numbers: true,
     file: null,
     blocks: []
   })
@@ -402,8 +404,13 @@ export function registerIpc(
   })
 
   ipcMain.handle(IPC.annotationBadges, async (_event, payload: unknown) => {
-    const { host, keys } = annotationBadgesSchema.parse(payload)
-    await getBrowser()?.setAnnotationBadges(host, keys)
+    const { host, keys, numbers } = annotationBadgesSchema.parse(payload)
+    await getBrowser()?.setAnnotationBadges(host, keys, numbers)
+  })
+
+  ipcMain.handle(IPC.annotationFocus, async (_event, payload: unknown) => {
+    const { host, key } = annotationFocusSchema.parse(payload)
+    await getBrowser()?.focusAnnotation(host, key)
   })
 
   ipcMain.handle(IPC.gitStatus, async (_event, payload: unknown) => {
@@ -510,6 +517,7 @@ export function registerIpc(
     ipcMain.removeHandler(IPC.annotationGet)
     ipcMain.removeHandler(IPC.annotationSet)
     ipcMain.removeHandler(IPC.annotationBadges)
+    ipcMain.removeHandler(IPC.annotationFocus)
     ipcMain.removeHandler(IPC.gitStatus)
     ipcMain.removeHandler(IPC.gitDiff)
     ipcMain.removeHandler(IPC.temporaryOpen)

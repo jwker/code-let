@@ -37,6 +37,12 @@ export interface AnnotationState {
   host: string
   /** 标注模式开着吗 */
   enabled: boolean
+  /**
+   * 编号显示着吗（已经标注的块的角标与描边）。
+   *
+   * 关掉之后画面回到干净的原型 —— 号不丢，只是不画；再打开全部回来。
+   */
+  numbers: boolean
   /** 当前页面对应的原型文件；还没打开页面时为 null */
   file: string | null
   /** 当前页面的块登记（只含有锚点的块，按文档顺序） */

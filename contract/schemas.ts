@@ -192,7 +192,14 @@ export const annotationSetSchema = z.object({
 /** 角标同步：键是块号或临时号；上限防一手超长数组 */
 export const annotationBadgesSchema = z.object({
   host: browserHostSchema,
-  keys: z.array(z.string().min(1).max(20)).max(500)
+  keys: z.array(z.string().min(1).max(20)).max(500),
+  numbers: z.boolean()
+})
+
+/** 标注清单：滚到某一块 */
+export const annotationFocusSchema = z.object({
+  host: browserHostSchema,
+  key: z.string().min(1).max(20)
 })
 
 /** Git 是项目级的东西 —— 按目录取，不按 agent */
