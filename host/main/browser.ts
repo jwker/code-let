@@ -15,10 +15,12 @@ import {
 import {
   BrowserPools,
   PROJECT_BROWSER,
+  agentBrowserHost,
   isAgentBrowserHost,
   type BrowserHost
 } from './browserPools'
 import { ANNOTATION_SCRIPT } from './annotationScript'
+import { PrototypeWatch } from './prototypeWatch'
 import {
   assignTemp,
   resolveBlockKey,
@@ -112,16 +114,22 @@ export function readBlockCandidate(value: unknown): PreviewBlock | null {
   return block ? { ...block, temp: null } : null
 }
 
+/** 原型文件的绝对路径。只有本地文件有；http 页面、空白页都没有文件可看 */
+export function prototypePathOf(url: string): string | null {
+  if (!url || !url.startsWith('file:')) return null
+  try {
+    return fileURLToPath(url)
+  } catch {
+    return null
+  }
+}
+
 /** 从页面 URL 算出引用载荷里的「文件」：项目内的本地文件用相对路径 */
 export function previewFileOf(url: string, cwd: string | null): string | null {
   if (!url || url === 'about:blank') return null
   if (!url.startsWith('file:')) return url
-  let absolute = ''
-  try {
-    absolute = fileURLToPath(url)
-  } catch {
-    return url
-  }
+  const absolute = prototypePathOf(url)
+  if (!absolute) return url
   if (!cwd) return absolute
   const rel = relative(cwd, absolute)
   if (!rel || rel.startsWith('..')) return absolute
@@ -216,6 +224,8 @@ export class BrowserManager {
   private disposed = false
   /** 按宿主分开的标注登记（页面刷新后重建，只活在本次运行内） */
   private readonly annotations = new Map<BrowserHost, AnnotationRecord>()
+  /** 「这一轮动过原型文件没有」的记账 —— 轮结束时决定要不要自动刷新 */
+  private readonly watch = new PrototypeWatch()
 
   constructor(
     private readonly win: BrowserWindow,
@@ -331,6 +341,39 @@ export class BrowserManager {
       .catch(() => {
         // 页面刚导航、脚本还没装上 —— 下一张 did-finish-load 会重来
       })
+  }
+
+  /**
+   * 一轮开始：记下当前预览文件的时间戳。
+   *
+   * 只有产品 agent 的预览宿主有原型文件；项目级浏览器不参与。
+   */
+  async noteTurnStart(agentId: string): Promise<void> {
+    const host = agentBrowserHost(agentId)
+    await this.watch.begin(agentId, this.previewPath(host))
+  }
+
+  /**
+   * 一轮结束：这一轮动过原型文件就重新加载预览，返回刷没刷。
+   *
+   * 没动过就什么都不做 —— 刷新会把用户正在看的滚动位置带走。
+   * 重新加载之后 `did-finish-load` 会重建块登记、按块号恢复角标。
+   */
+  async noteTurnEnd(agentId: string): Promise<boolean> {
+    const host = agentBrowserHost(agentId)
+    const path = this.previewPath(host)
+    const tab = this.pools.active(host)
+    const changed = await this.watch.end(agentId, path)
+    if (!changed || !tab) return false
+    tab.view.webContents.reload()
+    return true
+  }
+
+  /** 当前预览标签对应的本地文件（绝对路径）；没有就是 null */
+  private previewPath(host: BrowserHost): string | null {
+    const tab = this.pools.active(host)
+    if (!tab) return null
+    return prototypePathOf(tab.view.webContents.getURL() || tab.url)
   }
 
   /** 注入标注脚本、恢复开关与角标、重建块登记 */
@@ -566,6 +609,7 @@ export class BrowserManager {
     this.disposed = true
     ipcMain.removeListener(BROWSER_ANNOTATION_CHANNEL, this.onPageMessage)
     this.annotations.clear()
+    this.watch.clear()
     for (const { tab } of this.pools.allTabs()) this.detach(tab)
     this.pools.clear()
     this.visibleHost = null

@@ -12,6 +12,7 @@ import { SettingsStore } from './settings'
 import { APP_ORIGIN, registerSchemesAsPrivileged, serveRenderer } from './protocol'
 import { HostState } from './state'
 import { BrowserManager } from './browser'
+import type { PiEvent } from './pi/runtime'
 import {
   isOnSomeDisplay,
   loadWindowState,
@@ -184,6 +185,13 @@ function createWindow(): BrowserWindow {
    */
   if (process.env.CODELET_USER_DATA) {
     ;(globalThis as unknown as { __codeletBrowser?: BrowserManager }).__codeletBrowser = browser
+    /*
+     * 把合成的会话事件送进宿主 —— 自动刷新的用例需要「一轮开始 / 一轮结束」，
+     * 但真模型在测试里跑不了。走的是和真事件同一条处理路径。
+     */
+    ;(globalThis as unknown as { __codeletSessionEvent?: unknown }).__codeletSessionEvent = (
+      event: PiEvent
+    ) => state.handleSessionEvent(event)
     /*
      * 导出用的保存对话框同理：原生面板 Playwright 点不到，
      * 测试里换成直接返回路径。默认落到临时目录里。

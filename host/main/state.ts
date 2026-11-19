@@ -48,7 +48,7 @@ import {
   resolveInsideCwd,
   searchFiles as searchProjectFiles
 } from './files'
-import { PiRuntime, type PiRuntimePort } from './pi/runtime'
+import { PiRuntime, type PiEvent, type PiRuntimePort } from './pi/runtime'
 import { ProjectStore } from './projects'
 import {
   AgentStore,
@@ -108,6 +108,8 @@ const MIN_AWAY_MS = 3000
 
 export class HostState extends EventEmitter {
   readonly pi: PiRuntimePort
+  /** 浏览器（预览宿主）。宿主状态拿它做「一轮结束要不要刷新预览」 */
+  private browser: BrowserManager | null = null
   /** 用户选的项目清单 —— 会话清单只列这些项目的会话 */
   private readonly projects: ProjectStore
   private readonly tabStore: TabStore
@@ -221,6 +223,7 @@ export class HostState extends EventEmitter {
    * 用户正在看的那一页换掉了。
    */
   attachBrowser(browser: BrowserManager): void {
+    this.browser = browser
     this.pi.setBrowserToolHandler?.((agentId, request) => {
       const payload = request as { tool?: unknown; args?: unknown }
       const tool = typeof payload.tool === 'string' ? payload.tool : ''
@@ -305,39 +308,54 @@ export class HostState extends EventEmitter {
     this.emit('snapshot', this.snapshot())
   }
 
+  /**
+   * 处理一条 Pi 会话事件（真事件和测试钩子都走这里）。
+   *
+   * 公开出来是给端到端测试用的：`globalThis.__codeletSessionEvent` 只在测试环境挂，
+   * 用例靠它把「一轮开始 / 一轮结束」送进宿主，不用跑真模型。
+   */
+  handleSessionEvent(event: PiEvent): void {
+    // 扩展错误走快照，不混进会话事件流
+    if (event.type === 'extension_error') {
+      this.recordExtensionError(event.agentId, event.data as Omit<ExtensionErrorInfo, 'agentId'>)
+      return
+    }
+    // 调试控制台的记录：进存储，**不进会话事件流** —— 正文太大，不能发给渲染进程
+    if (event.type === 'debug_console_record') {
+      this.console.enqueue(event.data as ConsoleRecordInput)
+      this.emit('console-updated')
+      return
+    }
+    /*
+     * 一轮的开始与结束：记下 / 比较原型文件的修改时间。
+     * 结束那一下如果这一轮动过文件，预览自动重新加载（票 04）；没动过就不动。
+     */
+    if (event.type === 'agent_start') void this.browser?.noteTurnStart(event.agentId)
+    if (event.type === 'agent_settled') void this.browser?.noteTurnEnd(event.agentId)
+
+    this.emit('session-event', event)
+    // 模型被换了（比如扩展调的 setModel）—— 快照跟着变
+    if (event.type === 'model_select') {
+      this.readSession()
+      this.refreshTemporary()
+      this.push()
+    }
+    // 会话文件变了，对话列表要跟着变
+    if (affectsConversationList(event)) {
+      this.conversationsRefresh.schedule()
+    }
+    // 一轮结束 —— 这一轮我们自己写了不少东西，把「已看到」的时间推上去，
+    // 免得紧接着的检查把自己标成「有外部更新」
+    if (event.type === 'agent_settled') this.markWritten(event.agentId)
+  }
+
   // ---------------------------------------------------------------------
   // 启动
   // ---------------------------------------------------------------------
 
   async init(): Promise<void> {
     // 会话流事件：转发给渲染进程（带 tabId）
-    this.pi.onEvent((event) => {
-      // 扩展错误走快照，不混进会话事件流
-      if (event.type === 'extension_error') {
-        this.recordExtensionError(event.agentId, event.data as Omit<ExtensionErrorInfo, 'agentId'>)
-        return
-      }
-      // 调试控制台的记录：进存储，**不进会话事件流** —— 正文太大，不能发给渲染进程
-      if (event.type === 'debug_console_record') {
-        this.console.enqueue(event.data as ConsoleRecordInput)
-        this.emit('console-updated')
-        return
-      }
-      this.emit('session-event', event)
-      // 模型被换了（比如扩展调的 setModel）—— 快照跟着变
-      if (event.type === 'model_select') {
-        this.readSession()
-        this.refreshTemporary()
-        this.push()
-      }
-      // 会话文件变了，对话列表要跟着变
-      if (affectsConversationList(event)) {
-        this.conversationsRefresh.schedule()
-      }
-      // 一轮结束 —— 这一轮我们自己写了不少东西，把「已看到」的时间推上去，
-      // 免得紧接着的检查把自己标成「有外部更新」
-      if (event.type === 'agent_settled') this.markWritten(event.agentId)
-    })
+    this.pi.onEvent((event) => this.handleSessionEvent(event))
 
     // 先把会话列表读出来 —— 首次启动没有标签时，要靠它找「接着上次那个会话跑」
     await this.refreshConversations()

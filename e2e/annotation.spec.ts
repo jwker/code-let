@@ -163,14 +163,59 @@ test.describe.serial('原型标注', () => {
     }
   })
 
-  /** 找到原型页面那个 webContents 的 id */
+  /**
+   * 找到**产品 agent 预览**那个 webContents 的 id。
+   *
+   * 项目浏览器可能也开着同一个文件（地址带 `?project=1`），要把它排除掉。
+   */
   async function contentId(): Promise<number> {
     const id = await app!.evaluate(({ webContents }, needle) => {
-      const found = webContents.getAllWebContents().find((item) => item.getURL().includes(needle))
+      const found = webContents
+        .getAllWebContents()
+        .find((item) => item.getURL().includes(needle) && !item.getURL().includes('project=1'))
       return found ? found.id : 0
     }, 'pricing.html')
     if (!id) throw new Error('没找到原型页面')
     return id
+  }
+
+  /** 在项目级浏览器的那个页面里执行脚本 */
+  async function evalProjectPage<T>(script: string): Promise<T> {
+    const id = await app!.evaluate(({ webContents }) => {
+      const found = webContents
+        .getAllWebContents()
+        .find((item) => item.getURL().includes('project=1'))
+      return found ? found.id : 0
+    })
+    if (!id) throw new Error('没找到项目浏览器的页面')
+    return (await app!.evaluate(async ({ webContents }, args) => {
+      const contents = webContents.fromId(args.id)
+      if (!contents) throw new Error('项目浏览器的页面没了')
+      return contents.executeJavaScript(args.script)
+    }, { id, script })) as T
+  }
+
+  /**
+   * 把一轮合成事件送进宿主（测试钩子）。
+   *
+   * 真模型在测试里跑不了，但「一轮开始 / 结束」这条路径要和真事件走同一条。
+   */
+  async function emitSession(type: 'agent_start' | 'agent_settled'): Promise<void> {
+    await app!.evaluate(
+      async (_electron, args) => {
+        const push = (
+          globalThis as unknown as {
+            __codeletSessionEvent: (event: { type: string; data: unknown; agentId: string }) => void
+          }
+        ).__codeletSessionEvent
+        push({ type: args.type, data: {}, agentId: 'agent-p' })
+      },
+      { type }
+    )
+  }
+
+  function wait(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 
   /** 在原型页面里执行一段脚本并读回结果 */
@@ -522,5 +567,63 @@ test.describe.serial('原型标注', () => {
     expect(promotedSection).toContain('选择器  ')
     expect(promotedSection).not.toContain('临时号')
     expect(promoted).toContain('临时号  T2（无锚点，凭文字和选择器找）')
+  })
+
+  test('一轮结束时，动过原型文件就自动刷新预览', async () => {
+    await expect.poll(badgeTexts).toEqual(['4', '7', 'T2'])
+
+    // —— 改过文件：轮结束自动刷新，角标按块号回来 ——
+    await emitSession('agent_start')
+    // 等「一轮开始」那边把时间戳拍完（真实场景里中间隔着整轮的工具调用）
+    await wait(150)
+    writeFileSync(
+      join(projectDir, 'pricing.html'),
+      prototypeHtml('7').replace('顶部导航 产品 定价 文档', '顶部导航 产品 定价 文档 改过了')
+    )
+    await emitSession('agent_settled')
+
+    // 没点刷新按钮，页面自己换了内容
+    await expect.poll(() => evalPage<string>('document.body.innerText')).toContain('改过了')
+    await expect.poll(badgeTexts).toEqual(['4', '7', 'T2'])
+    await expect
+      .poll(async () => (await hookState()).blocks.map((block) => block.block))
+      .toEqual([1, 3, 4, 7, 5])
+
+    // —— 没动过：不刷新，滚动位置留住 ——
+    await evalPage('window.scrollTo(0, 400)')
+    await expect.poll(() => evalPage<number>('window.scrollY')).toBeGreaterThan(300)
+    await evalPage('window.__noReload = "yes"')
+    await emitSession('agent_start')
+    await wait(150)
+    await emitSession('agent_settled')
+    await wait(500)
+    expect(await evalPage<string>('window.__noReload ?? ""')).toBe('yes')
+    expect(await evalPage<number>('window.scrollY')).toBeGreaterThan(300)
+
+    // —— 项目级浏览器的同一个页面不受影响 ——
+    await app!.evaluate(async (_electron, url) => {
+      const manager = (
+        globalThis as unknown as {
+          __codeletBrowser: {
+            tool: (name: string, args: Record<string, unknown>, host: string) => Promise<unknown>
+          }
+        }
+      ).__codeletBrowser
+      await manager.tool('navigate', { url }, 'project')
+    }, `${prototypeUrl}?project=1`)
+    await expect.poll(() => evalProjectPage<string>('document.body.innerText')).toContain('改过了')
+    await evalProjectPage('window.__projectMarker = "yes"')
+
+    await emitSession('agent_start')
+    await wait(150)
+    writeFileSync(
+      join(projectDir, 'pricing.html'),
+      prototypeHtml('7').replace('顶部导航 产品 定价 文档', '顶部导航 产品 定价 文档 又改了一次')
+    )
+    await emitSession('agent_settled')
+
+    await expect.poll(() => evalPage<string>('document.body.innerText')).toContain('又改了一次')
+    expect(await evalProjectPage<string>('window.__projectMarker ?? ""')).toBe('yes')
+    expect(await evalProjectPage<string>('document.body.innerText')).toContain('改过了')
   })
 })
