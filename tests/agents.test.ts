@@ -41,6 +41,7 @@ function record(overrides: Partial<AgentRecord> = {}): AgentRecord {
     lastActiveAt: 1_000,
     archivedAt: null,
     turns: 0,
+    previewUrl: null,
     ...overrides
   }
 }
@@ -93,6 +94,34 @@ describe('agent 清单', () => {
     const reloaded = new AgentStore(file)
     expect(reloaded.list()).toHaveLength(1)
     expect(reloaded.get('a1')?.sessionPath).toBe('/repo/s1.jsonl')
+  })
+
+  it('上次预览的地址跟着落盘；老记录没有这个字段时按 null 读', () => {
+    const { store, file } = makeStore()
+    store.add(record({ previewUrl: 'file:///repo/preview/pricing.html' }))
+    expect(new AgentStore(file).get('a1')?.previewUrl).toBe(
+      'file:///repo/preview/pricing.html'
+    )
+
+    // 更早版本写出来的记录没有 previewUrl —— 不丢这条，按 null 读
+    writeFileSync(
+      file,
+      JSON.stringify({
+        version: 1,
+        agents: [
+          {
+            id: 'old',
+            name: '产品 1',
+            type: 'product',
+            instance: 1,
+            cwd: '/repo',
+            sessionPath: null,
+            lastActiveAt: 1
+          }
+        ]
+      })
+    )
+    expect(new AgentStore(file).get('old')?.previewUrl).toBeNull()
   })
 
   it('缺字段的记录被丢掉，不拿默认值补', () => {

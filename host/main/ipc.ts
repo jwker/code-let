@@ -340,6 +340,8 @@ export function registerIpc(
 
   ipcMain.handle(IPC.browserGet, async (_event, payload: unknown) => {
     const { host } = browserStateSchema.parse(payload ?? {})
+    // 产品 agent 的预览按上次的记录恢复；渲染层第一次要状态时顺手做
+    await state.restorePreview(host)
     return (await getBrowser()?.getState(host)) ?? emptyBrowser(host)
   })
 

@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain, WebContentsView, type IpcMainEvent } from 'electron'
+import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'
@@ -13,6 +14,7 @@ import {
   type BrowserTabState,
   type PreviewBlock
 } from '@contract/index'
+import { agentIdOfHost } from '@contract/browser'
 import {
   BrowserPools,
   PROJECT_BROWSER,
@@ -154,6 +156,23 @@ function toRecord(anchors: FileAnchor[]): Record<number, string> {
   return record
 }
 
+/**
+ * 记录下来的预览地址还能不能用。
+ *
+ * 只认本地文件（`file:`）—— http 预览（dev server）下次启动多半没起，
+ * 恢复出一个加载失败的页面比空态更糟。文件不在了也当没有记录。
+ * 存在性从外面传进来，测试不用碰磁盘。
+ */
+export function restorablePreviewUrl(
+  url: string | null | undefined,
+  fileExists: (path: string) => boolean = existsSync
+): string | null {
+  if (!url) return null
+  const path = prototypePathOf(url)
+  if (!path || !fileExists(path)) return null
+  return url
+}
+
 /** 从页面 URL 算出引用载荷里的「文件」：项目内的本地文件用相对路径 */
 export function previewFileOf(url: string, cwd: string | null): string | null {
   if (!url || url === 'about:blank') return null
@@ -238,6 +257,18 @@ export function normalizeBrowserUrl(input: string): { url: string; error: string
   return { url: url.toString(), error: null }
 }
 
+/** BrowserManager 的外围依赖 —— 全是回调，构造时一次给齐 */
+export interface BrowserManagerOptions {
+  /** 标签状态变了 */
+  onChange: (host: BrowserHost, state: BrowserState) => void
+  /** 标注状态变了（开关、块登记重建、用户点了一块） */
+  onAnnotation?: (event: AnnotationEvent) => void
+  /** 宿主对应的项目目录 —— 引用载荷里的「文件」要相对它 */
+  cwdForHost?: (host: BrowserHost) => string | null
+  /** 某个 agent 的预览换成了这个本地地址 */
+  onPreviewUrl?: (agentId: string, url: string) => void
+}
+
 export class BrowserManager {
   /**
    * 按宿主分开的标签池（PLAN.md D57）。
@@ -257,14 +288,27 @@ export class BrowserManager {
   /** 「这一轮动过原型文件没有」的记账 —— 轮结束时决定要不要自动刷新 */
   private readonly watch = new PrototypeWatch()
 
-  constructor(
-    private readonly win: BrowserWindow,
-    private readonly onChange: (host: BrowserHost, state: BrowserState) => void,
-    /** 标注状态变了（开关、块登记重建、用户点了一块） */
-    private readonly onAnnotation: (event: AnnotationEvent) => void = () => {},
-    /** 宿主对应的项目目录 —— 引用载荷里的「文件」要相对它 */
-    private readonly cwdForHost: (host: BrowserHost) => string | null = () => null
-  ) {
+  private readonly win: BrowserWindow
+  private readonly onChange: (host: BrowserHost, state: BrowserState) => void
+  /** 标注状态变了（开关、块登记重建、用户点了一块） */
+  private readonly onAnnotation: (event: AnnotationEvent) => void
+  /** 宿主对应的项目目录 —— 引用载荷里的「文件」要相对它 */
+  private readonly cwdForHost: (host: BrowserHost) => string | null
+  /** 某个 agent 的预览换成了这个本地地址 —— 宿主记下来，下次启动按它恢复 */
+  private readonly onPreviewUrl: (agentId: string, url: string) => void
+  /**
+   * 已经尝试过恢复的宿主。
+   *
+   * 一次运行只恢复一次：用户自己关掉了预览标签，切回来的时候不该又冒出来。
+   */
+  private readonly previewRestored = new Set<BrowserHost>()
+
+  constructor(win: BrowserWindow, options: BrowserManagerOptions) {
+    this.win = win
+    this.onChange = options.onChange
+    this.onAnnotation = options.onAnnotation ?? (() => {})
+    this.cwdForHost = options.cwdForHost ?? (() => null)
+    this.onPreviewUrl = options.onPreviewUrl ?? (() => {})
     /*
      * 原型页面的 preload 把注入脚本 post 出来的消息转到这里。
      * 建在管理器上而不是 IPC 注册处：要按 webContents 找到它属于哪个宿主。
@@ -627,10 +671,45 @@ export class BrowserManager {
 
   activate(host: BrowserHost, tabId: string): Promise<BrowserState> {
     if (this.pools.setActive(host, tabId)) {
+      // 多标签时「上次预览」跟着用户最后切到的那一个走
+      const tab = this.pools.find(host, tabId)
+      if (tab) this.rememberPreview(tab)
       this.applyVisibility()
       this.emit(host)
     }
     return Promise.resolve(this.state(host))
+  }
+
+  /**
+   * 产品 agent 的预览从记录里恢复。
+   *
+   * 只在宿主还没有标签时做，而且一次运行只尝试一次 —— 用户自己关掉了
+   * 预览标签，切回来的时候不该又冒出来。
+   * 没有记录、记录不是本地文件、或者文件已经不在，都什么都不做（渲染层走空态）。
+   */
+  async restorePreview(host: BrowserHost, url: string | null): Promise<void> {
+    if (!isAgentBrowserHost(host)) return
+    if (this.previewRestored.has(host)) return
+    this.previewRestored.add(host)
+    if (this.pools.list(host).length > 0) return
+    const usable = restorablePreviewUrl(url)
+    if (!usable) return
+    await this.create(host, usable)
+  }
+
+  /**
+   * 这一页是本地原型，就记成这个 agent 的「上次预览」。
+   *
+   * 只记 `file:`：http 预览下次启动多半没起，不该被恢复。
+   * 同一个地址不重复写盘（重载、页内跳转都会走到这里）。
+   */
+  private rememberPreview(tab: Tab): void {
+    if (!isAgentBrowserHost(tab.host)) return
+    const agentId = agentIdOfHost(tab.host)
+    if (!agentId) return
+    const url = tab.view.webContents.getURL() || tab.url
+    if (!url.startsWith('file:')) return
+    this.onPreviewUrl(agentId, url)
   }
 
   async navigate(host: BrowserHost, tabId: string, input: string): Promise<BrowserState> {
@@ -1027,10 +1106,12 @@ export class BrowserManager {
     view.webContents.on('did-navigate', (_event, target) => {
       tab.url = target
       tab.error = null
+      this.rememberPreview(tab)
       this.emit(tab.host)
     })
     view.webContents.on('did-navigate-in-page', (_event, target) => {
       tab.url = target
+      this.rememberPreview(tab)
       this.emit(tab.host)
     })
     view.webContents.on('did-finish-load', () => {

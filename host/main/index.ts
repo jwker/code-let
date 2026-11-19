@@ -163,21 +163,22 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  browser = new BrowserManager(
-    win,
-    (host, state) => {
+  browser = new BrowserManager(win, {
+    onChange: (host, browserState) => {
       for (const target of BrowserWindow.getAllWindows()) {
-        if (!target.isDestroyed()) target.webContents.send(IPC_EVENTS.browser, { host, state })
+        if (!target.isDestroyed()) target.webContents.send(IPC_EVENTS.browser, { host, state: browserState })
       }
     },
     // 标注状态跟着浏览器事件走：开关、块登记重建、用户点了一块
-    (event) => {
+    onAnnotation: (event) => {
       for (const target of BrowserWindow.getAllWindows()) {
         if (!target.isDestroyed()) target.webContents.send(IPC_EVENTS.annotation, event)
       }
     },
-    (host) => state.cwdForHost(host)
-  )
+    cwdForHost: (host) => state.cwdForHost(host),
+    // 产品 agent 换了本地预览文件 —— 记下来，重开应用时按它恢复
+    onPreviewUrl: (agentId, url) => state.rememberPreviewUrl(agentId, url)
+  })
   state.attachBrowser(browser)
   /*
    * 自动化测试用的钩子：E2E 要直接驱动浏览器工具（快照、点击、截图），

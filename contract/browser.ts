@@ -25,6 +25,11 @@ export function isAgentBrowserHost(host: BrowserHost): host is `agent:${string}`
   return host.startsWith('agent:')
 }
 
+/** 从宿主键取 agent id；项目级宿主没有 agent */
+export function agentIdOfHost(host: BrowserHost): string | null {
+  return isAgentBrowserHost(host) ? host.slice('agent:'.length) : null
+}
+
 /** 来自 IPC 的宿主字符串 —— 认不出来的一律不算数，不猜默认值 */
 export function isBrowserHost(value: unknown): value is BrowserHost {
   if (value === PROJECT_BROWSER) return true

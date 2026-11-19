@@ -36,7 +36,7 @@ import {
 import { DebugConsoleStore, type ConsoleRecordInput } from './debugConsole'
 import type { BrowserManager } from './browser'
 import { formatAnchorBreaks } from './anchorCheck'
-import { agentBrowserHost, isAgentBrowserHost, type BrowserHost } from '@contract/browser'
+import { agentBrowserHost, agentIdOfHost, type BrowserHost } from '@contract/browser'
 import { emptyGitStatus, readGitDiff, readGitStatus } from './git'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
@@ -244,9 +244,34 @@ export class HostState extends EventEmitter {
    * 项目级宿主没有 agent，自然也没有目录。
    */
   cwdForHost(host: BrowserHost): string | null {
-    if (!isAgentBrowserHost(host)) return null
-    const agentId = host.slice('agent:'.length)
-    return this.agentStore.get(agentId)?.cwd ?? null
+    const agentId = agentIdOfHost(host)
+    return agentId ? (this.agentStore.get(agentId)?.cwd ?? null) : null
+  }
+
+  /**
+   * 记下某个产品 agent 上次预览的本地文件。
+   *
+   * 只有产品 agent 有预览；地址不是本地文件时不记（http 预览下次启动多半打不开）。
+   * 同一个地址不重复写盘 —— 重载、页内跳转都会走到这里。
+   */
+  rememberPreviewUrl(agentId: string, url: string): void {
+    const agent = this.agentStore.get(agentId)
+    if (!agent || agent.type !== 'product') return
+    if (agent.previewUrl === url) return
+    this.agentStore.update(agentId, { previewUrl: url })
+  }
+
+  /**
+   * 产品 agent 的预览该不该恢复 —— 渲染层来要浏览器状态时顺手做一次。
+   *
+   * 只对产品 agent；项目级浏览器与通用 / 开发 agent 不参与。
+   */
+  async restorePreview(host: BrowserHost): Promise<void> {
+    const agentId = agentIdOfHost(host)
+    if (!agentId) return
+    const agent = this.agentStore.get(agentId)
+    if (!agent || agent.type !== 'product') return
+    await this.browser?.restorePreview(host, agent.previewUrl)
   }
 
   // ---------------------------------------------------------------------

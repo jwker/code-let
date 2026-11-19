@@ -303,18 +303,25 @@ test.describe.serial('原型标注', () => {
     await expect.poll(lastPrompt).toContain(text)
   }
 
-  /** 页面上画着的常驻角标都写着什么 */
-  function badgeTexts(): Promise<string[]> {
-    return evalPage<string[]>(
+  /**
+   * 页面上画着的常驻角标都写着什么 —— 排过序。
+   *
+   * DOM 顺序不是契约：鼠标恰好压在某一块上时，那一块的悬停角标会最后画，
+   * 位置会变。断言只该关心「画了哪几个号」。
+   */
+  async function badgeTexts(): Promise<string[]> {
+    const texts = await evalPage<string[]>(
       `Array.from(document.querySelectorAll('#codelet-annotation-layer .codelet-annotation-badge:not(.hover)')).map((node) => node.textContent)`
     )
+    return texts.sort()
   }
 
   /** 其中用警示色画的那几个（临时号） */
-  function tempBadgeTexts(): Promise<string[]> {
-    return evalPage<string[]>(
+  async function tempBadgeTexts(): Promise<string[]> {
+    const texts = await evalPage<string[]>(
       `Array.from(document.querySelectorAll('#codelet-annotation-layer .codelet-annotation-badge.temp:not(.hover)')).map((node) => node.textContent)`
     )
+    return texts.sort()
   }
 
   /** 页面上真的画着几个常驻角标 */

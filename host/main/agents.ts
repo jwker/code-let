@@ -37,6 +37,13 @@ export interface AgentRecord {
   archivedAt: number | null
   /** 用户消息条数 */
   turns: number
+  /**
+   * 上次预览的本地文件地址（`file:`）。
+   *
+   * 重开应用时按它把产品 agent 的预览开回来。只记本地文件 —— http 预览
+   * 下次启动多半打不开。旧记录没有这个字段时按 null 读。
+   */
+  previewUrl: string | null
 }
 
 interface AgentsFile {
@@ -75,6 +82,9 @@ function readRecord(raw: unknown): AgentRecord | null {
   if (value.archivedAt !== null && value.archivedAt !== undefined && typeof value.archivedAt !== 'number') {
     return null
   }
+  if (value.previewUrl !== null && value.previewUrl !== undefined && typeof value.previewUrl !== 'string') {
+    return null
+  }
   return {
     id: value.id,
     name: value.name,
@@ -85,7 +95,8 @@ function readRecord(raw: unknown): AgentRecord | null {
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : value.lastActiveAt,
     lastActiveAt: value.lastActiveAt,
     archivedAt: (value.archivedAt as number | null) ?? null,
-    turns: typeof value.turns === 'number' && value.turns >= 0 ? Math.floor(value.turns) : 0
+    turns: typeof value.turns === 'number' && value.turns >= 0 ? Math.floor(value.turns) : 0,
+    previewUrl: (value.previewUrl as string | null) ?? null
   }
 }
 
@@ -217,7 +228,8 @@ export function newAgentRecord(input: {
     createdAt: input.now,
     lastActiveAt: input.now,
     archivedAt: null,
-    turns: 0
+    turns: 0,
+    previewUrl: null
   }
 }
 
