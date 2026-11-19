@@ -45,6 +45,17 @@ async function openProjectSettings(): Promise<void> {
   await expect(page.getByLabel('原型图目录')).toBeVisible({ timeout: 10_000 })
 }
 
+/** 产品 agent 当前的系统提示（测试钩子） */
+function systemPrompt(): Promise<string | null> {
+  return app!.evaluate(
+    (_electron, agentId) =>
+      (
+        globalThis as unknown as { __codeletSystemPrompt: (id: string) => string | null }
+      ).__codeletSystemPrompt(agentId),
+    'agent-p'
+  ) as Promise<string | null>
+}
+
 function readProjects(): Array<{ path: string; prototypeDir?: string }> {
   const raw = JSON.parse(readFileSync(join(userDataDir, 'projects.json'), 'utf8')) as {
     projects: Array<{ path: string; prototypeDir?: string }>
@@ -146,9 +157,35 @@ test.describe.serial('项目设置：原型图目录', () => {
     app = null
   })
 
-  test('重开应用后设置还在', async () => {
+  test('重开应用后设置还在；改目录后 /reload 才吃到新值', async () => {
     await launch()
     await openProjectSettings()
     await expect(page.getByLabel('原型图目录')).toHaveValue('design/protos')
+
+    // 产品 agent 的 runtime 已经带着这个目录建起来
+    await page
+      .getByRole('navigation', { name: '项目导航' })
+      .getByRole('button', { name: '产品 1' })
+      .click()
+    await expect(systemPrompt()).resolves.toContain(join(projectDir, 'design/protos'))
+
+    // 改成另一个目录：已开着的 runtime 不重建，提示里还是旧目录
+    await openProjectSettings()
+    await page.getByLabel('原型图目录').fill('design/pages')
+    await page.getByRole('button', { name: '保存', exact: true }).click()
+    await expect(page.getByRole('status')).toContainText('/reload')
+    await page
+      .getByRole('navigation', { name: '项目导航' })
+      .getByRole('button', { name: '产品 1' })
+      .click()
+    await expect(systemPrompt()).resolves.toContain(join(projectDir, 'design/protos'))
+
+    // /reload 重建 runtime，换成新的目录
+    const composer = page.locator('textarea').first()
+    await composer.fill('/reload')
+    await composer.press('Enter')
+    await expect(page.getByText('已重新加载扩展和会话')).toBeVisible({ timeout: 20_000 })
+    await expect(systemPrompt()).resolves.toContain(join(projectDir, 'design/pages'))
+    await expect(systemPrompt()).resolves.not.toContain(join(projectDir, 'design/protos'))
   })
 })

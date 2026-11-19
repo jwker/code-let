@@ -52,7 +52,8 @@ import {
   searchFiles as searchProjectFiles
 } from './files'
 import { PiRuntime, type PiEvent, type PiRuntimePort } from './pi/runtime'
-import { normalizePrototypeDir, ProjectStore } from './projects'
+import { DEFAULT_PROTOTYPE_DIR, normalizePrototypeDir, ProjectStore } from './projects'
+import { prototypePromptFragment } from './prototypePrompt'
 import {
   AgentStore,
   dueForArchive,
@@ -264,6 +265,20 @@ export class HostState extends EventEmitter {
   }
 
   /**
+   * 产品 agent 的系统提示片段：原型写到项目的原型目录、每块带 `data-block`。
+   *
+   * 通用 / 开发 agent 返回空数组；项目管理里没有这个项目时按默认目录算。
+   */
+  private prototypePromptFor(agent: Pick<AgentRecord, 'type' | 'cwd'>): string[] {
+    const project = this.projects.list().find((item) => item.path === agent.cwd)
+    return prototypePromptFragment({
+      type: agent.type,
+      cwd: agent.cwd,
+      prototypeDir: project?.prototypeDir ?? DEFAULT_PROTOTYPE_DIR
+    })
+  }
+
+  /**
    * 预览区该显示什么：上次的地址还能用就恢复，否则列项目的原型目录。
    *
    * 只对产品 agent 的预览宿主有意义；项目级浏览器与通用 / 开发 agent 一律空态。
@@ -472,7 +487,8 @@ export class HostState extends EventEmitter {
       await this.pi.openAgent(agent.id, {
         cwd: agent.cwd,
         path: hasFile ? (agent.sessionPath ?? undefined) : undefined,
-        lazy: true
+        lazy: true,
+        appendSystemPrompt: this.prototypePromptFor(agent)
       })
       // 文件已经不在了 —— 上面重开了一条新会话，旧路径留着只会误导
       if (!hasFile) this.agentStore.update(agent.id, { sessionPath: null })
@@ -659,7 +675,8 @@ export class HostState extends EventEmitter {
     const id = this.nextAgentId()
     await this.pi.openAgent(id, {
       cwd: options.cwd,
-      ...(options.sessionPath ? { path: options.sessionPath } : {})
+      ...(options.sessionPath ? { path: options.sessionPath } : {}),
+      appendSystemPrompt: this.prototypePromptFor({ type, cwd: options.cwd })
     })
     const sessionPath = options.sessionPath ?? this.pi.agentState(id).sessionFile
     const record = newAgentRecord({
@@ -1144,7 +1161,10 @@ export class HostState extends EventEmitter {
     const agent = this.agentStore.get(agentId)
     if (!agent) return
     if (!this.pi.hasAgent(agentId)) await this.registerAgent(agent)
-    await this.trackRefresh(() => this.pi.reloadAgent(agentId))
+    // 重建时按当前项目设置刷新提示片段 —— 这样 /reload 就能吃到改过的原型目录
+    await this.trackRefresh(() =>
+      this.pi.reloadAgent(agentId, { appendSystemPrompt: this.prototypePromptFor(agent) })
+    )
     // 重建后路径可能变了（原来是「没说过话的空 agent」的话）
     const state = this.pi.agentState(agentId)
     if (state.sessionFile) this.agentStore.update(agentId, { sessionPath: state.sessionFile })

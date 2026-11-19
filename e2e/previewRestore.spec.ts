@@ -198,6 +198,29 @@ test.describe.serial('原型预览的恢复', () => {
     await expect(page.getByText('这个项目还没有原型')).toHaveCount(0)
     await expect.poll(async () => (await blocksOf('agent-p1')).map((item) => item.block)).toEqual([1, 2])
 
+    // 产品 agent 的系统提示里带着原型目录与 data-block 的要求
+    const systemPrompt = await app!.evaluate(
+      (_electron, agentId) =>
+        (
+          globalThis as unknown as { __codeletSystemPrompt: (id: string) => string | null }
+        ).__codeletSystemPrompt(agentId),
+      'agent-p1'
+    )
+    expect(systemPrompt).toContain(join(projectDir, '.codelet/prototype'))
+    expect(systemPrompt).toContain('data-block')
+
+    // runtime 建起来了 —— 扩展照常加载
+    const extensionErrors = await page.evaluate(async () =>
+      (
+        window as unknown as {
+          codelet: { getSnapshot: () => Promise<{ extensionErrors: unknown[] }> }
+        }
+      ).codelet
+        .getSnapshot()
+        .then((snapshot) => snapshot.extensionErrors)
+    )
+    expect(extensionErrors).toEqual([])
+
     // 项目级浏览器不会被恢复成这个原型
     const projectTabs = await app!.evaluate(
       async (_electron, host) => {

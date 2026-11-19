@@ -193,6 +193,10 @@ function createWindow(): BrowserWindow {
     ;(globalThis as unknown as { __codeletSessionEvent?: unknown }).__codeletSessionEvent = (
       event: PiEvent
     ) => state.handleSessionEvent(event)
+    /* 某个 agent 现在的系统提示 —— 用例据此确认按 runtime 注入的提示真的生效 */
+    ;(globalThis as unknown as { __codeletSystemPrompt?: unknown }).__codeletSystemPrompt = (
+      agentId: string
+    ) => state.pi.systemPrompt?.(agentId) ?? null
     /*
      * 导出用的保存对话框同理：原生面板 Playwright 点不到，
      * 测试里换成直接返回路径。默认落到临时目录里。

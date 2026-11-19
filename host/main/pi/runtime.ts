@@ -88,14 +88,30 @@ export interface PiRuntimePort {
    */
   openAgent(
     agentId: string,
-    options: { cwd: string; path?: string; lazy?: boolean; inMemory?: boolean }
+    options: {
+      cwd: string
+      path?: string
+      lazy?: boolean
+      inMemory?: boolean
+      /**
+       * 追加到系统提示末尾的片段（按 runtime 生效）。
+       *
+       * 产品 agent 用它拿到「原型写到哪」；通用 / 开发 agent 不传。
+       * 重建 runtime（`/reload`、宿主重载）时沿用同一份。
+       */
+      appendSystemPrompt?: string[]
+    }
   ): Promise<void>
   /** 关掉一个 agent：先 abort 等那一轮结算，再 dispose */
   closeAgent(agentId: string): Promise<void>
   /** 激活一个 agent：runtime 还没建就建 */
   activateAgent(agentId: string): Promise<void>
-  /** 重建某个 agent 的 runtime —— 从磁盘重新读会话 */
-  reloadAgent(agentId: string): Promise<void>
+  /**
+   * 重建某个 agent 的 runtime —— 从磁盘重新读会话。
+   *
+   * 传了 `appendSystemPrompt` 就换成新的提示片段（项目设置改过之后用它刷新）。
+   */
+  reloadAgent(agentId: string, options?: { appendSystemPrompt?: string[] }): Promise<void>
   /**
    * 这个 agent 登记过 runtime 没有。
    *
@@ -108,6 +124,12 @@ export interface PiRuntimePort {
   agentState(agentId: string): AgentRuntimeState
   /** 某个 agent 的会话条目 */
   readEntries(agentId: string): StreamItem[]
+  /**
+   * 某个 agent 当前的系统提示；runtime 还没建就是 null。
+   *
+   * 给测试用：验证「按 runtime 注入的提示」真的进了系统提示。
+   */
+  systemPrompt?(agentId: string): string | null
   /**
    * 往某个 agent 的会话里塞一条自定义消息：显示在对话里，也进模型上下文。
    *
@@ -240,6 +262,8 @@ interface AgentRuntime {
   /** 浏览器工具请求的 EventBus 监听 */
   browserUnsub: (() => void) | null
   sessionManager: SessionManager | null
+  /** 追加到系统提示的片段 —— 只有产品 agent 有 */
+  appendSystemPrompt?: string[]
 }
 
 /**
@@ -296,7 +320,13 @@ export class PiRuntime implements PiRuntimePort {
    */
   async openAgent(
     agentId: string,
-    options: { cwd: string; path?: string; lazy?: boolean; inMemory?: boolean }
+    options: {
+      cwd: string
+      path?: string
+      lazy?: boolean
+      inMemory?: boolean
+      appendSystemPrompt?: string[]
+    }
   ): Promise<void> {
     const path = options.path ?? null
     // 文件不在就别登记了 —— 恢复时靠这个把没落盘的标签挑出去
@@ -312,7 +342,10 @@ export class PiRuntime implements PiRuntimePort {
       unbind: null,
       consoleUnsub: null,
       browserUnsub: null,
-      sessionManager: null
+      sessionManager: null,
+      ...(options.appendSystemPrompt && options.appendSystemPrompt.length > 0
+        ? { appendSystemPrompt: options.appendSystemPrompt }
+        : {})
     }
     record.consoleUnsub = record.bus.on('debug-console:record', (data) => {
       // 正文很大 —— 只在主进程里转给存储，不往渲染进程送
@@ -353,7 +386,13 @@ export class PiRuntime implements PiRuntimePort {
       const resourceLoaderOptions: {
         eventBus: EventBus
         additionalExtensionPaths?: string[]
-      } = { eventBus: record.bus }
+        appendSystemPrompt?: string[]
+      } = {
+        eventBus: record.bus,
+        ...(record.appendSystemPrompt && record.appendSystemPrompt.length > 0
+          ? { appendSystemPrompt: record.appendSystemPrompt }
+          : {})
+      }
       // 项目内扩展（ext/ 编译到 out/ext）。逐个传文件，不传目录 —— 目录会被 Pi 当成一个包。
       const extensionPaths = this.extensionsDir ? listExtensionFiles(this.extensionsDir) : []
       if (extensionPaths.length > 0) {
@@ -526,8 +565,13 @@ export class PiRuntime implements PiRuntimePort {
    *
    * 正在跑的话先 abort 等结算（跟关标签同一个道理：别丢半截轮次）。
    */
-  async reloadAgent(agentId: string): Promise<void> {
+  async reloadAgent(
+    agentId: string,
+    options?: { appendSystemPrompt?: string[] }
+  ): Promise<void> {
     const record = this.record(agentId)
+    // 项目设置改过的话，重建时把提示片段换成新的
+    if (options?.appendSystemPrompt) record.appendSystemPrompt = options.appendSystemPrompt
     const runtime = record.runtime
     if (runtime) {
       record.unbind?.()
@@ -593,6 +637,16 @@ export class PiRuntime implements PiRuntimePort {
       thinkingLevel: runtime.session.thinkingLevel ?? null,
       modelFallback: runtime.modelFallbackMessage ?? null
     }
+  }
+
+  /**
+   * 某个 agent 当前的系统提示；runtime 还没建就是 null。
+   *
+   * 产品 agent 的「原型写到哪」是按 runtime 注入的（`appendSystemPrompt`），
+   * 这个方法让测试能确认它真的进了系统提示。
+   */
+  systemPrompt(agentId: string): string | null {
+    return this.tabs.get(agentId)?.runtime?.session.systemPrompt ?? null
   }
 
   /**
