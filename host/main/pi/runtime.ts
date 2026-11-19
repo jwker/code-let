@@ -108,6 +108,16 @@ export interface PiRuntimePort {
   agentState(agentId: string): AgentRuntimeState
   /** 某个 agent 的会话条目 */
   readEntries(agentId: string): StreamItem[]
+  /**
+   * 往某个 agent 的会话里塞一条自定义消息：显示在对话里，也进模型上下文。
+   *
+   * 保号校验的提示用它 —— 用户和 agent 都得看到号可能错位了。
+   * runtime 还没建（懒加载）时安静地什么都不做。
+   */
+  sendCustomMessage?(
+    agentId: string,
+    message: { customType: string; content: string; display: boolean }
+  ): Promise<void>
   /** 接上浏览器工具桥 */
   setBrowserToolHandler?(handler: (agentId: string, request: unknown) => Promise<unknown>): void
   /** 某个标签的可用模型清单 */
@@ -804,6 +814,29 @@ export class PiRuntime implements PiRuntimePort {
     const session = this.tabs.get(agentId)?.runtime?.session
     if (!session) throw new Error('runtime 尚未启动')
     session.setSessionName(name)
+  }
+
+  /**
+   * 往某个标签的会话里塞一条自定义消息。
+   *
+   * 不触发新一轮（triggerTurn: false）：这是给用户和下一轮的 agent 看的备注，
+   * 不该因为它自己再跑一轮。
+   */
+  async sendCustomMessage(
+    agentId: string,
+    message: { customType: string; content: string; display: boolean }
+  ): Promise<void> {
+    const session = this.tabs.get(agentId)?.runtime?.session
+    if (!session) return
+    await session.sendCustomMessage(
+      {
+        customType: message.customType,
+        content: message.content,
+        display: message.display,
+        details: undefined
+      },
+      { triggerTurn: false }
+    )
   }
 
   /** 往某个标签发一条用户消息 */

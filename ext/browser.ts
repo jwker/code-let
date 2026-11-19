@@ -1,5 +1,11 @@
 import { Type } from '@earendil-works/pi-ai'
 import { defineTool, type ExtensionAPI } from '@earendil-works/pi-coding-agent'
+import {
+  failure,
+  request,
+  result,
+  type ImageBlock
+} from './lib/browserBridge'
 
 /**
  * 把右侧浏览器暴露成 agent 工具。
@@ -7,60 +13,6 @@ import { defineTool, type ExtensionAPI } from '@earendil-works/pi-coding-agent'
  * 工具不改文件，只通过 EventBus 请求宿主操作现有的 WebContentsView；
  * 浏览器地址的本地页面限制仍由主进程校验，agent 不能绕过去。
  */
-
-interface Response {
-  id?: string
-  ok?: boolean
-  result?: unknown
-  error?: string
-}
-
-/** 工具结果里可以带图片；截图就靠这个进模型上下文 */
-interface ImageBlock {
-  type: 'image'
-  data: string
-  mimeType: string
-}
-
-function request(pi: ExtensionAPI, tool: string, args: Record<string, unknown>): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const id = `browser-${Date.now()}-${Math.random().toString(36).slice(2)}`
-    let done = false
-    let timer: ReturnType<typeof setTimeout> | null = null
-    let unsubscribe = (): void => {}
-    const finish = (): void => {
-      if (done) return
-      done = true
-      if (timer) clearTimeout(timer)
-      unsubscribe()
-    }
-    timer = setTimeout(() => {
-      finish()
-      reject(new Error('浏览器工具超时'))
-    }, 10_000)
-    unsubscribe = pi.events.on('browser:response', (data) => {
-      const response = data as Response
-      if (response.id !== id) return
-      finish()
-      if (response.ok) resolve(response.result)
-      else reject(new Error(response.error || '浏览器工具执行失败'))
-    })
-    pi.events.emit('browser:request', { id, tool, args })
-  })
-}
-
-function result(value: unknown): { content: Array<{ type: 'text'; text: string }>; details: unknown } {
-  const text = JSON.stringify(value, null, 2)
-  return {
-    content: [
-      {
-        type: 'text',
-        text: text.length > 16_000 ? `${text.slice(0, 16_000)}\n…（截断）` : text
-      }
-    ],
-    details: value
-  }
-}
 
 /** 截图结果：文字说明 + 图片本身 */
 function screenshotResult(value: {
@@ -86,14 +38,6 @@ function screenshotResult(value: {
       { type: 'image', data: value.data, mimeType: value.mimeType }
     ],
     details: { width: value.width, height: value.height }
-  }
-}
-
-function failure(error: unknown): { content: Array<{ type: 'text'; text: string }>; details: unknown } {
-  const message = error instanceof Error ? error.message : String(error)
-  return {
-    content: [{ type: 'text', text: `浏览器工具失败：${message}` }],
-    details: { error: message }
   }
 }
 

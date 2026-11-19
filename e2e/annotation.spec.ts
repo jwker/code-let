@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
 let projectDir = ''
 let userDataDir = ''
+let agentDir = ''
 let app: ElectronApplication | null = null
 let page: Page
 let prototypeUrl = ''
@@ -84,6 +85,7 @@ test.describe.serial('原型标注', () => {
   test.beforeAll(async () => {
     projectDir = mkdtempSync(join(tmpdir(), 'codelet-annotation-e2e-project-'))
     userDataDir = mkdtempSync(join(tmpdir(), 'codelet-annotation-e2e-userdata-'))
+    agentDir = mkdtempSync(join(tmpdir(), 'codelet-annotation-e2e-agent-'))
     writeFileSync(join(projectDir, 'pricing.html'), prototypeHtml())
     prototypeUrl = pathToFileURL(join(projectDir, 'pricing.html')).toString()
 
@@ -148,7 +150,12 @@ test.describe.serial('原型标注', () => {
        * CODELET_ECHO_PROMPT：主进程记下发出去的消息就返回，不调模型。
        * 标注的用例只关心「发出去的是什么」，不该为此请求真实 provider。
        */
-      env: { ...process.env, CODELET_USER_DATA: userDataDir, CODELET_ECHO_PROMPT: '1' },
+      env: {
+        ...process.env,
+        CODELET_USER_DATA: userDataDir,
+        CODELET_ECHO_PROMPT: '1',
+        PI_CODING_AGENT_DIR: agentDir
+      },
       timeout: 30_000
     })
     page = await app.firstWindow()
@@ -158,7 +165,7 @@ test.describe.serial('原型标注', () => {
   test.afterAll(async () => {
     await app?.close()
     app = null
-    for (const dir of [projectDir, userDataDir]) {
+    for (const dir of [projectDir, userDataDir, agentDir]) {
       if (dir) rmSync(dir, { recursive: true, force: true })
     }
   })
@@ -578,12 +585,12 @@ test.describe.serial('原型标注', () => {
     await wait(150)
     writeFileSync(
       join(projectDir, 'pricing.html'),
-      prototypeHtml('7').replace('顶部导航 产品 定价 文档', '顶部导航 产品 定价 文档 改过了')
+      prototypeHtml('7').replace('<div class="m-filler"></div>', '<div class="m-filler">第一版</div>')
     )
     await emitSession('agent_settled')
 
     // 没点刷新按钮，页面自己换了内容
-    await expect.poll(() => evalPage<string>('document.body.innerText')).toContain('改过了')
+    await expect.poll(() => evalPage<string>('document.body.innerText')).toContain('第一版')
     await expect.poll(badgeTexts).toEqual(['4', '7', 'T2'])
     await expect
       .poll(async () => (await hookState()).blocks.map((block) => block.block))
@@ -611,19 +618,123 @@ test.describe.serial('原型标注', () => {
       ).__codeletBrowser
       await manager.tool('navigate', { url }, 'project')
     }, `${prototypeUrl}?project=1`)
-    await expect.poll(() => evalProjectPage<string>('document.body.innerText')).toContain('改过了')
+    await expect.poll(() => evalProjectPage<string>('document.body.innerText')).toContain('第一版')
     await evalProjectPage('window.__projectMarker = "yes"')
 
     await emitSession('agent_start')
     await wait(150)
     writeFileSync(
       join(projectDir, 'pricing.html'),
-      prototypeHtml('7').replace('顶部导航 产品 定价 文档', '顶部导航 产品 定价 文档 又改了一次')
+      prototypeHtml('7').replace('<div class="m-filler"></div>', '<div class="m-filler">第二版</div>')
     )
     await emitSession('agent_settled')
 
-    await expect.poll(() => evalPage<string>('document.body.innerText')).toContain('又改了一次')
+    await expect.poll(() => evalPage<string>('document.body.innerText')).toContain('第二版')
     expect(await evalProjectPage<string>('window.__projectMarker ?? ""')).toBe('yes')
-    expect(await evalProjectPage<string>('document.body.innerText')).toContain('改过了')
+    expect(await evalProjectPage<string>('document.body.innerText')).toContain('第一版')
+  })
+
+  test('agent 能读到当前页的块清单，字段与渲染层一致', async () => {
+    const answer = (await app!.evaluate(async () => {
+      const manager = (
+        globalThis as unknown as {
+          __codeletBrowser: {
+            tool: (name: string, args: Record<string, unknown>, host: string) => Promise<unknown>
+          }
+        }
+      ).__codeletBrowser
+      return manager.tool('blocks', {}, 'agent:agent-p')
+    })) as {
+      file: string | null
+      blocks: Array<{
+        block: number | null
+        temp: string | null
+        anchor: string | null
+        selector: string
+        text: string
+      }>
+    }
+
+    expect(answer.file).toBe('pricing.html')
+    const numbered = answer.blocks.filter((item) => item.block !== null).map((item) => item.block)
+    expect(numbered).toEqual([1, 3, 4, 7, 5])
+
+    const promoted = answer.blocks.find((item) => item.block === 7)
+    expect(promoted?.anchor).toBe('data-block="7"')
+    expect(promoted?.selector).toContain('m-quote')
+    expect(promoted?.text).toContain('客户评价')
+
+    // 还没转正的临时块：没有块号，也没有锚点，但选择器和文字都在
+    const temp = answer.blocks.find((item) => item.temp === 'T2')
+    expect(temp).toMatchObject({ block: null, anchor: null })
+    expect(temp?.selector).toContain('m-filler')
+
+    // 项目级宿主没有块登记
+    const project = await app!.evaluate(async () => {
+      const manager = (
+        globalThis as unknown as {
+          __codeletBrowser: {
+            tool: (name: string, args: Record<string, unknown>, host: string) => Promise<unknown>
+          }
+        }
+      ).__codeletBrowser
+      return manager.tool('blocks', {}, 'project')
+    })
+    expect(project).toEqual({ file: null, blocks: [] })
+
+    // 扩展得真的加载起来（导入路径写错会在这里露出来）
+    const errors = await page.evaluate(async () =>
+      (
+        window as unknown as {
+          codelet: { getSnapshot: () => Promise<{ extensionErrors: unknown[] }> }
+        }
+      ).codelet
+        .getSnapshot()
+        .then((snapshot) => snapshot.extensionErrors)
+    )
+    expect(errors).toEqual([])
+  })
+
+  test('一轮里改坏了号，就在对话里给一条提示', async () => {
+    // 提示是发在对话里的 —— 先把区域 5 切回产品 agent 的对话
+    await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '产品 1' }).click()
+    await expect(page.getByRole('button', { name: /原型/ })).toBeVisible({ timeout: 10_000 })
+
+    const notices = page.getByText('[annotation]', { exact: true })
+    await expect(notices).toHaveCount(0)
+
+    // —— 没动号：一个字都不发 ——
+    await emitSession('agent_start')
+    await wait(150)
+    await emitSession('agent_settled')
+    await wait(400)
+    await expect(notices).toHaveCount(0)
+
+    // —— 号消失 ——
+    await emitSession('agent_start')
+    await wait(150)
+    writeFileSync(join(projectDir, 'pricing.html'), prototypeHtml())
+    await emitSession('agent_settled')
+    await expect(notices).toHaveCount(1)
+    await expect(page.getByText('号 7 不见了')).toBeVisible()
+
+    // —— 被删掉的号又被写给了新块 ——
+    await emitSession('agent_start')
+    await wait(150)
+    writeFileSync(join(projectDir, 'pricing.html'), prototypeHtml('7'))
+    await emitSession('agent_settled')
+    await expect(notices).toHaveCount(2)
+    await expect(page.getByText('号 7 被重新写给了另一个块')).toBeVisible()
+
+    // —— 号还在，但那一块的文字变了 ——
+    await emitSession('agent_start')
+    await wait(150)
+    writeFileSync(
+      join(projectDir, 'pricing.html'),
+      prototypeHtml('7').replace('客户评价 以前这件事要开三个窗口', '客户评价 现在一句话就够了')
+    )
+    await emitSession('agent_settled')
+    await expect(notices).toHaveCount(3)
+    await expect(page.getByText('号 7 的文字从')).toBeVisible()
   })
 })

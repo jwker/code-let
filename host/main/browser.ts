@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain, WebContentsView, type IpcMainEvent } from 'electron'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, relative, sep } from 'node:path'
 import {
@@ -21,8 +22,10 @@ import {
 } from './browserPools'
 import { ANNOTATION_SCRIPT } from './annotationScript'
 import { PrototypeWatch } from './prototypeWatch'
+import { checkAnchors, readAnchors, type AnchorBreak, type FileAnchor } from './anchorCheck'
 import {
   assignTemp,
+  promotedBlock,
   resolveBlockKey,
   resolveCitation,
   type TempAssignment
@@ -66,6 +69,26 @@ interface AnnotationRecord {
   numbers: boolean
   /** 临时号的分配表：只活在本次运行里，不写进用户的文件 */
   temps: TempAssignment[]
+  /** 保号校验的记账：这一轮开始时的锚点 + 已经消失、还没回来的号 */
+  anchors: AnchorRecord
+}
+
+/** 保号校验跨轮记着的东西 */
+interface AnchorRecord {
+  /** 这一轮开始时文件里的块号 → 文字；这一轮没读到基线就是 null */
+  before: Record<number, string> | null
+  /** 已经消失、还没回来的号 → 消失前那一段的文字 */
+  missing: Record<number, string>
+  /** before 对应哪个文件；换文件就重新来过 */
+  file: string | null
+}
+
+/** 一轮结束时的结论 */
+export interface TurnEndResult {
+  /** 原型文件（相对项目根）；没有预览文件时为 null */
+  file: string | null
+  /** 保号校验发现的破坏；空数组 = 号没动过 */
+  breaks: AnchorBreak[]
 }
 
 /**
@@ -122,6 +145,13 @@ export function prototypePathOf(url: string): string | null {
   } catch {
     return null
   }
+}
+
+/** 锚点列表 → 块号到文字的映射（保号校验的基线） */
+function toRecord(anchors: FileAnchor[]): Record<number, string> {
+  const record: Record<number, string> = {}
+  for (const anchor of anchors) record[anchor.block] = anchor.text
+  return record
 }
 
 /** 从页面 URL 算出引用载荷里的「文件」：项目内的本地文件用相对路径 */
@@ -251,7 +281,8 @@ export class BrowserManager {
       blocks: [],
       badges: [],
       numbers: true,
-      temps: []
+      temps: [],
+      anchors: { before: null, missing: {}, file: null }
     }
     this.annotations.set(host, created)
     return created
@@ -344,29 +375,92 @@ export class BrowserManager {
   }
 
   /**
-   * 一轮开始：记下当前预览文件的时间戳。
+   * 给 agent 的块清单：跟渲染层标注看到的是同一份登记。
    *
-   * 只有产品 agent 的预览宿主有原型文件；项目级浏览器不参与。
+   * 字段就是 `PreviewBlock`（块号 / 选择器 / 文字摘要 / 锚点）；
+   * 还没转正的临时块 `block` 为 null、`temp` 是 T1 这样的号、`anchor` 也是 null。
    */
-  async noteTurnStart(agentId: string): Promise<void> {
-    const host = agentBrowserHost(agentId)
-    await this.watch.begin(agentId, this.previewPath(host))
+  blockList(host: BrowserHost): { file: string | null; blocks: PreviewBlock[] } {
+    const state = this.annotationState(host)
+    const record = this.annotationRecord(host)
+    const temps = record.temps
+      .filter((item) => promotedBlock(record.temps, state.blocks, item.temp) === null)
+      .map((item) => ({
+        block: null,
+        temp: item.temp,
+        anchor: null,
+        selector: item.selector,
+        text: item.text
+      }))
+    return { file: state.file, blocks: [...state.blocks, ...temps] }
   }
 
   /**
-   * 一轮结束：这一轮动过原型文件就重新加载预览，返回刷没刷。
+   * 一轮开始：记下预览文件的时间戳，以及文件里此刻的锚点。
+   *
+   * 只有产品 agent 的预览宿主有原型文件；项目级浏览器不参与。
+   * 锚点是给「保号校验」用的基线 —— 轮结束时读文件对比，不依赖页面刷新。
+   */
+  async noteTurnStart(agentId: string): Promise<void> {
+    const host = agentBrowserHost(agentId)
+    const path = this.previewPath(host)
+    await this.watch.begin(agentId, path)
+    const record = this.annotationRecord(host)
+    if (!path) {
+      record.anchors = { before: null, missing: {}, file: null }
+      return
+    }
+    // 换了文件就把「消失过的号」清掉 —— 那是上一个文件的事
+    if (record.anchors.file !== path) {
+      record.anchors = { before: null, missing: {}, file: path }
+    }
+    const anchors = await this.readFileAnchors(path)
+    record.anchors.before = anchors ? toRecord(anchors) : null
+  }
+
+  /**
+   * 一轮结束：动过原型文件就重新加载预览，并做一次保号校验。
    *
    * 没动过就什么都不做 —— 刷新会把用户正在看的滚动位置带走。
    * 重新加载之后 `did-finish-load` 会重建块登记、按块号恢复角标。
    */
-  async noteTurnEnd(agentId: string): Promise<boolean> {
+  async noteTurnEnd(agentId: string): Promise<TurnEndResult> {
     const host = agentBrowserHost(agentId)
     const path = this.previewPath(host)
     const tab = this.pools.active(host)
     const changed = await this.watch.end(agentId, path)
-    if (!changed || !tab) return false
-    tab.view.webContents.reload()
-    return true
+    const record = this.annotationRecord(host)
+    const before = record.anchors.before
+    record.anchors.before = null
+    if (!changed) return { file: record.file, breaks: [] }
+
+    let breaks: AnchorBreak[] = []
+    if (path && before && record.anchors.file === path) {
+      const current = await this.readFileAnchors(path)
+      if (current) {
+        const checked = checkAnchors(before, record.anchors.missing, current)
+        record.anchors.missing = checked.missing
+        breaks = checked.breaks
+      }
+    }
+
+    if (tab) {
+      try {
+        tab.view.webContents.reload()
+      } catch {
+        // 标签在轮结束的那一刻被关掉了 —— 没什么可刷的
+      }
+    }
+    return { file: record.file, breaks }
+  }
+
+  /** 读原型文件里的锚点；读不到（文件不在、没权限）返回 null */
+  private async readFileAnchors(path: string): Promise<FileAnchor[] | null> {
+    try {
+      return readAnchors(await readFile(path, 'utf8'))
+    } catch {
+      return null
+    }
   }
 
   /** 当前预览标签对应的本地文件（绝对路径）；没有就是 null */
@@ -445,7 +539,7 @@ export class BrowserManager {
     if (reported.block === null) {
       const temp = assignTemp(record.temps, reported.selector)
       if (!record.temps.some((item) => item.selector === reported.selector)) {
-        record.temps.push({ temp, selector: reported.selector })
+        record.temps.push({ temp, selector: reported.selector, text: reported.text })
       }
       this.onAnnotation({
         host,
@@ -645,6 +739,10 @@ export class BrowserManager {
     if (tool === 'open') {
       this.noteAgent(host, 'browser_open', `打开 ${url || '空白页'}`)
       return this.create(host, url || 'about:blank')
+    }
+    if (tool === 'blocks') {
+      this.noteAgent(host, 'browser_blocks', '读取原型块清单')
+      return this.blockList(host)
     }
     if (!tab) throw new Error('没有打开的浏览器标签')
 

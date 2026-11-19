@@ -35,6 +35,7 @@ import {
 } from './attachments'
 import { DebugConsoleStore, type ConsoleRecordInput } from './debugConsole'
 import type { BrowserManager } from './browser'
+import { formatAnchorBreaks } from './anchorCheck'
 import { agentBrowserHost, isAgentBrowserHost, type BrowserHost } from '@contract/browser'
 import { emptyGitStatus, readGitDiff, readGitStatus } from './git'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
@@ -328,10 +329,11 @@ export class HostState extends EventEmitter {
     }
     /*
      * 一轮的开始与结束：记下 / 比较原型文件的修改时间。
-     * 结束那一下如果这一轮动过文件，预览自动重新加载（票 04）；没动过就不动。
+     * 结束那一下如果这一轮动过文件，预览自动重新加载（票 04），
+     * 同时做一次保号校验，号都还在就不出声。
      */
     if (event.type === 'agent_start') void this.browser?.noteTurnStart(event.agentId)
-    if (event.type === 'agent_settled') void this.browser?.noteTurnEnd(event.agentId)
+    if (event.type === 'agent_settled') void this.finishAgentTurn(event.agentId)
 
     this.emit('session-event', event)
     // 模型被换了（比如扩展调的 setModel）—— 快照跟着变
@@ -347,6 +349,28 @@ export class HostState extends EventEmitter {
     // 一轮结束 —— 这一轮我们自己写了不少东西，把「已看到」的时间推上去，
     // 免得紧接着的检查把自己标成「有外部更新」
     if (event.type === 'agent_settled') this.markWritten(event.agentId)
+  }
+
+  /**
+   * 一轮收尾：动过原型文件就刷新预览，号被改坏了就在对话里说一声。
+   *
+   * 提示走自定义消息：用户看得见，agent 在下一轮上下文里也看得见。
+   * 没变化时一个字都不发 —— 不制造噪音。
+   */
+  private async finishAgentTurn(agentId: string): Promise<void> {
+    const result = await this.browser?.noteTurnEnd(agentId)
+    if (!result || result.breaks.length === 0) return
+    const content = formatAnchorBreaks(result.breaks, result.file)
+    if (!content) return
+    try {
+      await this.pi.sendCustomMessage?.(agentId, {
+        customType: 'annotation',
+        content,
+        display: true
+      })
+    } catch {
+      // runtime 已经关了、提示发不出去 —— 不能拖垮轮结束
+    }
   }
 
   // ---------------------------------------------------------------------

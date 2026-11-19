@@ -15,6 +15,8 @@ import type { BlockCitation, PreviewBlock } from '@contract/index'
 export interface TempAssignment {
   temp: string
   selector: string
+  /** 分配那一刻那一块的文字摘要 —— 给 agent 的块清单要用 */
+  text: string
 }
 
 /**

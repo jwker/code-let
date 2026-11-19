@@ -16,8 +16,8 @@ import {
 
 const quoteSelector = 'div.m-quote'
 const temps = [
-  { temp: 'T1', selector: quoteSelector },
-  { temp: 'T2', selector: 'div.m-filler' }
+  { temp: 'T1', selector: quoteSelector, text: '客户评价' },
+  { temp: 'T2', selector: 'div.m-filler', text: '占位' }
 ]
 const promotedBlocks: PreviewBlock[] = [
   { block: 7, temp: null, anchor: 'data-block="7"', selector: quoteSelector, text: '客户评价' }
@@ -34,7 +34,7 @@ const quoteCitation: BlockCitation = {
 describe('临时号分配', () => {
   it('第一个是 T1，之后依次加一', () => {
     expect(assignTemp([], quoteSelector)).toBe('T1')
-    expect(assignTemp([{ temp: 'T1', selector: quoteSelector }], 'div.m-filler')).toBe('T2')
+    expect(assignTemp([{ temp: 'T1', selector: quoteSelector, text: '' }], 'div.m-filler')).toBe('T2')
   })
 
   it('同一个选择器复用原来的号 —— 重复点不重号', () => {
@@ -45,8 +45,8 @@ describe('临时号分配', () => {
     expect(
       assignTemp(
         [
-          { temp: 'T1', selector: 'a' },
-          { temp: 'T3', selector: 'b' }
+          { temp: 'T1', selector: 'a', text: '' },
+          { temp: 'T3', selector: 'b', text: '' }
         ],
         'c'
       )
