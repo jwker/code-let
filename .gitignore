@@ -24,3 +24,7 @@ docs/*
 !docs/adr/
 !docs/agents/
 .scratch/
+
+# 产品 agent 的原型目录（项目设置里的「原型图目录」，默认就在这里）。
+# 原型是 agent 在用的工作产物，不进仓库。
+.codelet/
