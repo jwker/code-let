@@ -1,5 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { CommandArgumentOption, CommandOption, FileSearchResult, StreamItem, ThinkingLevel } from '@contract/index'
+import type {
+  BlockCitation,
+  CommandArgumentOption,
+  CommandOption,
+  FileSearchResult,
+  StreamItem,
+  ThinkingLevel
+} from '@contract/index'
+import { blockKey, blockLabel, composeMessageWithCitations } from '@contract/index'
 import { useStore } from '../store'
 import { host } from '../host'
 import { useIndicator } from '../shell/useIndicator'
@@ -35,6 +43,8 @@ import { useAutoScroll } from './useAutoScroll'
 
 /** 还没有内容流时的空数组 —— 稳定引用，别每次渲染新建 */
 const EMPTY_ITEMS: StreamItem[] = []
+/** 没有引用时的空数组 —— 同上 */
+const NO_CITATIONS: BlockCitation[] = []
 
 type ComposerMenuState = {
   kind: 'command' | 'file' | 'argument'
@@ -58,6 +68,11 @@ export function ConversationArea() {
   const mode = useStore((s) => s.mode)
   const session = useStore((s) => s.snapshot.session)
   const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
+  /* 输入框里的引用（原型块）：跟输入框一起走，发送时展开成载荷 */
+  const citations = useStore((s) =>
+    activeAgentId ? (s.citations[activeAgentId] ?? NO_CITATIONS) : NO_CITATIONS
+  )
+  const removeCitation = useStore((s) => s.removeCitation)
   // 内容流按标签存（D4 修订）—— 这里只读活动标签那一份
   const items = useStore((s) => (s.snapshot.activeAgentId ? s.items[s.snapshot.activeAgentId] : undefined) ?? EMPTY_ITEMS)
   const streaming = useStore(
@@ -770,9 +785,14 @@ export function ConversationArea() {
     try {
       const projectPaths = previousAttachments.filter((item) => !item.uploadId).map((item) => item.path)
       const uploadIds = previousAttachments.flatMap((item) => (item.uploadId ? [item.uploadId] : []))
+      /*
+       * 引用在这里展开成载荷附在消息末尾 —— chip 只是给人看的，
+       * agent 收到的是文件、块号、锚点、选择器、文字摘要（不带源码片段）。
+       * 引用不清空：角标跟着它常驻，下一句还能接着用同一个号。
+       */
       await host.prompt(
         activeAgentId,
-        text,
+        composeMessageWithCitations(text, citations),
         !isSlash && projectPaths.length > 0 ? projectPaths : undefined,
         !isSlash && uploadIds.length > 0 ? uploadIds : undefined
       )
@@ -1049,6 +1069,39 @@ export function ConversationArea() {
           )}
 
           <div className="rounded-[18px] border border-hairline bg-raised p-3 shadow-[var(--sh-md)] transition-colors focus-within:border-hairline-strong">
+            {citations.length > 0 && (
+              <div className="mb-1.5 flex flex-wrap gap-1 px-1">
+                {citations.map((citation) => {
+                  const label = blockLabel(citation)
+                  return (
+                    <span
+                      key={`${citation.file}:${blockKey(citation)}`}
+                      title={`${citation.file} · ${citation.selector}`}
+                      className={`flex flex-none items-center gap-1 rounded-full border py-0.5 pl-2 pr-1 font-mono text-[10.5px] ${
+                        citation.block !== null
+                          ? 'border-info-line bg-info-wash text-info'
+                          : 'border-warn-line bg-warn-wash text-warn'
+                      }`}
+                    >
+                      {label}
+                      <button
+                        type="button"
+                        aria-label={`移除引用「${label}」`}
+                        title="删掉这个引用（角标一起撤掉）"
+                        onClick={() => {
+                          if (activeAgentId) {
+                            removeCitation(activeAgentId, citation.file, blockKey(citation))
+                          }
+                        }}
+                        className="flex h-4 w-4 flex-none items-center justify-center rounded-full text-[10px] opacity-70 transition-opacity hover:bg-surface hover:opacity-100"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
             {attachments.length > 0 && (
               <div className="mb-1.5 flex flex-wrap gap-1 px-1">
                 {attachments.map((item) => (

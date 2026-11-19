@@ -14,7 +14,7 @@
 import type { BrowserHost } from '@contract/browser'
 
 export type { BrowserHost }
-export { PROJECT_BROWSER, agentBrowserHost, isBrowserHost } from '@contract/browser'
+export { PROJECT_BROWSER, agentBrowserHost, isAgentBrowserHost, isBrowserHost } from '@contract/browser'
 
 /** 池里的一条标签至少要有 id */
 export interface PoolTab {

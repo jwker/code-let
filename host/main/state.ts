@@ -35,7 +35,7 @@ import {
 } from './attachments'
 import { DebugConsoleStore, type ConsoleRecordInput } from './debugConsole'
 import type { BrowserManager } from './browser'
-import { agentBrowserHost } from '@contract/browser'
+import { agentBrowserHost, isAgentBrowserHost, type BrowserHost } from '@contract/browser'
 import { emptyGitStatus, readGitDiff, readGitStatus } from './git'
 import { affectsConversationList, DebouncedRefresh } from './conversationRefresh'
 import { pickDirectory } from './directoryPicker'
@@ -231,6 +231,18 @@ export class HostState extends EventEmitter {
       // 宿主由 agent id 决定 —— agent 碰不到项目浏览器的标签（D57）
       return browser.tool(tool, args, agentBrowserHost(agentId))
     })
+  }
+
+  /**
+   * 某个浏览器宿主对应的项目目录。
+   *
+   * 引用载荷里的「文件」要相对它写成 `preview/pricing.html` 这种样子。
+   * 项目级宿主没有 agent，自然也没有目录。
+   */
+  cwdForHost(host: BrowserHost): string | null {
+    if (!isAgentBrowserHost(host)) return null
+    const agentId = host.slice('agent:'.length)
+    return this.agentStore.get(agentId)?.cwd ?? null
   }
 
   // ---------------------------------------------------------------------

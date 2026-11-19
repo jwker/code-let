@@ -4,11 +4,15 @@ import {
   IPC,
   IPC_EVENTS,
   MAX_PAYLOAD_BYTES,
+  type AnnotationState,
   type SessionEvent,
   type BrowserState,
   type ThinkingLevel
 } from '@contract/index'
+import type { BrowserHost } from '@contract/browser'
 import {
+  annotationBadgesSchema,
+  annotationSetSchema,
   browserBoundsSchema,
   browserNavigateSchema,
   browserStateSchema,
@@ -229,6 +233,15 @@ export function registerIpc(
 
   ipcMain.handle(IPC.promptSend, async (_event, payload: unknown) => {
     const { agentId, text, attachments, uploads } = promptSchema.parse(payload)
+    /*
+     * 测试钩子：E2E 要断言「发出去的消息里带着展开后的引用载荷」，
+     * 但真模型在测试里不可用。只在设置了 CODELET_USER_DATA 的测试环境里记一份。
+     */
+    if (process.env.CODELET_USER_DATA) {
+      ;(
+        globalThis as unknown as { __codeletLastPrompt?: { agentId: string; text: string } }
+      ).__codeletLastPrompt = { agentId, text }
+    }
     await state.prompt(agentId, text, attachments, uploads)
   })
 
@@ -369,6 +382,30 @@ export function registerIpc(
     await getBrowser()?.setVisible(host, visible)
   })
 
+  // —— 标注（只对 `agent:<id>` 宿主有内容） ——
+
+  const emptyAnnotation = (host: BrowserHost): AnnotationState => ({
+    host,
+    enabled: false,
+    file: null,
+    blocks: []
+  })
+
+  ipcMain.handle(IPC.annotationGet, async (_event, payload: unknown) => {
+    const { host } = browserStateSchema.parse(payload ?? {})
+    return getBrowser()?.annotationState(host) ?? emptyAnnotation(host)
+  })
+
+  ipcMain.handle(IPC.annotationSet, async (_event, payload: unknown) => {
+    const { host, enabled } = annotationSetSchema.parse(payload)
+    return (await getBrowser()?.setAnnotation(host, enabled)) ?? emptyAnnotation(host)
+  })
+
+  ipcMain.handle(IPC.annotationBadges, async (_event, payload: unknown) => {
+    const { host, keys } = annotationBadgesSchema.parse(payload)
+    await getBrowser()?.setAnnotationBadges(host, keys)
+  })
+
   ipcMain.handle(IPC.gitStatus, async (_event, payload: unknown) => {
     const { cwd } = gitCwdSchema.parse(payload)
     return state.getGitStatus(cwd)
@@ -470,6 +507,9 @@ export function registerIpc(
     ipcMain.removeHandler(IPC.browserReload)
     ipcMain.removeHandler(IPC.browserBounds)
     ipcMain.removeHandler(IPC.browserVisible)
+    ipcMain.removeHandler(IPC.annotationGet)
+    ipcMain.removeHandler(IPC.annotationSet)
+    ipcMain.removeHandler(IPC.annotationBadges)
     ipcMain.removeHandler(IPC.gitStatus)
     ipcMain.removeHandler(IPC.gitDiff)
     ipcMain.removeHandler(IPC.temporaryOpen)

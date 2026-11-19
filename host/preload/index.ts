@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import {
   IPC,
   IPC_EVENTS,
+  type AnnotationEvent,
+  type AnnotationState,
   type ConsoleEvent,
   type ConsoleExportRequest,
   type ConsoleExportResult,
@@ -103,6 +105,15 @@ const api: CodeletApi = {
   setBrowserBounds: (bounds) => ipcRenderer.invoke(IPC.browserBounds, bounds) as Promise<void>,
   setBrowserVisible: (host, visible) =>
     ipcRenderer.invoke(IPC.browserVisible, { host, visible }) as Promise<void>,
+  /*
+   * 标注（只有 `agent:<id>` 宿主有内容）。跟浏览器一样，每条调用都带 host ——
+   * 少传参数 TypeScript 不报错，靠 tests/preload.test.ts 的源码断言守着。
+   */
+  getAnnotation: (host) => ipcRenderer.invoke(IPC.annotationGet, { host }) as Promise<AnnotationState>,
+  setAnnotation: (host, enabled) =>
+    ipcRenderer.invoke(IPC.annotationSet, { host, enabled }) as Promise<AnnotationState>,
+  setAnnotationBadges: (host, keys) =>
+    ipcRenderer.invoke(IPC.annotationBadges, { host, keys }) as Promise<void>,
   getGitStatus: (cwd) => ipcRenderer.invoke(IPC.gitStatus, { cwd }) as Promise<GitStatus>,
   getGitDiff: (cwd, path, scope) =>
     ipcRenderer.invoke(IPC.gitDiff, { cwd, path, scope }) as Promise<GitDiff>,
@@ -161,6 +172,14 @@ const api: CodeletApi = {
     ipcRenderer.on(IPC_EVENTS.browser, handler)
     return () => {
       ipcRenderer.removeListener(IPC_EVENTS.browser, handler)
+    }
+  },
+
+  onAnnotation: (listener) => {
+    const handler = (_event: unknown, payload: AnnotationEvent): void => listener(payload)
+    ipcRenderer.on(IPC_EVENTS.annotation, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_EVENTS.annotation, handler)
     }
   },
 

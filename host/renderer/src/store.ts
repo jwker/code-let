@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type {
+  AnnotationState,
+  BlockCitation,
   ConversationMode,
   DocEntry,
   DocGroup,
@@ -14,6 +16,7 @@ import type {
   SessionEvent,
   StreamItem
 } from '@contract/index'
+import { blockKey } from '@contract/index'
 import { applyEvent, nextStreaming } from '@contract/stream'
 import { host } from './host'
 
@@ -313,6 +316,24 @@ interface RendererStore {
    * 切回项目 A，A 的树恢复到你上次展开的样子。
    */
   treeExpanded: Record<string, string[]>
+  /**
+   * 各宿主的标注状态（开关、当前文件、块登记）—— 主进程推的事件驱动。
+   *
+   * 只有 `agent:<id>` 会有内容；工具栏的开关和「点得出块」都看它。
+   */
+  annotations: Record<string, AnnotationState>
+  /**
+   * 每个 agent 输入框里已经落下的引用，跟着输入框走。
+   *
+   * 一条引用对应页面上的一个常驻角标：加一个引用多一个角标，删掉引用角标一起撤。
+   */
+  citations: Record<string, BlockCitation[]>
+  /** 收到一份标注状态（主进程推的开关、块登记、页面加载） */
+  setAnnotation: (state: AnnotationState) => void
+  /** 点了一块：追加引用；同一块重复点不新增 */
+  addCitation: (agentId: string, citation: BlockCitation) => void
+  /** 删掉一个引用（按文件 + 块号/临时号），角标跟着撤 */
+  removeCitation: (agentId: string, file: string, key: string) => void
   /** 各项目已加载的目录内容（按 `cwd + 目录路径`） */
   treeEntries: Record<string, FileEntry[]>
   /** 某个目录为什么没读成 —— 越界的符号链接会写在这里 */
@@ -420,6 +441,8 @@ export const useStore = create<RendererStore>((set, get) => ({
   modelsLoading: false,
   modelsError: null,
   fileContents: {},
+  annotations: {},
+  citations: {},
   treeExpanded: loadTreeExpanded(),
   treeEntries: {},
   treeErrors: {},
@@ -454,6 +477,31 @@ export const useStore = create<RendererStore>((set, get) => ({
   },
 
   setCodeMode: (mode) => set({ codeMode: mode }),
+
+  setAnnotation: (state) => {
+    set((current) => ({
+      annotations: { ...current.annotations, [state.host]: state }
+    }))
+  },
+
+  addCitation: (agentId, citation) => {
+    const key = blockKey(citation)
+    const current = get().citations[agentId] ?? []
+    // 同一个块重复点不新增 —— 引用的数量要等于用户说的块的个数
+    if (current.some((item) => blockKey(item) === key && item.file === citation.file)) return
+    set((state) => ({ citations: { ...state.citations, [agentId]: [...current, citation] } }))
+  },
+
+  removeCitation: (agentId, file, key) => {
+    const current = get().citations[agentId] ?? []
+    set((state) => ({
+      citations: {
+        ...state.citations,
+        // 键是「文件 + 块号」两段 —— 将来多屏原型里同名块号不会互相撤掉
+        [agentId]: current.filter((item) => !(item.file === file && blockKey(item) === key))
+      }
+    }))
+  },
 
   loadGitStatus: async (cwd) => {
     const seq = ++gitSeq

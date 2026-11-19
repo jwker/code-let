@@ -56,6 +56,34 @@ const FAKE_BROWSER: BrowserState = {
   agent: null
 }
 
+/** 假的原型标注状态：只到「长得像」为止 —— 页面里的角标要真宿主才有 */
+function fakeAnnotation(host: string, enabled = false) {
+  if (!host.startsWith('agent:')) {
+    return { host, enabled: false, file: null, blocks: [] }
+  }
+  return {
+    host,
+    enabled,
+    file: 'preview/pricing.html',
+    blocks: [
+      {
+        block: 1,
+        temp: null,
+        anchor: 'data-block="1"',
+        selector: 'div.m-nav',
+        text: '产品 定价 文档 开始用'
+      },
+      {
+        block: 4,
+        temp: null,
+        anchor: 'data-block="4"',
+        selector: 'div.m-pricing > div.m-card.pro',
+        text: '专业版 ¥68 / 月 无限项目 并行 agent 优先支持 升级'
+      }
+    ]
+  }
+}
+
 /** 文档区用的假文档 —— 预览模式下点开就有东西看 */
 const FAKE_DOCS: Record<string, string> = {
   'AGENTS.md': `# 项目约定
@@ -913,6 +941,11 @@ export function createMockApi(): CodeletApi {
     setBrowserBounds: async () => undefined,
     setBrowserVisible: async () => undefined,
     onBrowserState: () => () => undefined,
+
+    getAnnotation: async (host) => fakeAnnotation(host),
+    setAnnotation: async (host, enabled) => fakeAnnotation(host, enabled),
+    setAnnotationBadges: async () => undefined,
+    onAnnotation: () => () => undefined,
 
     // —— 调试控制台（预览模式里是假数据）——
     listConsoleRecords: async () => ({

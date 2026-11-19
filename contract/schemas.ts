@@ -184,6 +184,17 @@ export const browserVisibleSchema = z.object({
   visible: z.boolean()
 })
 
+export const annotationSetSchema = z.object({
+  host: browserHostSchema,
+  enabled: z.boolean()
+})
+
+/** 角标同步：键是块号或临时号；上限防一手超长数组 */
+export const annotationBadgesSchema = z.object({
+  host: browserHostSchema,
+  keys: z.array(z.string().min(1).max(20)).max(500)
+})
+
 /** Git 是项目级的东西 —— 按目录取，不按 agent */
 export const gitCwdSchema = z.object({
   cwd: z.string().min(1)

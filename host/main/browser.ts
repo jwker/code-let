@@ -1,11 +1,23 @@
-import { BrowserWindow, WebContentsView } from 'electron'
-import type {
-  BrowserAgentActivity,
-  BrowserBounds,
-  BrowserState,
-  BrowserTabState
+import { BrowserWindow, ipcMain, WebContentsView, type IpcMainEvent } from 'electron'
+import { fileURLToPath } from 'node:url'
+import { dirname, join, relative, sep } from 'node:path'
+import {
+  BROWSER_ANNOTATION_CHANNEL,
+  type AnnotationEvent,
+  type AnnotationState,
+  type BrowserAgentActivity,
+  type BrowserBounds,
+  type BrowserState,
+  type BrowserTabState,
+  type PreviewBlock
 } from '@contract/index'
-import { BrowserPools, PROJECT_BROWSER, type BrowserHost } from './browserPools'
+import {
+  BrowserPools,
+  PROJECT_BROWSER,
+  isAgentBrowserHost,
+  type BrowserHost
+} from './browserPools'
+import { ANNOTATION_SCRIPT } from './annotationScript'
 
 /**
  * 右侧浏览器会话。
@@ -24,10 +36,69 @@ const DEFAULT_PAGE_SIZE = 80
 const MAX_PAGE_SIZE = 200
 /** 截图进模型前缩到多长 */
 const SCREENSHOT_MAX_EDGE = 1024
-/** 截图 base64 上限 —— 再大只会吃 token */
+/** 一次截图最多进模型多少 base64 字符 */
 const SCREENSHOT_MAX_BASE64 = 400_000
+/** 主进程产物目录 —— 浏览器视图的 preload 跟主进程在同一个 out 里 */
+const currentDir = dirname(fileURLToPath(import.meta.url))
 /** browser_wait 的默认等待上限 */
 const WAIT_MAX_MS = 30_000
+
+/** 一个宿主的标注登记 —— 主进程是「引用载荷 / 角标 / 块清单」的唯一数据源 */
+interface AnnotationRecord {
+  /** 标注模式开着吗 */
+  enabled: boolean
+  /** 当前页面对应的原型文件（相对项目根；不是本地文件时是 URL） */
+  file: string | null
+  /** 当前页面的块登记 */
+  blocks: PreviewBlock[]
+  /** 哪些块该显示常驻角标（键是块号或临时号） */
+  badges: string[]
+}
+
+/**
+ * 把页面报上来的块洗干净。
+ *
+ * 页面是 agent 写出来的东西，不能当可信输入：块号必须是正整数，
+ * 选择器和文字都要截断。认不出来就丢掉。
+ */
+export function readPreviewBlock(value: unknown): PreviewBlock | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Record<string, unknown>
+  const block =
+    typeof raw.block === 'number' && Number.isInteger(raw.block) && raw.block > 0 ? raw.block : null
+  const temp = typeof raw.temp === 'string' && raw.temp ? raw.temp.slice(0, 12) : null
+  if (block === null && temp === null) return null
+  const selector = typeof raw.selector === 'string' ? raw.selector.trim().slice(0, 2000) : ''
+  if (!selector) return null
+  return {
+    block,
+    temp: block === null ? temp : null,
+    anchor:
+      typeof raw.anchor === 'string' && raw.anchor
+        ? raw.anchor.slice(0, 200)
+        : block !== null
+          ? `data-block="${block}"`
+          : null,
+    selector,
+    text: typeof raw.text === 'string' ? raw.text.replace(/\s+/g, ' ').trim().slice(0, 160) : ''
+  }
+}
+
+/** 从页面 URL 算出引用载荷里的「文件」：项目内的本地文件用相对路径 */
+export function previewFileOf(url: string, cwd: string | null): string | null {
+  if (!url || url === 'about:blank') return null
+  if (!url.startsWith('file:')) return url
+  let absolute = ''
+  try {
+    absolute = fileURLToPath(url)
+  } catch {
+    return url
+  }
+  if (!cwd) return absolute
+  const rel = relative(cwd, absolute)
+  if (!rel || rel.startsWith('..')) return absolute
+  return rel.split(sep).join('/')
+}
 
 interface Tab {
   id: string
@@ -115,11 +186,142 @@ export class BrowserManager {
   private seq = 0
   private permissionConfigured = false
   private disposed = false
+  /** 按宿主分开的标注登记（页面刷新后重建，只活在本次运行内） */
+  private readonly annotations = new Map<BrowserHost, AnnotationRecord>()
 
   constructor(
     private readonly win: BrowserWindow,
-    private readonly onChange: (host: BrowserHost, state: BrowserState) => void
-  ) {}
+    private readonly onChange: (host: BrowserHost, state: BrowserState) => void,
+    /** 标注状态变了（开关、块登记重建、用户点了一块） */
+    private readonly onAnnotation: (event: AnnotationEvent) => void = () => {},
+    /** 宿主对应的项目目录 —— 引用载荷里的「文件」要相对它 */
+    private readonly cwdForHost: (host: BrowserHost) => string | null = () => null
+  ) {
+    /*
+     * 原型页面的 preload 把注入脚本 post 出来的消息转到这里。
+     * 建在管理器上而不是 IPC 注册处：要按 webContents 找到它属于哪个宿主。
+     */
+    ipcMain.on(BROWSER_ANNOTATION_CHANNEL, this.onPageMessage)
+  }
+
+  private annotationRecord(host: BrowserHost): AnnotationRecord {
+    const found = this.annotations.get(host)
+    if (found) return found
+    const created: AnnotationRecord = { enabled: false, file: null, blocks: [], badges: [] }
+    this.annotations.set(host, created)
+    return created
+  }
+
+  annotationState(host: BrowserHost): AnnotationState {
+    // 标注只作用于产品 agent 的预览宿主，项目级浏览器不参与
+    if (!isAgentBrowserHost(host)) {
+      return { host, enabled: false, file: null, blocks: [] }
+    }
+    const record = this.annotationRecord(host)
+    return { host, enabled: record.enabled, file: record.file, blocks: record.blocks }
+  }
+
+  /** 开 / 关标注模式。项目级宿主恒为关 */
+  async setAnnotation(host: BrowserHost, enabled: boolean): Promise<AnnotationState> {
+    if (!isAgentBrowserHost(host)) return this.annotationState(host)
+    const record = this.annotationRecord(host)
+    record.enabled = enabled
+    const tab = this.pools.active(host)
+    if (tab) {
+      await this.runAnnotation(tab, `setMode(${enabled ? 'true' : 'false'})`)
+      // 顺手重建一次块登记 —— 页面里新加的块也能马上被点到
+      await this.scanAnnotation(host, tab)
+    }
+    this.emitAnnotation(host)
+    return this.annotationState(host)
+  }
+
+  /**
+   * 同步常驻角标的集合。
+   *
+   * 键跟着输入框里的引用走：加一个引用多一个角标，删掉引用角标一起撤掉。
+   */
+  async setAnnotationBadges(host: BrowserHost, keys: string[]): Promise<void> {
+    if (!isAgentBrowserHost(host)) return
+    const record = this.annotationRecord(host)
+    record.badges = [...new Set(keys.filter((key) => key.length > 0))].slice(0, 500)
+    const tab = this.pools.active(host)
+    if (tab) await this.runAnnotation(tab, `setBadges(${JSON.stringify(record.badges)})`)
+  }
+
+  /** 在原型页面里执行一段 `__codeletAnnotation` 调用；页面没注入过时安静地失败 */
+  private async runAnnotation(tab: Tab, call: string): Promise<void> {
+    await tab.view.webContents
+      .executeJavaScript(`window.__codeletAnnotation && window.__codeletAnnotation.${call}`)
+      .catch(() => {
+        // 页面刚导航、脚本还没装上 —— 下一张 did-finish-load 会重来
+      })
+  }
+
+  /** 注入标注脚本、恢复开关与角标、重建块登记 */
+  private async installAnnotation(tab: Tab): Promise<void> {
+    if (!isAgentBrowserHost(tab.host)) return
+    try {
+      await tab.view.webContents.executeJavaScript(ANNOTATION_SCRIPT)
+    } catch {
+      // 页面已经不在（后退 / 关闭），不值得报错
+      return
+    }
+    const record = this.annotationRecord(tab.host)
+    await this.runAnnotation(tab, `setMode(${record.enabled ? 'true' : 'false'})`)
+    await this.runAnnotation(tab, `setBadges(${JSON.stringify(record.badges)})`)
+    await this.scanAnnotation(tab.host, tab)
+    this.emitAnnotation(tab.host)
+  }
+
+  /** 重建块登记：只读页面里的 `data-block`，不自己分配号 */
+  private async scanAnnotation(host: BrowserHost, tab: Tab): Promise<void> {
+    const record = this.annotationRecord(host)
+    const raw = await tab.view.webContents
+      .executeJavaScript(`window.__codeletAnnotation ? window.__codeletAnnotation.blocks() : []`)
+      .catch(() => [])
+    record.blocks = Array.isArray(raw)
+      ? raw
+          .map((item) => readPreviewBlock(item))
+          .filter((item): item is PreviewBlock => item !== null)
+      : []
+    record.file = previewFileOf(tab.view.webContents.getURL() || tab.url, this.cwdForHost(host))
+  }
+
+  /** 页面点了一块：块信息以主进程的登记为准，页面报的只当回去的线索 */
+  private readonly onPageMessage = (event: IpcMainEvent, message: unknown): void => {
+    const found = this.pools
+      .allTabs()
+      .find(({ tab }) => tab.view.webContents.id === event.sender.id)
+    if (!found) return
+    const payload = message as { type?: unknown; block?: unknown }
+    if (!payload) return
+    const host = found.host
+    if (!isAgentBrowserHost(host)) return
+    // 页面里按了 Esc：退出标注模式（点击还给原型）
+    if (payload.type === 'exit') {
+      void this.setAnnotation(host, false)
+      return
+    }
+    if (payload.type !== 'pick') return
+    const reported = readPreviewBlock(payload.block)
+    if (!reported) return
+    const record = this.annotationRecord(host)
+    const known = record.blocks.find(
+      (block) =>
+        (reported.block !== null && block.block === reported.block) ||
+        (reported.temp !== null && block.temp === reported.temp)
+    )
+    this.onAnnotation({
+      host,
+      state: this.annotationState(host),
+      picked: known ?? reported
+    })
+  }
+
+  private emitAnnotation(host: BrowserHost): void {
+    this.onAnnotation({ host, state: this.annotationState(host), picked: null })
+  }
 
   state(host: BrowserHost): BrowserState {
     return {
@@ -258,6 +460,8 @@ export class BrowserManager {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    ipcMain.removeListener(BROWSER_ANNOTATION_CHANNEL, this.onPageMessage)
+    this.annotations.clear()
     for (const { tab } of this.pools.allTabs()) this.detach(tab)
     this.pools.clear()
     this.visibleHost = null
@@ -520,7 +724,12 @@ export class BrowserManager {
         partition: PARTITION,
         sandbox: true,
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        /*
+         * 只做一件事：把页面里注入脚本 post 出来的标注消息转成 IPC。
+         * 没有暴露任何能力给页面（不走 contextBridge）。
+         */
+        preload: join(currentDir, '../preload/browser.cjs')
       }
     })
     const tab: Tab = {
@@ -556,6 +765,13 @@ export class BrowserManager {
     view.webContents.on('did-start-loading', () => {
       tab.loading = true
       tab.error = null
+      // 新页面还没扫过：块登记先清掉，免得界面还指着上一页的号
+      if (isAgentBrowserHost(tab.host)) {
+        const record = this.annotationRecord(tab.host)
+        record.blocks = []
+        record.file = null
+        this.emitAnnotation(tab.host)
+      }
       this.emit(tab.host)
     })
     view.webContents.on('did-stop-loading', () => {
@@ -570,6 +786,10 @@ export class BrowserManager {
     view.webContents.on('did-navigate-in-page', (_event, target) => {
       tab.url = target
       this.emit(tab.host)
+    })
+    view.webContents.on('did-finish-load', () => {
+      // 注入标注脚本、恢复开关与角标、重建块登记（只对 agent 预览生效）
+      void this.installAnnotation(tab)
     })
     view.webContents.on('page-title-updated', (_event, title) => {
       tab.title = title || '新标签'

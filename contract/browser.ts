@@ -16,6 +16,15 @@ export function agentBrowserHost(agentId: string): BrowserHost {
   return `agent:${agentId}`
 }
 
+/**
+ * 是不是某个 agent 的预览宿主。
+ *
+ * 标注只对这一种宿主生效 —— 项目级浏览器的页面不参与（D57 的两个宿主边界）。
+ */
+export function isAgentBrowserHost(host: BrowserHost): host is `agent:${string}` {
+  return host.startsWith('agent:')
+}
+
 /** 来自 IPC 的宿主字符串 —— 认不出来的一律不算数，不猜默认值 */
 export function isBrowserHost(value: unknown): value is BrowserHost {
   if (value === PROJECT_BROWSER) return true

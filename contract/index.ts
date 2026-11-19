@@ -12,6 +12,19 @@
 
 // 类型再导出一份：调用方统一从 '@contract/index' 取
 export type {
+  AnnotationEvent,
+  AnnotationState,
+  BlockCitation,
+  PreviewBlock
+} from './annotation'
+export {
+  blockCitationPayload,
+  blockKey,
+  blockLabel,
+  composeMessageWithCitations,
+  oneLine
+} from './annotation'
+export type {
   AgentInfo,
   AgentType,
   PaneLayout,
@@ -57,6 +70,7 @@ import type {
   ConsoleStats
 } from './console'
 import type { AgentInfo, AgentType, ProjectPaneView, ProjectTabInfo } from './agents'
+import type { AnnotationEvent, AnnotationState } from './annotation'
 import type { BrowserHost } from './browser'
 import type {
   ModelAuthEvent,
@@ -180,6 +194,12 @@ export const IPC = {
   browserBounds: 'host:browser:bounds',
   /** 浏览器：显示 / 隐藏原生页面 */
   browserVisible: 'host:browser:visible',
+  /** 标注：取某个 agent 预览的标注状态（开关、文件、块登记） */
+  annotationGet: 'host:annotation:get',
+  /** 标注：开 / 关标注模式 */
+  annotationSet: 'host:annotation:set',
+  /** 标注：同步「哪些块显示常驻角标」 */
+  annotationBadges: 'host:annotation:badges',
   /** 列当前模型可用的思考等级 */
   thinkingLevels: 'host:thinking:levels',
   /** 设置某个标签的思考等级 */
@@ -246,6 +266,9 @@ export const IPC = {
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
 
+/** 原型页面 → 主进程的通道。页面 preload（`host/browserPreload`）把它转成 IPC */
+export const BROWSER_ANNOTATION_CHANNEL = 'host:browser:annotation'
+
 /** 主进程 → 渲染进程的单向事件通道 */
 export const IPC_EVENTS = {
   /** 宿主状态快照（项目 / 对话列表 / 会话状态） */
@@ -254,6 +277,8 @@ export const IPC_EVENTS = {
   session: 'host:event:session',
   /** 浏览器标签状态 */
   browser: 'host:event:browser',
+  /** 标注状态（开关、块登记、刚点中的块） */
+  annotation: 'host:event:annotation',
   /** 调试控制台：有新记录 / 导出进度 */
   console: 'host:event:console',
   /** 大模型：登录过程中的事件 */
@@ -927,6 +952,14 @@ export interface CodeletApi {
   setBrowserBounds(bounds: BrowserBounds): Promise<void>
   /** 显示 / 隐藏浏览器页面 */
   setBrowserVisible(host: BrowserHost, visible: boolean): Promise<void>
+  /** 取某个 agent 预览的标注状态（项目级宿主永远返回空状态） */
+  getAnnotation(host: BrowserHost): Promise<AnnotationState>
+  /** 开 / 关标注模式。项目级浏览器的页面不参与标注，恒为关 */
+  setAnnotation(host: BrowserHost, enabled: boolean): Promise<AnnotationState>
+  /** 同步「哪些块显示常驻角标」—— 键是块号或临时号，跟着输入框里的引用走 */
+  setAnnotationBadges(host: BrowserHost, keys: string[]): Promise<void>
+  /** 订阅标注状态。事件带宿主 —— 只有 `agent:<id>` 会有内容 */
+  onAnnotation(listener: (event: AnnotationEvent) => void): () => void
   /** 订阅浏览器标签状态。事件带宿主 —— 两个宿主的池是分开的 */
   onBrowserState(listener: (event: BrowserEvent) => void): () => void
   /** 某个目录的 Git 状态；只读。Git 是项目级的东西，按目录取而不是按 agent */

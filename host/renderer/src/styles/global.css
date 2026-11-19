@@ -36,12 +36,15 @@
 
   --color-ok: var(--ok);
   --color-ok-wash: var(--ok-wash);
+  --color-ok-line: var(--ok-line);
   --color-warn: var(--warn);
   --color-warn-wash: var(--warn-wash);
+  --color-warn-line: var(--warn-line);
   --color-danger: var(--danger);
   --color-danger-wash: var(--danger-wash);
   --color-info: var(--info);
   --color-info-wash: var(--info-wash);
+  --color-info-line: var(--info-line);
 
   --radius-xs: var(--r-xs);
   --radius-sm: var(--r-sm);

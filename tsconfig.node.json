@@ -3,6 +3,7 @@
   "include": [
     "host/main/**/*",
     "host/preload/**/*",
+    "host/browserPreload/**/*",
     "contract/**/*",
     "ext/**/*",
     "tests/**/*",

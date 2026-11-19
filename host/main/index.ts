@@ -162,11 +162,21 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  browser = new BrowserManager(win, (host, state) => {
-    for (const target of BrowserWindow.getAllWindows()) {
-      if (!target.isDestroyed()) target.webContents.send(IPC_EVENTS.browser, { host, state })
-    }
-  })
+  browser = new BrowserManager(
+    win,
+    (host, state) => {
+      for (const target of BrowserWindow.getAllWindows()) {
+        if (!target.isDestroyed()) target.webContents.send(IPC_EVENTS.browser, { host, state })
+      }
+    },
+    // 标注状态跟着浏览器事件走：开关、块登记重建、用户点了一块
+    (event) => {
+      for (const target of BrowserWindow.getAllWindows()) {
+        if (!target.isDestroyed()) target.webContents.send(IPC_EVENTS.annotation, event)
+      }
+    },
+    (host) => state.cwdForHost(host)
+  )
   state.attachBrowser(browser)
   /*
    * 自动化测试用的钩子：E2E 要直接驱动浏览器工具（快照、点击、截图），
@@ -232,7 +242,11 @@ function createWindow(): BrowserWindow {
   return win
 }
 
-if (!app.requestSingleInstanceLock()) {
+/*
+ * 自动化测试里不抢单实例锁：每个 spec 都要自己起一份应用，
+ * 而开发者可能正开着一个 `npm run dev`。真机上这仍然是单实例的。
+ */
+if (!process.env.CODELET_USER_DATA && !app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on('second-instance', () => {

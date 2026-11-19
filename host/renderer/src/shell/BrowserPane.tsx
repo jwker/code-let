@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { BrowserState, BrowserTabState } from '@contract/index'
-import type { BrowserHost } from '@contract/browser'
+import type { AnnotationState, BlockCitation, BrowserState, BrowserTabState } from '@contract/index'
+import { blockKey } from '@contract/index'
+import { isAgentBrowserHost, type BrowserHost } from '@contract/browser'
 import { host } from '../host'
 import { useStore } from '../store'
 
@@ -15,6 +16,9 @@ function displayUrl(tab: BrowserTabState | null): string {
   if (!tab || tab.url === 'about:blank') return ''
   return tab.url
 }
+
+/** 没有引用时的空数组 —— 保持引用稳定，免得角标同步 effect 每帧都跑 */
+const NO_CITATIONS: BlockCitation[] = []
 
 /**
  * 浏览器面板（PLAN.md D57）。
@@ -46,7 +50,12 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
    * 两者的空态不一样：公共浏览器空着就是空着，agent 的预览空着要说明
    * 「这里在等什么」—— 产品 agent 的区域 6 一开始就是一块白板（D52）。
    */
-  const isAgentHost = browserHost.startsWith('agent:')
+  const isAgentHost = isAgentBrowserHost(browserHost)
+  /** 预览宿主的 id —— 标注状态、引用都按它记 */
+  const agentId = isAgentHost ? browserHost.slice('agent:'.length) : ''
+  const annotation: AnnotationState | null = useStore((s) => s.annotations[browserHost] ?? null)
+  const annotationEnabled = annotation?.enabled === true
+  const citations = useStore((s) => (agentId ? (s.citations[agentId] ?? NO_CITATIONS) : NO_CITATIONS))
   /** 只有一张 about:blank 的空白标签：还没做出任何页面 */
   const blankPreview = isAgentHost && (!active || active.url === 'about:blank')
 
@@ -72,12 +81,36 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
       if (cancelled || event.host !== browserHost) return
       setState(event.state)
     })
+    /*
+     * 标注状态（开关、块登记）跟浏览器状态分开走：它只对 agent 预览有意义，
+     * 而且要在切宿主、切面板之后恢复。进来先取一次，之后跟事件。
+     */
+    if (isAgentHost) {
+      void host.getAnnotation(browserHost).then((next) => {
+        if (!cancelled) useStore.getState().setAnnotation(next)
+      })
+    }
+    const offAnnotation = host.onAnnotation((event) => {
+      if (cancelled || event.host !== browserHost) return
+      useStore.getState().setAnnotation(event.state)
+      // 点了一块：「#4」落进输入框，角标跟着这个引用常驻
+      if (event.picked && event.state.file && agentId) {
+        useStore.getState().addCitation(agentId, { file: event.state.file, ...event.picked })
+      }
+    })
     return () => {
       cancelled = true
       off()
+      offAnnotation()
       void host.setBrowserVisible(browserHost, false)
     }
-  }, [browserHost])
+  }, [browserHost, isAgentHost, agentId])
+
+  /** 角标跟着输入框里的引用走：加一个多一个，删掉一起撤 */
+  useEffect(() => {
+    if (!isAgentHost) return
+    void host.setAnnotationBadges(browserHost, citations.map((item) => blockKey(item)))
+  }, [browserHost, isAgentHost, citations])
 
   useEffect(() => {
     if (!addressFocused) setAddress(displayUrl(active))
@@ -262,6 +295,40 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
           ↵
         </button>
       </div>
+
+      {isAgentHost && (
+        <div className="flex h-[32px] flex-none items-center gap-1.5 border-b border-hairline bg-panel px-2">
+          <span className="min-w-0 truncate font-mono text-[11px] text-fg-3" title={annotation?.file ?? ''}>
+            {annotation?.file ?? '还没有原型文件'}
+          </span>
+          <button
+            type="button"
+            aria-pressed={annotationEnabled}
+            aria-label="标注"
+            title="打开后，页面里的点击用来选块；再点一次把点击还给原型"
+            onClick={() => {
+              void host.setAnnotation(browserHost, !annotationEnabled).then((next) => {
+                useStore.getState().setAnnotation(next)
+              })
+            }}
+            disabled={blankPreview}
+            className={`ml-auto flex h-[23px] flex-none items-center gap-1 rounded border px-2 text-[11px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              annotationEnabled
+                ? 'border-accent bg-accent text-accent-fg'
+                : 'border-transparent text-fg-3 hover:bg-sunken hover:text-fg-1'
+            }`}
+          >
+            ✎ 标注
+          </button>
+        </div>
+      )}
+
+      {annotationEnabled && (
+        <div className="flex h-[26px] flex-none items-center gap-1.5 border-b border-hairline bg-accent-wash px-2 text-[11px] text-fg-2">
+          <span className="h-1.5 w-1.5 flex-none rounded-full bg-fg-1" />
+          <span className="min-w-0 truncate">标注模式 · 点击选块，不触发原型自己的交互 · Esc 退出</span>
+        </div>
+      )}
 
       {agent && (
         <div className="flex h-[26px] flex-none items-center gap-1.5 border-b border-hairline bg-warn-wash px-2 text-[11px] text-warn">

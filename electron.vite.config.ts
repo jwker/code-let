@@ -30,7 +30,11 @@ export default defineConfig({
     build: {
       outDir: 'out/preload',
       rollupOptions: {
-        input: { index: resolve(root, 'host/preload/index.ts') },
+        input: {
+          index: resolve(root, 'host/preload/index.ts'),
+          // 原型预览的原生视图用另一个 preload —— 只做标注消息转发
+          browser: resolve(root, 'host/browserPreload/index.ts')
+        },
         // sandbox: true 的 preload 必须是 CJS
         output: { format: 'cjs', entryFileNames: '[name].cjs' }
       }
