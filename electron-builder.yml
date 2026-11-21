@@ -6,6 +6,10 @@ directories:
   buildResources: build
   output: release
 
+# 产物名字带上最后一次提交 —— 下载下来一个 dmg，从文件名就知道对应哪个版本。
+# hash 由 scripts/dist.mjs 通过环境变量给（没给就报错，不会悄悄用个空值）。
+artifactName: ${productName}-${version}-${env.CODELET_COMMIT}-${arch}.${ext}
+
 files:
   - out/**/*
   - package.json

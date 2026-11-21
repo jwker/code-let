@@ -202,8 +202,14 @@ npm run typecheck  # 主进程 / 渲染进程两套 tsconfig
 npm test           # vitest
 npm run test:e2e   # 构建后用 Playwright 启动 Electron 跑 UI 测试
 npm run icon       # 重新生成应用图标（需要 Electron）
-npm run dist       # 打包（electron-builder）
+npm run dist       # 打包（electron-builder，按当前机器架构出 dmg）
+npm run dist:mac   # macOS 两种架构都打（arm64 + x64）
 ```
+
+产物落在 `release/`，名字带上最后一次提交的短 hash，例如
+`Codelet-0.1.0-387e7756-arm64.dmg`。工作区有未提交改动时 hash 后面多一个 `-dirty` ——
+这种包能装能跑，但它不对应任何一个提交。`npm run dist` 默认只打当前架构，
+配置里列的两种架构要靠 `dist:mac` 显式打开（也可以在命令行追 `-- --mac dmg --x64`）。
 
 ## 浏览器预览模式
 
