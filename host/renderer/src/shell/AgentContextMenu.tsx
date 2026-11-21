@@ -7,7 +7,7 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { PromptDialog } from './PromptDialog'
 import { agentMenuState } from './agentMenuItems'
 import { useOverlay } from './useOverlay'
-import { coversBrowser } from './overlay'
+import { clampOverlayBox, coversBrowser, leftColumnBounds } from './overlay'
 
 /**
  * agent 头像的右键菜单（PLAN.md D53）。
@@ -53,7 +53,7 @@ export function AgentContextMenu({
   const [position, setPosition] = useState({ left: anchor.x, top: anchor.y })
 
   /*
-   * 菜单跟气泡一样贴在窄轨右边，正常宽度下落在区域 5 里 —— 只有真的压到
+   * 菜单跟气泡一样贴在窄轨右边，整个落在左列里 —— 只有真的压到
    * 原生浏览器视图时才把它收起来（`.agent-menu` 宽 198px）。
    */
   const browserSpan = useStore((s) => s.browserSpan)
@@ -62,9 +62,8 @@ export function AgentContextMenu({
     const el = ref.current
     if (!el) return
     const rect = el.getBoundingClientRect()
-    const left = Math.min(anchor.x, window.innerWidth - rect.width - 8)
-    const top = Math.min(anchor.y, window.innerHeight - rect.height - 8)
-    setPosition({ left: Math.max(8, left), top: Math.max(8, top) })
+    // 边界是左列，不是窗口 —— 贴着左列右缘弹的菜单不能伸进右栏
+    setPosition(clampOverlayBox({ left: anchor.x, top: anchor.y }, rect, leftColumnBounds()))
   }, [anchor.x, anchor.y])
 
   // 点外面 / Esc 关掉；方向键在项之间移动

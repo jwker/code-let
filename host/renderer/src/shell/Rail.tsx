@@ -5,7 +5,7 @@ import { host } from '../host'
 import { AgentAvatar } from './AgentAvatar'
 import { AgentContextMenu, RenameAgentDialog, type AgentMenuAnchor } from './AgentContextMenu'
 import { IconPlus, IconSettings } from './icons'
-import { coversBrowser } from './overlay'
+import { coversBrowser, leftColumnBounds } from './overlay'
 
 /**
  * 窄导航轨。
@@ -59,13 +59,16 @@ export function Rail() {
     []
   )
 
-  /** 排一个气泡：位置现在就量好，出现时不再读布局 */
+  /** 排一个气泡：位置现在就量好，出现时不再读布局。气泡也不越过左列右边界。 */
   function scheduleTip(agent: AgentInfo, element: HTMLElement): void {
     if (tipTimer.current !== null) window.clearTimeout(tipTimer.current)
     const rect = element.getBoundingClientRect()
+    const column = leftColumnBounds()
+    // `.rail-tip` 的 max-width 是 260；留 8px 边
+    const left = Math.max(column.left + 8, Math.min(rect.right + 8, column.left + column.width - 268))
     tipTimer.current = window.setTimeout(() => {
       tipTimer.current = null
-      setTip({ agent, top: rect.top, left: rect.right + 8 })
+      setTip({ agent, top: rect.top, left })
     }, 180)
   }
 

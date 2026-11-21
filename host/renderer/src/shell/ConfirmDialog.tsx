@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { useOverlay } from './useOverlay'
+import { useLeftColumnOverlay } from './useOverlay'
 
 /**
  * 确认框 —— 需要用户点头才继续的那种操作（关掉正在跑的标签、把项目移出清单）。
@@ -33,7 +33,7 @@ export function ConfirmDialog({
   onConfirm: () => void
 }) {
   // 浏览器页面是原生 view，会盖住对话框 —— 有浮层时把它收起来
-  useOverlay()
+  useLeftColumnOverlay()
 
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
@@ -44,13 +44,13 @@ export function ConfirmDialog({
   }, [onCancel, busy])
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center">
+    <div className="left-scope z-[70] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/25" onClick={busy ? undefined : onCancel} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-[330px] rounded-xl border border-hairline bg-raised p-4"
+        className="left-dialog relative w-[330px] rounded-xl border border-hairline bg-raised p-4"
         style={{ boxShadow: 'var(--sh-lg)' }}
       >
         <div className="text-[13.5px] font-semibold text-fg-1">{title}</div>

@@ -54,6 +54,11 @@
 }
 
 @layer base {
+  html {
+    /* 左列宽度；主窗口由 .shell 覆盖，设置窗口等没有右栏的地方就是整窗 */
+    --left-w: 100vw;
+  }
+
   html,
   body,
   #root {
@@ -101,6 +106,8 @@
   --rail-w: 56px;
   /* 右栏当前宽度；由 App 往 shell 上写，收起时用不到 */
   --right-w: 380px;
+  /* 左列宽度 —— 浮层的边界。收起右栏时就是整窗 */
+  --left-w: 100vw;
   /* 侧栏左上角的圆角；分隔线按这个半径拐弯，改大改小只要动这里 */
   --panel-radius: 12px;
 
@@ -1275,6 +1282,30 @@
 /* 拖拽中不要 180ms 过渡，否则宽度跟不上鼠标 */
 .shell.is-resizing {
   transition: none;
+}
+
+/* 右栏展开着：左列只剩窗口左边那一段 */
+.shell.has-right {
+  --left-w: calc(100vw - var(--right-w));
+}
+
+/*
+ * 浮层的作用域 —— 菜单、气泡、对话框一律只铺左列。
+ *
+ * 原来用 `fixed inset-0` 铺满整窗：遮罩把右栏也压暗，居中的对话框落在两栏的
+ * 分界上。位置坐标仍然按视口算（左列在 (0,0)），只是宽度被截在左列里。
+ */
+.left-scope {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--left-w);
+}
+
+/* 左列里的对话框：再窄也留 16px 边，不越过左列右边界 */
+.left-dialog {
+  max-width: calc(var(--left-w) - 32px);
 }
 
 /*
@@ -2805,7 +2836,10 @@ ol.md-list {
 /* —— 弹窗 —— */
 .conv-tree-layer {
   position: fixed;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--left-w);
   z-index: 60;
   /* 弹窗挂在圆点轨里，而轨本身 pointer-events: none —— 这里要收回来 */
   pointer-events: auto;
@@ -2833,7 +2867,7 @@ ol.md-list {
   position: relative;
   z-index: 1;
   width: 640px;
-  max-width: calc(100vw - 48px);
+  max-width: calc(var(--left-w) - 48px);
   max-height: min(70vh, 620px);
   display: flex;
   flex-direction: column;

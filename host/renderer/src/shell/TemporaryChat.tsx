@@ -11,6 +11,7 @@ import {
   type ComposerAttachment
 } from '../conversation/composerCommands'
 import { ModelPicker } from './ModelPicker'
+import { leftColumnBounds } from './overlay'
 import { IconArrowUp, IconPaperclip, IconSession, IconStop } from './icons'
 
 const EMPTY_ITEMS: StreamItem[] = []
@@ -243,12 +244,12 @@ export function TemporaryChat() {
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 p-6 backdrop-blur-[1.5px]">
+    <div className="left-scope z-[70] flex items-center justify-center bg-black/40 p-6 backdrop-blur-[1.5px]">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="临时对话"
-        className="relative flex h-[min(700px,calc(100vh-64px))] w-[min(620px,calc(100vw-48px))] flex-col overflow-hidden rounded-[20px] border border-hairline-strong bg-surface shadow-[var(--sh-lg)]"
+        className="left-dialog relative flex h-[min(700px,calc(100vh-64px))] w-[min(620px,calc(100vw-48px))] flex-col overflow-hidden rounded-[20px] border border-hairline-strong bg-surface shadow-[var(--sh-lg)]"
       >
         <header className="flex flex-none items-start gap-3 border-b border-hairline px-4 py-4">
           <div className="grid h-[30px] w-[30px] flex-none place-items-center rounded-[10px] border border-dashed border-hairline-strong bg-sunken text-[15px] text-fg-2">
@@ -444,7 +445,7 @@ export function TemporaryChat() {
         <div
           className="fixed z-[110]"
           style={{
-            left: Math.max(8, Math.min(modelPicker.left, window.innerWidth - 436)),
+            left: Math.max(8, Math.min(modelPicker.left, leftColumnBounds().width - 436)),
             bottom: modelPicker.bottom
           }}
         >

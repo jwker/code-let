@@ -3,7 +3,7 @@ import type { AgentInfo, AgentTypeDef } from '@contract/index'
 import { BUILTIN_AGENT_TYPES, capabilitiesOf, defaultAgentName } from '@contract/index'
 import { useStore } from '../store'
 import { AgentAvatar } from './AgentAvatar'
-import { useOverlay } from './useOverlay'
+import { useLeftColumnOverlay } from './useOverlay'
 
 /**
  * 新建 agent（PLAN.md D53 / D62）。
@@ -44,7 +44,7 @@ export function NewAgentDialog({
   onCreate: (choice: NewAgentChoice) => void
   onCancel: () => void
 }) {
-  useOverlay()
+  useLeftColumnOverlay()
 
   /*
    * 类型清单从 store 取；还没拉到时先用内置三个顶上 ——
@@ -108,13 +108,13 @@ export function NewAgentDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center">
+    <div className="left-scope z-[70] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/25" onClick={busy ? undefined : onCancel} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label="新建 agent"
-        className="relative w-[380px] rounded-xl border border-hairline bg-raised p-4"
+        className="left-dialog relative w-[380px] rounded-xl border border-hairline bg-raised p-4"
         style={{ boxShadow: 'var(--sh-lg)' }}
       >
         <div className="text-[13.5px] font-semibold text-fg-1">新建 agent</div>

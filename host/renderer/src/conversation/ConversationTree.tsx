@@ -3,7 +3,7 @@ import type { SessionTree } from '@contract/index'
 import { host } from '../host'
 import { useStore } from '../store'
 import { PromptDialog } from '../shell/PromptDialog'
-import { useOverlay } from '../shell/useOverlay'
+import { useLeftColumnOverlay } from '../shell/useOverlay'
 import { treeToRows, type TreeRow } from './treeRows'
 import { gutterWidth, laneX, layoutTree, ROW_HEIGHT, type TreeRowLayout } from './treeLayout'
 
@@ -62,7 +62,7 @@ export function ConversationTree({
   /** 「回到这一轮」把提问原文放回输入框 */
   onComposerText: (text: string) => void
 }) {
-  useOverlay()
+  useLeftColumnOverlay()
   const setItems = useStore((s) => s.setItems)
   const layout = useMemo(() => layoutTree(tree, treeToRows(tree)), [tree])
   const rows = layout.rows

@@ -75,6 +75,8 @@ export function App() {
   const rightWidth = clampRightPanelWidth(
     storedRightWidth ?? defaultRightPanelWidth(windowWidth)
   )
+  /** 左列的宽度 —— 浮层（模型选择器）的右边界 */
+  const leftWidth = windowWidth - (rightPanel.open ? rightWidth : 0)
 
   useEffect(() => {
     // macOS 的红绿灯压在标题栏顶上，躲开它
@@ -200,7 +202,7 @@ export function App() {
         <div
           className="fixed z-[60]"
           style={{
-            left: Math.max(8, Math.min(pickerAnchor.left, window.innerWidth - 436)),
+            left: Math.max(8, Math.min(pickerAnchor.left, leftWidth - 436)),
             bottom: pickerAnchor.bottom
           }}
         >

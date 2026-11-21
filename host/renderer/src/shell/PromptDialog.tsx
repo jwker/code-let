@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useOverlay } from './useOverlay'
+import { useLeftColumnOverlay } from './useOverlay'
 
 /**
  * 一个只有输入框的小对话框。
@@ -37,7 +37,7 @@ export function PromptDialog({
   onCancel: () => void
   onConfirm: (value: string) => void
 }) {
-  useOverlay()
+  useLeftColumnOverlay()
   const [value, setValue] = useState(initialValue)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -71,13 +71,13 @@ export function PromptDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center">
+    <div className="left-scope z-[70] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/25" onClick={busy ? undefined : onCancel} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="relative w-[360px] rounded-xl border border-hairline bg-raised p-4"
+        className="left-dialog relative w-[360px] rounded-xl border border-hairline bg-raised p-4"
         style={{ boxShadow: 'var(--sh-lg)' }}
       >
         <div className="text-[13.5px] font-semibold text-fg-1">{title}</div>

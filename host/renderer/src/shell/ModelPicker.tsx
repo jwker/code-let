@@ -108,7 +108,7 @@ export function ModelPicker({
       onKeyDown={onKeyDown}
       role="dialog"
       aria-label="选择模型"
-      className="w-[420px] max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-hairline-strong bg-raised shadow-[var(--sh-lg)]"
+      className="w-[420px] max-w-[calc(var(--left-w)-32px)] overflow-hidden rounded-xl border border-hairline-strong bg-raised shadow-[var(--sh-lg)]"
     >
       <div className="flex items-center gap-2 border-b border-hairline px-3 py-2">
         <span className="text-[12px] text-fg-3">⌕</span>
