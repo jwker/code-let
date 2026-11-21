@@ -31,6 +31,13 @@ mac:
       arch: [arm64, x64]
   category: public.app-category.developer-tools
   darkModeSupport: true
+  # 跳过 Electron 自带的本地化 .pak：它们是数据文件，不是可执行文件，本来不该单独签名。
+  # 不跳过的话 @electron/osx-sign 会把 Electron Framework 里 220 个 locale.pak 逐个签一遍，
+  # 每个还要向 Apple 的时间戳服务打一次往返（实测 1.6 秒/个），一个架构多花六分钟以上。
+  # 这些文件仍然被打包签名（_CodeSignature/CodeResources）封住，安全性不受影响。
+  signIgnore:
+    - '/Resources/[^/]+\.lproj/locale\.pak$'
+    - '/Resources/[^/]+\.lproj/[^/]+\.pak$'
 
 win:
   target:
