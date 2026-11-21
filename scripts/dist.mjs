@@ -13,6 +13,12 @@
  * 但拿它去对问题得知道它不等同于任何一个提交。
  *
  * 参数原样转给 electron-builder：`npm run dist -- --mac dmg --arm64`。
+ *
+ * **默认不签名。** 签名（`mac.identity`）对每个文件都跑一次带 `--timestamp` 的
+ * `codesign`，要向 Apple 的时间戳服务打网络往返 —— Electron 的 220 个
+ * `locale.pak` 加上嵌套框架，一个架构要十几分钟。而现在的包也没公证
+ * （日志里那句 `skipped macOS notarization`），签了在别人机器上照样要右键打开，
+ * 本地打包没理由为它等。要出签名包就带环境变量：`CODELET_SIGN=1 npm run dist`。
  */
 
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -41,6 +47,9 @@ function commitName() {
 const commit = commitName()
 console.log(`打包标记：${commit}`)
 
+const sign = process.env.CODELET_SIGN === '1'
+console.log(sign ? '签名：开（CODELET_SIGN=1）' : '签名：关（本地打包，要签名带 CODELET_SIGN=1）')
+
 // 本地装的 electron-builder；`--no-install` 保证不会临时去网上抓一个别的版本
 const result = spawnSync(
   'npx',
@@ -48,7 +57,12 @@ const result = spawnSync(
   {
     cwd: root,
     stdio: 'inherit',
-    env: { ...process.env, CODELET_COMMIT: commit }
+    env: {
+      ...process.env,
+      CODELET_COMMIT: commit,
+      // electron-builder 认这个变量：不自动找钥匙串里的证书，等于不签名
+      ...(sign ? {} : { CSC_IDENTITY_AUTO_DISCOVERY: 'false' })
+    }
   }
 )
 
