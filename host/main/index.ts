@@ -29,6 +29,22 @@ import {
  */
 if (process.env.CODELET_USER_DATA) {
   app.setPath('userData', process.env.CODELET_USER_DATA)
+} else if (!app.isPackaged) {
+  /*
+   * 开发版和打包版各用一份目录。
+   *
+   * 打包版和开发版用的是同一个 userData：`~/Library/Application Support/codelet`
+   * （Electron 按 package.json 的 `name` 取目录，`productName` 只管显示名）。
+   * 单实例锁就建在这个目录里，所以 `/Applications` 里那个 Codelet 开着的时候，
+   * `npm run dev` 会直接退出，什么提示都没有。
+   *
+   * 数据也不该共用：两个进程各自在内存里持有一份 `agents.json` / `tabs.json`，
+   * 谁后写谁赢，先写的那份改动就没了；同一个会话文件更糟 —— 两边都在追加 JSONL。
+   *
+   * 所以开发固定用 `Codelet Dev`。要拿真实数据调试就显式指过去：
+   * `CODELET_USER_DATA="$HOME/Library/Application Support/codelet" npm run dev`。
+   */
+  app.setPath('userData', join(app.getPath('appData'), 'Codelet Dev'))
 }
 
 // 必须在 app.ready 之前注册，否则相对路径 / fetch / ES module 脚本会失效
@@ -256,8 +272,8 @@ function createWindow(): BrowserWindow {
 }
 
 /*
- * 自动化测试里不抢单实例锁：每个 spec 都要自己起一份应用，
- * 而开发者可能正开着一个 `npm run dev`。真机上这仍然是单实例的。
+ * 自动化测试里不抢单实例锁：每个 spec 都要自己起一份应用。
+ * 平时仍然单实例 —— 开发版和打包版各有自己的 userData，锁互不干扰，可以同时开。
  */
 if (!process.env.CODELET_USER_DATA && !app.requestSingleInstanceLock()) {
   app.quit()

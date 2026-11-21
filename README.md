@@ -219,6 +219,20 @@ npm run dist:mac   # macOS 两种架构都打（arm64 + x64）
 签名只能在打包时做，没法提前：签名是对**这一个产物**的内容算的，任何重新打包都会改变文件，
 旧签名随之作废。所以只有要分发的包才签；本机自用的包不签，装上去照样双击就开。
 
+## 开发版的数据放在哪
+
+开发版用 `~/Library/Application Support/Codelet Dev`，打包后的应用用
+`~/Library/Application Support/codelet` —— 两份数据、两把单实例锁，所以
+`/Applications` 里的 Codelet 开着的时候照样能跑 `npm run dev`。
+
+想拿真实数据调试就显式指过去：
+
+```bash
+CODELET_USER_DATA="$HOME/Library/Application Support/codelet" npm run dev
+```
+
+注意这时两边共用同一份 `agents.json` 和会话文件，别同时开着两个实例往里写。
+
 ## 浏览器预览模式
 
 `npm run dev` 之后直接在浏览器打开 `http://localhost:5173` 也能看到完整界面，数据是假的。
