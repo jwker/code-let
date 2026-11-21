@@ -65,7 +65,7 @@ type ComposerNotice = { kind: 'info' | 'error'; text: string }
  * 一条内容流，三种排版。普通和终端读同一个数组（R3），
  * HTML 模式这一轮留空 —— 它不是排版，是 skill 的产物。
  */
-export function ConversationArea() {
+export function ConversationArea({ variant = 'main' }: { variant?: 'main' | 'narrow' } = {}) {
   const mode = useStore((s) => s.mode)
   const session = useStore((s) => s.snapshot.session)
   const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
@@ -110,6 +110,19 @@ export function ConversationArea() {
   })
   const [reloading, setReloading] = useState(false)
   const [draft, setDraft] = useState('')
+
+  /*
+   * 「回到这一轮」把提问原文送回输入框。请求走 store 而不是 props：
+   * 树入口在产品 agent 那边挂在窄栏的标题栏上，拿不到这里的本地 state。
+   */
+  const composerTextRequest = useStore((s) => s.composerTextRequest)
+  const consumeComposerText = useStore((s) => s.consumeComposerText)
+  useEffect(() => {
+    if (!composerTextRequest) return
+    if (composerTextRequest.agentId !== activeAgentId) return
+    setDraft(composerTextRequest.text)
+    consumeComposerText()
+  }, [activeAgentId, composerTextRequest, consumeComposerText])
 
   /*
    * 输入法组词状态。
@@ -383,7 +396,14 @@ export function ConversationArea() {
     streaming,
     session.sessionId
   )
-  const hasNav = mode !== 'html' && userTurnsOf(items).length >= 2
+  /*
+   * 左侧那一列要不要占位：不止一轮，或者还有别的支线。
+   * 后者跟圆点轨的显示条件一致 —— 两处用同一个数，才不会出现「轨出来了、正文没让位」。
+   */
+  const otherBranches = useStore((s) =>
+    s.snapshot.activeAgentId ? (s.treeBranches[s.snapshot.activeAgentId] ?? 0) : 0
+  )
+  const hasNav = mode !== 'html' && (userTurnsOf(items).length >= 2 || otherBranches > 0)
 
   function showNotice(kind: ComposerNotice['kind'], text: string, timeout = 0): void {
     if (noticeTimer.current !== null) {
@@ -840,7 +860,12 @@ export function ConversationArea() {
         滚动容器自己给的 padding 做不到（跟着内容一起滚走）。
       */}
       <div className={`relative min-h-0 flex-1 pt-3 ${hasNav ? 'conv-has-nav' : ''}`}>
-        <ConversationNav items={items} mode={mode} scrollRef={scrollRef} />
+        <ConversationNav
+          items={items}
+          mode={mode}
+          scrollRef={scrollRef}
+          treeEntry={variant !== 'narrow'}
+        />
         {mode === 'normal' &&
           (items.length > 0 ? (
             <div className="conv-normal" ref={setRef}>

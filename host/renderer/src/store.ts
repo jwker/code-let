@@ -19,6 +19,7 @@ import type {
 import { blockKey } from '@contract/index'
 import { applyEvent, nextStreaming } from '@contract/stream'
 import { host } from './host'
+import type { HorizontalSpan } from './shell/overlay'
 
 export type Theme = 'light' | 'dark'
 
@@ -279,12 +280,15 @@ interface RendererStore {
   /** 文档区：分组清单、当前选中的一篇、它的内容 */
   docs: DocsViewState
   /**
-   * 当前有几个浮层开着（气泡、菜单、对话框）。
+   * 会盖住原生浏览器视图的浮层数（气泡、菜单、对话框）。
    *
-   * 浏览器页面是原生 view，画在 DOM 之上；有浮层时要把原生视图收起来，
-   * 否则气泡被盖住、对话框点不到。见 `shell/useOverlay.ts`。
+   * 浏览器页面是原生 view，画在 DOM 之上；这类浮层开着时要把原生视图收起来，
+   * 否则气泡被盖住、对话框点不到。窄轨上的气泡和右键菜单只占区域 5，
+   * 不算在里面 —— 判断在 `shell/overlay.ts`，用法见 `shell/useOverlay.ts`。
    */
-  overlayCount: number
+  browserOverlayCount: number
+  /** 原生浏览器视图现在占的横向范围（窗口坐标）；没有原生视图时为 null */
+  browserSpan: HorizontalSpan | null
   /** 项目设置里选中的分类 */
   settingsCategory: 'agents' | 'conversations' | 'project'
   /** 区域 5 的宽度，按入口各记一份 */
@@ -293,6 +297,13 @@ interface RendererStore {
   renameRequest: { path: string; nonce: number } | null
   /** 新建对话请求 —— App 看到后弹出「先起名再建」的对话框 */
   newConversationRequest: { cwd: string; nonce: number } | null
+  /**
+   * 「把这段文字放进某个 agent 的输入框」的请求。
+   *
+   * 树弹窗的「回到这一轮」用它：弹窗可能挂在窄栏的标题栏上（产品 agent），
+   * 那儿拿不到输入框的本地 state。
+   */
+  composerTextRequest: { agentId: string; text: string; nonce: number } | null
   /** 模型选择器的锚点（null = 关着）。position: fixed 用，贴着触发它的控件上方 */
   modelPickerAnchor: { left: number; bottom: number } | null
   /** 临时对话是否收起成右下角胶囊 */
@@ -334,6 +345,13 @@ interface RendererStore {
   addCitation: (agentId: string, citation: BlockCitation) => void
   /** 删掉一个引用（按文件 + 块号/临时号），角标跟着撤 */
   removeCitation: (agentId: string, file: string, key: string) => void
+  /**
+   * 每个 agent 有几条「别的支线」。
+   *
+   * 树入口拉完树之后写进来：圆点轨靠它决定只剩一轮时要不要留着，
+   * 对话区靠它决定正文要不要让出左侧那一列。
+   */
+  treeBranches: Record<string, number>
   /** 各项目已加载的目录内容（按 `cwd + 目录路径`） */
   treeEntries: Record<string, FileEntry[]>
   /** 某个目录为什么没读成 —— 越界的符号链接会写在这里 */
@@ -351,8 +369,11 @@ interface RendererStore {
   /** 读 AI 文档清单（区域 5 的文档区） */
   setSettingsCategory: (category: 'agents' | 'conversations' | 'project') => void
   /** 登记一个浮层（挂载时）/ 撤销（卸载时） */
-  pushOverlay: () => void
-  popOverlay: () => void
+  /** 登记 / 撤销一个浮层。`coversBrowser` 为假时不动原生视图 */
+  pushOverlay: (coversBrowser?: boolean) => void
+  popOverlay: (coversBrowser?: boolean) => void
+  /** 原生浏览器视图的横向范围变了（面板拖动、窗口缩放、页面收起） */
+  setBrowserSpan: (span: HorizontalSpan | null) => void
   loadDocs: (cwd: string) => Promise<void>
   /** 打开一篇文档 → 区域 6 读它的内容 */
   openDoc: (path: string) => Promise<void>
@@ -373,6 +394,12 @@ interface RendererStore {
   consumeRenameRequest: () => void
   /** 请求新建对话（先起名） */
   requestNewConversation: (cwd: string) => void
+  /** 树入口拉完树之后把「别的支线」条数记下来 */
+  setTreeBranches: (agentId: string, count: number) => void
+  /** 请求把一段文字放进某个 agent 的输入框 */
+  requestComposerText: (agentId: string, text: string) => void
+  /** 输入框已经拿到那段文字 */
+  consumeComposerText: () => void
   /** 新建对话对话框已经处理掉请求 */
   consumeNewConversationRequest: () => void
   bumpEvents: (count: number) => void
@@ -430,11 +457,13 @@ export const useStore = create<RendererStore>((set, get) => ({
   codeMode: 'files',
   git: EMPTY_GIT,
   docs: EMPTY_DOCS,
-  overlayCount: 0,
+  browserOverlayCount: 0,
+  browserSpan: null,
   settingsCategory: 'agents',
   zone5Widths: loadZone5Widths(),
   renameRequest: null,
   newConversationRequest: null,
+  composerTextRequest: null,
   modelPickerAnchor: null,
   tempMinimized: false,
   models: [],
@@ -444,6 +473,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   annotations: {},
   citations: {},
   treeExpanded: loadTreeExpanded(),
+  treeBranches: {},
   treeEntries: {},
   treeErrors: {},
 
@@ -556,8 +586,14 @@ export const useStore = create<RendererStore>((set, get) => ({
 
   setSettingsCategory: (category) => set({ settingsCategory: category }),
 
-  pushOverlay: () => set((state) => ({ overlayCount: state.overlayCount + 1 })),
-  popOverlay: () => set((state) => ({ overlayCount: Math.max(0, state.overlayCount - 1) })),
+  pushOverlay: (coversBrowser = true) =>
+    set((state) => (coversBrowser ? { browserOverlayCount: state.browserOverlayCount + 1 } : state)),
+  popOverlay: (coversBrowser = true) =>
+    set((state) =>
+      coversBrowser ? { browserOverlayCount: Math.max(0, state.browserOverlayCount - 1) } : state
+    ),
+
+  setBrowserSpan: (span) => set({ browserSpan: span }),
 
   loadDocs: async (cwd) => {
     if (!cwd) {
@@ -744,6 +780,21 @@ export const useStore = create<RendererStore>((set, get) => ({
   },
 
   consumeRenameRequest: () => set({ renameRequest: null }),
+
+  setTreeBranches: (agentId, count) =>
+    set((state) =>
+      state.treeBranches[agentId] === count
+        ? state
+        : { treeBranches: { ...state.treeBranches, [agentId]: count } }
+    ),
+
+  requestComposerText: (agentId, text) => {
+    set((state) => ({
+      composerTextRequest: { agentId, text, nonce: (state.composerTextRequest?.nonce ?? 0) + 1 }
+    }))
+  },
+
+  consumeComposerText: () => set({ composerTextRequest: null }),
 
   requestNewConversation: (cwd) => {
     set((state) => ({

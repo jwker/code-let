@@ -6,6 +6,8 @@ import { ConfirmDialog } from './ConfirmDialog'
 import { PromptDialog } from './PromptDialog'
 import { agentMenuState } from './agentMenuItems'
 import { useOverlay } from './useOverlay'
+import { coversBrowser } from './overlay'
+import { useStore } from '../store'
 
 /**
  * agent 头像的右键菜单（PLAN.md D53）。
@@ -40,7 +42,6 @@ export function AgentContextMenu({
   onArchive: () => void
   onDelete: () => void
 }) {
-  useOverlay()
   const { agent } = anchor
   const state = agentMenuState(agent)
   const ref = useRef<HTMLDivElement>(null)
@@ -48,6 +49,13 @@ export function AgentContextMenu({
 
   // 贴边翻转：按在右下角时别把菜单顶出窗口
   const [position, setPosition] = useState({ left: anchor.x, top: anchor.y })
+
+  /*
+   * 菜单跟气泡一样贴在窄轨右边，正常宽度下落在区域 5 里 —— 只有真的压到
+   * 原生浏览器视图时才把它收起来（`.agent-menu` 宽 198px）。
+   */
+  const browserSpan = useStore((s) => s.browserSpan)
+  useOverlay(coversBrowser({ left: position.left, width: 198 }, browserSpan))
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) return

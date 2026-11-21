@@ -201,9 +201,12 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
       if (!node) return
       const rect = node.getBoundingClientRect()
       if (rect.width < 1 || rect.height < 1) {
+        useStore.getState().setBrowserSpan(null)
         void host.setBrowserVisible(browserHost, false)
         return
       }
+      // 浮层要判断自己会不会盖住这块原生视图（`shell/overlay.ts`）
+      useStore.getState().setBrowserSpan({ left: rect.left, width: rect.width })
       void host.setBrowserBounds({
         x: Math.round(rect.left),
         y: Math.round(rect.top),
@@ -223,6 +226,8 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
       cancelAnimationFrame(frame)
       observer.disconnect()
       window.removeEventListener('resize', onResize)
+      // 这块原生视图没了，浮层不用再为它让路
+      useStore.getState().setBrowserSpan(null)
     }
   }, [])
 
@@ -232,7 +237,11 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
    * 三种情况都要收起：没有活动标签、页面报错（让错误说明可见）、
    * **有浮层开着**（气泡/菜单/对话框会被原生 view 盖住 —— 它永远画在 DOM 之上）。
    */
-  const overlayCount = useStore((s) => s.overlayCount)
+  /*
+   * 只数**会盖住这块原生视图**的浮层 —— 窄轨上的气泡和菜单不在此列，
+   * 不然鼠标扫过头像，右边的页面就整片消失。
+   */
+  const browserOverlayCount = useStore((s) => s.browserOverlayCount)
   useEffect(() => {
     /*
      * 空白预览也收起：原生 view 永远画在 DOM 之上，不收起来下面的空态文案
@@ -240,9 +249,9 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
      */
     void host.setBrowserVisible(
       browserHost,
-      Boolean(active) && !active?.error && overlayCount === 0 && !blankPreview
+      Boolean(active) && !active?.error && browserOverlayCount === 0 && !blankPreview
     )
-  }, [browserHost, active?.id, active?.url, active?.error, overlayCount, blankPreview])
+  }, [browserHost, active?.id, active?.url, active?.error, browserOverlayCount, blankPreview])
 
   async function createTab(): Promise<void> {
     setCreating(true)

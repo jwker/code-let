@@ -2,6 +2,7 @@ import { PANE_LAYOUT, paneLayoutFor } from '@contract/index'
 import type { AgentType, ProjectPane } from '@contract/index'
 import { useEffect } from 'react'
 import { ConversationArea } from '../conversation/ConversationArea'
+import { ConversationTreeEntry } from '../conversation/ConversationTreeEntry'
 import { useStore } from '../store'
 import { FileTree } from './FileTree'
 import { DocsList } from './DocsList'
@@ -136,10 +137,15 @@ export function Zone5() {
         <div className="zone5-head">
           <span className="zone5-title">对话</span>
           <span className="zone5-meta">{activeAgent?.name}</span>
+          {/*
+            窄栏里圆点轨整列被藏掉，所以会话树的入口放在这一行 ——
+            长在轨里的话，产品 agent 连有分叉都打不开弹窗。
+          */}
+          <ConversationTreeEntry placement="head" />
         </div>
         <div className="zone5-body zone5-chat">
           <div className="shell-main">
-            <ConversationArea />
+            <ConversationArea variant="narrow" />
           </div>
         </div>
       </aside>

@@ -67,6 +67,26 @@ export const agentIdSchema = z.object({
   agentId: z.string().min(1)
 })
 
+/** 切支线：目标是一个条目（会话文件里的 id） */
+export const treeNavigateSchema = z.object({
+  agentId: z.string().min(1),
+  targetId: z.string().min(1),
+  summarize: z.boolean().optional()
+})
+
+/** 另开会话：目标是路径上最后一个要保留的条目 */
+export const treeForkSchema = z.object({
+  agentId: z.string().min(1),
+  targetId: z.string().min(1)
+})
+
+/** 加标签：空串等于清掉；上限跟会话改名一致 */
+export const treeLabelSchema = z.object({
+  agentId: z.string().min(1),
+  targetId: z.string().min(1),
+  label: z.string().max(80)
+})
+
 /** 项目标签 id —— 项目标签是页面，不是运行时 */
 export const projectTabIdSchema = z.object({
   tabId: z.string().min(1)

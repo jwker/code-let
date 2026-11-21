@@ -48,7 +48,10 @@ import {
   temporaryIdSchema,
   temporaryModelSelectSchema,
   temporaryPromptSchema,
-  thinkingSelectSchema
+  thinkingSelectSchema,
+  treeForkSchema,
+  treeLabelSchema,
+  treeNavigateSchema
 } from '@contract/schemas'
 import { compactSessionEvent, trimMessageUpdate } from '@contract/stream'
 import type { HostState } from './state'
@@ -218,6 +221,26 @@ export function registerIpc(
   ipcMain.handle(IPC.agentsEntries, async (_event, payload: unknown) => {
     const { agentId } = agentIdSchema.parse(payload)
     return state.readEntries(agentId)
+  })
+
+  ipcMain.handle(IPC.agentsTree, async (_event, payload: unknown) => {
+    const { agentId } = agentIdSchema.parse(payload)
+    return state.readTree(agentId)
+  })
+
+  ipcMain.handle(IPC.treeNavigate, async (_event, payload: unknown) => {
+    const { agentId, targetId, summarize } = treeNavigateSchema.parse(payload)
+    return state.navigateTree(agentId, targetId, { summarize })
+  })
+
+  ipcMain.handle(IPC.treeFork, async (_event, payload: unknown) => {
+    const { agentId, targetId } = treeForkSchema.parse(payload)
+    return state.forkTree(agentId, targetId)
+  })
+
+  ipcMain.handle(IPC.treeLabel, async (_event, payload: unknown) => {
+    const { agentId, targetId, label } = treeLabelSchema.parse(payload)
+    await state.labelTree(agentId, targetId, label)
   })
 
   ipcMain.handle(IPC.projectsActivateTab, async (_event, payload: unknown) => {

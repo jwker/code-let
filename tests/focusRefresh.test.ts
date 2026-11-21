@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -23,6 +24,12 @@ const AGENT_DIR = mkdtempSync(join(tmpdir(), 'codelet-focus-agent-'))
 process.env.PI_CODING_AGENT_DIR = AGENT_DIR
 
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   private listeners = new Set<PiEventListener>()
   private managers = new Map<string, SessionManager>()
 

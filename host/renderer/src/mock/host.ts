@@ -16,9 +16,12 @@ import type {
   ProjectInfo,
   ProviderInfo,
   SessionEvent,
+  SessionTree,
   StreamItem,
-  ThinkingLevel
+  ThinkingLevel,
+  TreeNavigateResult
 } from '@contract/index'
+import { entriesToTree } from '@contract/tree'
 
 /**
  * 浏览器预览用的假宿主。
@@ -425,6 +428,73 @@ const FAKE_ITEMS: StreamItem[] = [
 ]
 
 /**
+ * 假的会话树（条目级）。
+ *
+ * 前半段跟内容流对得上；第二轮的提问下面多挂一个「换个思路」，
+ * 那就是别的支线 —— 树按钮上的角标、弹窗里的窄缝都靠它看效果。
+ */
+const FAKE_TREE_ENTRIES: Array<Record<string, unknown>> = [
+  {
+    type: 'message',
+    id: 'tree-u1',
+    parentId: null,
+    timestamp: '2026-11-20T10:24:00.000Z',
+    message: { role: 'user', content: '把记忆索引改成增量更新，顺便把 `tokens.ts` 的导出整理一下。' }
+  },
+  {
+    type: 'message',
+    id: 'tree-a1',
+    parentId: 'tree-u1',
+    timestamp: '2026-11-20T10:25:00.000Z',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text: '好的。我先读了现有的索引实现，索引写入是全量重建，在 12k 条记忆上约 1.8s。' }]
+    }
+  },
+  {
+    type: 'message',
+    id: 'tree-u2',
+    parentId: 'tree-a1',
+    timestamp: '2026-11-20T10:31:00.000Z',
+    message: { role: 'user', content: '再补一个迁移脚本，把旧的 legacy 索引整个删掉，别留下半套。' }
+  },
+  {
+    type: 'message',
+    id: 'tree-a2',
+    parentId: 'tree-u2',
+    timestamp: '2026-11-20T10:35:00.000Z',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text: '迁移脚本在 `scripts/migrate-index.ts`，幂等，失败回滚。' }]
+    }
+  },
+  {
+    type: 'message',
+    id: 'tree-u2b',
+    parentId: 'tree-a1',
+    timestamp: '2026-11-20T10:38:00.000Z',
+    message: { role: 'user', content: '换个思路：先写迁移用例，再动索引。' }
+  },
+  {
+    type: 'message',
+    id: 'tree-a2b',
+    parentId: 'tree-u2b',
+    timestamp: '2026-11-20T10:40:00.000Z',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text: '先写用例更稳：用例锁住游标和幂等，迁移脚本再改就有退路。' }]
+    }
+  }
+]
+
+/** 假树里每条用户消息的原文 —— 切支线要回给渲染层的 `editorText` */
+const FAKE_TREE_USER_TEXT = new Map(
+  FAKE_TREE_ENTRIES.filter((entry) => (entry.message as { role?: string } | undefined)?.role === 'user').map(
+    (entry) => [String(entry.id), String((entry.message as { content: string }).content)]
+  )
+)
+
+/**
  * 假的可用模型清单。
  *
  * 名字用真实目录里的写法 —— 有的带空格（`DeepSeek V4.1 Flash`）、
@@ -522,6 +592,10 @@ export function createMockApi(): CodeletApi {
   const renamedConversations = new Map<string, string>()
   /** 假数据里「用户选中的项目」 */
   let projects: ProjectInfo[] = FAKE_PROJECTS.map((p) => ({ ...p }))
+  /** 假树：每个标签的当前叶，以及条目上的标签 */
+  const treeLeaf = new Map<string, string>()
+  const treeLabels = new Map<string, string>()
+  let forkSeq = 0
   /** 假宿主的文件标签 */
   let files: FileTab[] = []
   let activeFileId: string | null = null
@@ -549,6 +623,8 @@ export function createMockApi(): CodeletApi {
     }
     tabs.push(tab)
     activeTabId = tab.id
+    // 假树的当前叶落在第二条支线的回答上 —— 跟内容流对得上
+    treeLeaf.set(tab.id, 'tree-a2')
     return tab
   }
 
@@ -791,6 +867,30 @@ export function createMockApi(): CodeletApi {
     },
 
     getAgentEntries: async (agentId) => tabs.find((t) => t.id === agentId)?.items ?? [],
+
+    getAgentTree: async (agentId): Promise<SessionTree> =>
+      entriesToTree(FAKE_TREE_ENTRIES, treeLeaf.get(agentId) ?? null, (id) => treeLabels.get(id)),
+
+    navigateTree: async (agentId, targetId): Promise<TreeNavigateResult> => {
+      const tab = tabs.find((t) => t.id === agentId)
+      if (tab?.streaming) throw new Error('等这一轮结束再切支线')
+      treeLeaf.set(agentId, targetId)
+      const text = FAKE_TREE_USER_TEXT.get(targetId)
+      // 目标是用户消息时，Pi 把原文交回来；目标是回答时只挪叶
+      return { cancelled: false, ...(text ? { editorText: text } : {}) }
+    },
+
+    forkTree: async (agentId) => {
+      const tab = tabs.find((t) => t.id === agentId)
+      forkSeq += 1
+      return `${tab?.path ?? 'fake-session'}::fork-${forkSeq}`
+    },
+
+    labelTree: async (_agentId, targetId, label) => {
+      const next = label.trim()
+      if (next) treeLabels.set(targetId, next)
+      else treeLabels.delete(targetId)
+    },
 
     listDocs: async () => ({
       truncated: false,

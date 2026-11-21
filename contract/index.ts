@@ -18,6 +18,7 @@ export type {
   PreviewBlock
 } from './annotation'
 export type { PreviewEntry, PrototypeFile, PrototypeListing } from './preview'
+export type { SessionNodeKind, SessionTree, SessionTreeNode, TreeNavigateResult } from './tree'
 export {
   blockCitationPayload,
   blockKey,
@@ -73,6 +74,7 @@ import type {
 import type { AgentInfo, AgentType, ProjectPaneView, ProjectTabInfo } from './agents'
 import type { AnnotationEvent, AnnotationState, BlockCitation } from './annotation'
 import type { PreviewEntry } from './preview'
+import type { SessionTree, TreeNavigateResult } from './tree'
 import type { BrowserHost } from './browser'
 import type {
   ModelAuthEvent,
@@ -122,6 +124,14 @@ export const IPC = {
   agentsReload: 'host:agents:reload',
   /** 读某个 agent 的内容流（历史重建） */
   agentsEntries: 'host:agents:entries',
+  /** 读某个 agent 的会话树（条目级） */
+  agentsTree: 'host:agents:tree',
+  /** 切支线 / 截断：把当前叶移到某个条目 */
+  treeNavigate: 'host:tree:navigate',
+  /** 把一条路径复制成一个新会话文件 */
+  treeFork: 'host:tree:fork',
+  /** 给某个条目加标签（书签）；空串等于清掉 */
+  treeLabel: 'host:tree:label',
   /** 切到某条项目标签 */
   projectsActivateTab: 'host:projects:activate-tab',
   /** 关掉一条项目标签 —— 只收起页面，不碰任何 agent */
@@ -925,6 +935,19 @@ export interface CodeletApi {
   reloadAgent(agentId: string): Promise<HostSnapshot>
   /** 读某个 agent 的内容流（历史重建，R1 R5） */
   getAgentEntries(agentId: string): Promise<StreamItem[]>
+  /** 读某个 agent 的会话树（条目级；一行一轮由渲染层合并） */
+  getAgentTree(agentId: string): Promise<SessionTree>
+  /**
+   * 切支线：把当前叶移到某个条目（`navigateTree`）。
+   *
+   * 目标是用户消息时叶落到它的父节点、原文经 `editorText` 回输入框；
+   * 目标是助手消息时叶落在那条回复上。
+   */
+  navigateTree(agentId: string, targetId: string, options?: { summarize?: boolean }): Promise<TreeNavigateResult>
+  /** 把根到某个条目那条路径复制成新会话文件，返回新文件路径 */
+  forkTree(agentId: string, targetId: string): Promise<string>
+  /** 给某个条目加标签；空串等于清掉 */
+  labelTree(agentId: string, targetId: string, label: string): Promise<void>
   /**
    * 往某个标签发一条消息。
    *

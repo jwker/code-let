@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { describe, expect, it, afterEach } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -22,6 +23,12 @@ import type { ModelOption, StreamItem } from '@contract/index'
  */
 
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   private listeners = new Set<PiEventListener>()
   readonly files = new Map<string, string | null>()
   readonly streaming = new Set<string>()

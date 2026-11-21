@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -24,6 +25,12 @@ process.env.PI_CODING_AGENT_DIR = AGENT_DIR
 
 /** 假运行时：真 SDK 负责落盘，它只管按真 SDK 的次序发事件 */
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   private listeners = new Set<PiEventListener>()
   private managers = new Map<string, SessionManager>()
   private streaming = new Set<string>()

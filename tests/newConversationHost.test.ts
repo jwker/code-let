@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,6 +16,12 @@ import type { PiRuntimePort, AgentRuntimeState } from '../host/main/pi/runtime'
  */
 
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   tabs = new Map<string, AgentRuntimeState>()
   named: Array<{ agentId: string; name: string }> = []
   private seq = 0

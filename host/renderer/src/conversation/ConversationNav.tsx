@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import type { StreamItem } from '@contract/index'
+import { useStore } from '../store'
 import { navTurnSummary, userTurnsOf } from './conversationTurns'
+import { ConversationTreeEntry } from './ConversationTreeEntry'
 
 /**
  * 对话区左侧的圆点导航（PLAN.md D36）。
@@ -11,11 +13,19 @@ import { navTurnSummary, userTurnsOf } from './conversationTurns'
 export function ConversationNav({
   items,
   mode,
-  scrollRef
+  scrollRef,
+  treeEntry = true
 }: {
   items: StreamItem[]
   mode: 'normal' | 'terminal' | 'html'
   scrollRef: RefObject<HTMLDivElement | null>
+  /**
+   * 轨顶上要不要放会话树入口。
+   *
+   * 产品 agent 的对话在窄栏里，整个轨被 CSS 藏掉，树入口由窄栏标题栏自己放
+   * （`ConversationTreeEntry` 的 `head` 位）；那边传 false，免得同一份树拉两次。
+   */
+  treeEntry?: boolean
 }) {
   const turns = useMemo(() => userTurnsOf(items), [items])
   // assistant 的增量会不停改变 items；轮次没变时别反复重挂滚动监听
@@ -24,6 +34,10 @@ export function ConversationNav({
   const [hovered, setHovered] = useState<{ index: number; y: number } | null>(null)
   const [overflowing, setOverflowing] = useState(false)
   const [edges, setEdges] = useState({ top: true, bottom: true })
+  /** 别的支线条数（树入口拉完树之后写进 store）—— 决定只剩一轮时这条轨要不要留着 */
+  const otherBranches = useStore((s) =>
+    s.snapshot.activeAgentId ? (s.treeBranches[s.snapshot.activeAgentId] ?? 0) : 0
+  )
   const navRef = useRef<HTMLElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const dotRefs = useRef<Array<HTMLButtonElement | null>>([])
@@ -102,7 +116,17 @@ export function ConversationNav({
     }
   }, [turnsKey])
 
-  if (mode === 'html' || turns.length < 2) return null
+  /*
+   * 什么时候显示这条轨：不止一轮，或者还有别的支线。
+   *
+   * 第二条支线上只剩一轮之后（「回到这一轮」截断过），圆点只剩一个 ——
+   * 这时候要是把轨藏掉，别的支线就再也点不到了。
+   *
+   * 树入口**始终挂着**（不可见也用 `visibility` 藏着），因为「有几条别的支线」
+   * 是它拉树之后才知道的：卸载掉它，这个数就永远回不来。
+   */
+  if (mode === 'html') return null
+  const show = turns.length >= 2 || otherBranches > 0
 
   function jump(index: number): void {
     const node = scrollRef.current
@@ -152,12 +176,19 @@ export function ConversationNav({
       ref={navRef}
       className="conv-nav"
       aria-label={`对话导航，共 ${turns.length} 轮`}
+      aria-hidden={show ? undefined : true}
       onMouseLeave={() => setHovered(null)}
       onBlur={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHovered(null)
       }}
     >
-      {overflowing && (
+      {treeEntry && (
+        <div className={`conv-nav-entry${show ? '' : ' is-hidden'}`}>
+          <ConversationTreeEntry placement="rail" />
+        </div>
+      )}
+
+      {show && overflowing && (
         <span
           className={`conv-nav-end conv-nav-end-top${edges.top ? ' is-end' : ''}`}
           aria-hidden="true"
@@ -166,7 +197,10 @@ export function ConversationNav({
         </span>
       )}
 
-      <div ref={listRef} className={`conv-nav-list${overflowing ? ' is-overflowing' : ''}`}>
+      <div
+        ref={listRef}
+        className={`conv-nav-list${overflowing ? ' is-overflowing' : ''}${show ? '' : ' is-hidden'}`}
+      >
         {turns.map((turn, ordinal) => (
           <div className="conv-nav-item" key={turn.index}>
             <button
@@ -190,7 +224,7 @@ export function ConversationNav({
         ))}
       </div>
 
-      {overflowing && (
+      {show && overflowing && (
         <span
           className={`conv-nav-end conv-nav-end-bottom${edges.bottom ? ' is-end' : ''}`}
           aria-hidden="true"

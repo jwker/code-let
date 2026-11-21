@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,6 +20,12 @@ import type { ModelOption, StreamItem } from '@contract/index'
  */
 
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   onEvent(_listener: PiEventListener): () => void {
     return () => {}
   }

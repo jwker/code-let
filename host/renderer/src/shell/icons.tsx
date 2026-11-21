@@ -185,6 +185,17 @@ export const IconPaperclip = () => (
   </Icon>
 )
 
+/** 会话树入口 —— 一条线向右拐出一道分叉 */
+export const IconBranch = ({ size = 16 }: { size?: number }) => (
+  <Icon size={size}>
+    <circle cx="6" cy="5" r="2.2" />
+    <circle cx="6" cy="19" r="2.2" />
+    <circle cx="18" cy="9" r="2.2" />
+    <path d="M6 7.2v9.6" />
+    <path d="M18 11.2v.7a4 4 0 0 1-4 4H8.2" />
+  </Icon>
+)
+
 /** 跳到顶部 / 底部用「箭头 + 横线」—— 别跟发送那个光箭头长一样 */
 export const IconArrowUpToLine = () => (
   <Icon>

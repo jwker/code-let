@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { afterEach, describe, expect, it } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,6 +17,12 @@ import type { CommandOption, ModelOption, StreamItem } from '@contract/index'
  */
 
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   readonly prompts: Array<{ agentId: string; text: string; images?: PromptImage[] }> = []
 
   onEvent(_listener: PiEventListener): () => void {

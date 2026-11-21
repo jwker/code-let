@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { describe, expect, it } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,6 +20,12 @@ import type { ModelOption, StreamItem } from '@contract/index'
 
 /** 假运行时：会话文件路径可配，方便测「有文件 / 没文件」两种 */
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   private listeners = new Set<PiEventListener>()
   /** tabId → 这个标签的会话文件路径 */
   readonly files = new Map<string, string | null>()

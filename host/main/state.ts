@@ -22,9 +22,11 @@ import type {
   ProjectPaneView,
   ProjectTabInfo,
   SessionState,
+  SessionTree,
   ThinkingLevel,
   StreamItem,
-  TemporaryChatState
+  TemporaryChatState,
+  TreeNavigateResult
 } from '@contract/index'
 import { ATTACHMENT_LIMITS } from '@contract/index'
 import {
@@ -1440,6 +1442,37 @@ export class HostState extends EventEmitter {
     return this.pi.readEntries(tabId)
   }
 
+  /** 某个 agent 的整棵会话树（条目级） */
+  readTree(agentId: string): SessionTree {
+    return this.pi.readTree(agentId)
+  }
+
+  /** 切支线 / 截断：把当前叶移到某个条目 */
+  async navigateTree(
+    agentId: string,
+    targetId: string,
+    options?: { summarize?: boolean }
+  ): Promise<TreeNavigateResult> {
+    return this.pi.navigateTree(agentId, targetId, options)
+  }
+
+  /** 另开一个会话：把一条路径复制成新会话文件，返回路径 */
+  async forkTree(agentId: string, targetId: string): Promise<string> {
+    return this.pi.forkTree(agentId, targetId)
+  }
+
+  /**
+   * 加标签（书签）；空串等于清掉。
+   *
+   * 标签是**我们自己**往会话文件里追加的条目，写完要把「已看到」的时间推到当下 ——
+   * 不推的话，下一次对话列表刷新会把这条标签当成「在别处改过」，
+   * 输入框突然被禁用、冒出一条「重新加载」。
+   */
+  async labelTree(agentId: string, targetId: string, label: string): Promise<void> {
+    await this.pi.labelTree(agentId, targetId, label)
+    this.markWritten(agentId)
+  }
+
   /** 已配置凭据的模型清单（选择器用） */
   /**
    * 某个目录的 Git 状态；只读。
@@ -1493,6 +1526,8 @@ export class HostState extends EventEmitter {
       throw new Error(`当前模型不支持思考等级 ${level}`)
     }
     this.pi.setThinkingLevel(tabId, level)
+    // 思考等级写进会话文件（`thinking_level_change` 条目）—— 自己写的不算外部更新
+    this.markWritten(tabId)
     this.readSession()
     this.push()
   }
@@ -1610,13 +1645,26 @@ export class HostState extends EventEmitter {
   }
 
   /** 压缩某个 agent 的上下文 */
+  /**
+   * 压缩某个 agent 的上下文。
+   *
+   * 压缩会往会话文件里追加压缩条目 —— 跟标签一样是自己写的，
+   * 写完把「已看到」推到当下，否则压缩完界面会冒出「在别处有更新」。
+   */
   async compactAgent(agentId: string): Promise<void> {
     await this.pi.compactAgent(agentId)
+    this.markWritten(agentId)
   }
 
   /** 切某个标签的模型 */
   async selectModel(tabId: string, provider: string, id: string, persist: boolean): Promise<void> {
     await this.pi.selectModel(tabId, provider, id, persist)
+    /*
+     * 换模型也会往会话文件里追加 `model_change` 条目。不推 seenMtime 的话，
+     * 之后任意一次对话列表刷新都会把这次换模型当成「在别处改过」，
+     * 输入框被禁用、挂着一条「重新加载」—— 而这个状态会一直挂到下一轮结束。
+     */
+    this.markWritten(tabId)
     this.readSession()
     this.push()
   }

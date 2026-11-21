@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -21,6 +22,12 @@ const AGENT_DIR = mkdtempSync(join(tmpdir(), 'codelet-stale-agent-'))
 process.env.PI_CODING_AGENT_DIR = AGENT_DIR
 
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   private listeners = new Set<PiEventListener>()
   private files = new Map<string, string | null>()
   private active: string | null = null
@@ -145,6 +152,56 @@ describe('会话在别处被改过', () => {
     // 模拟「我们这一轮写了文件」
     touchFuture(sessionFile)
     pi.emit('agent_settled', 'agent-tab-1')
+    await state.refreshConversations()
+    expect(state.snapshot().agents[0].stale).toBe(false)
+    await state.dispose()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('★ 加标签自己写的条目不算外部更新', async () => {
+    const { dir, sessionFile, pi, state } = await setup()
+    // 标签是往会话文件里追加一条，文件时间会变
+    pi.labelTree = async () => {
+      touchFuture(sessionFile)
+    }
+    await state.labelTree('agent-tab-1', 'entry-1', '解析边界')
+    await state.refreshConversations()
+    expect(state.snapshot().agents[0].stale).toBe(false)
+    await state.dispose()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('★ 压缩自己写的条目不算外部更新', async () => {
+    const { dir, sessionFile, pi, state } = await setup()
+    pi.compactAgent = async () => {
+      touchFuture(sessionFile)
+    }
+    await state.compactAgent('agent-tab-1')
+    await state.refreshConversations()
+    expect(state.snapshot().agents[0].stale).toBe(false)
+    await state.dispose()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('★ 换模型自己写的条目不算外部更新', async () => {
+    const { dir, sessionFile, pi, state } = await setup()
+    pi.selectModel = async () => {
+      touchFuture(sessionFile)
+    }
+    await state.selectModel('agent-tab-1', 'openai', 'gpt-4o', false)
+    await state.refreshConversations()
+    expect(state.snapshot().agents[0].stale).toBe(false)
+    await state.dispose()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('★ 改思考等级自己写的条目不算外部更新', async () => {
+    const { dir, sessionFile, pi, state } = await setup()
+    pi.thinkingLevels = () => ['high'] as never
+    pi.setThinkingLevel = () => {
+      touchFuture(sessionFile)
+    }
+    await state.selectThinkingLevel('agent-tab-1', 'high')
     await state.refreshConversations()
     expect(state.snapshot().agents[0].stale).toBe(false)
     await state.dispose()

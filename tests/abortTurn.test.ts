@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,6 +21,12 @@ import { summarizeTurn } from '../host/renderer/src/conversation/turnMeta'
  */
 
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   private tabs = new Map<string, { streaming: boolean }>()
   readonly calls: string[] = []
   /** 让 abortAgent 挂住，好观察「中止进行中」的快照 */

@@ -33,8 +33,10 @@ import {
   type PickAttachmentsResult,
   type PreviewEntry,
   type SessionEvent,
+  type SessionTree,
   type StreamItem,
-  type ThinkingLevel
+  type ThinkingLevel,
+  type TreeNavigateResult
 } from '@contract/index'
 
 /**
@@ -72,6 +74,13 @@ const api: CodeletApi = {
   reloadAgent: (agentId) => ipcRenderer.invoke(IPC.agentsReload, { agentId }) as Promise<HostSnapshot>,
   getAgentEntries: (agentId) =>
     ipcRenderer.invoke(IPC.agentsEntries, { agentId }) as Promise<StreamItem[]>,
+  getAgentTree: (agentId) => ipcRenderer.invoke(IPC.agentsTree, { agentId }) as Promise<SessionTree>,
+  navigateTree: (agentId, targetId, options) =>
+    ipcRenderer.invoke(IPC.treeNavigate, { agentId, targetId, ...options }) as Promise<TreeNavigateResult>,
+  forkTree: (agentId, targetId) =>
+    ipcRenderer.invoke(IPC.treeFork, { agentId, targetId }) as Promise<string>,
+  labelTree: (agentId, targetId, label) =>
+    ipcRenderer.invoke(IPC.treeLabel, { agentId, targetId, label }) as Promise<void>,
   activateProjectTab: (tabId) =>
     ipcRenderer.invoke(IPC.projectsActivateTab, { tabId }) as Promise<HostSnapshot>,
   closeProjectTab: (tabId) =>

@@ -24,11 +24,15 @@ import type {
   ConversationInfo,
   ExtensionErrorInfo,
   ModelOption,
+  SessionTree,
   StreamItem,
-  ThinkingLevel
+  ThinkingLevel,
+  TreeNavigateResult
 } from '@contract/index'
 import type { PromptImage } from '../attachments'
 import { entriesToItems } from '@contract/stream'
+import { entriesToTree } from '@contract/tree'
+import { assertTreeNavigable, toNavigateResult } from './treeOps'
 import { thumbnailStreamImage } from '../imageResize'
 
 /** 一条会话流事件 —— 带它属于哪个标签 */
@@ -124,6 +128,19 @@ export interface PiRuntimePort {
   agentState(agentId: string): AgentRuntimeState
   /** 某个 agent 的会话条目 */
   readEntries(agentId: string): StreamItem[]
+  /** 某个 agent 的整棵会话树（条目级） */
+  readTree(agentId: string): SessionTree
+  /**
+   * 切支线：把当前叶移到某个条目。
+   *
+   * 目标是用户消息时，Pi 把原文经 `editorText` 交回来（改完再发就是新支线）；
+   * 目标是助手消息时叶落在那条回复上。
+   */
+  navigateTree(agentId: string, targetId: string, options?: { summarize?: boolean }): Promise<TreeNavigateResult>
+  /** 把根到某个条目那条路径复制成新会话文件，返回新文件路径 */
+  forkTree(agentId: string, targetId: string): Promise<string>
+  /** 给某个条目加标签；空串等于清掉 */
+  labelTree(agentId: string, targetId: string, label: string): Promise<void>
   /**
    * 某个 agent 当前的系统提示；runtime 还没建就是 null。
    *
@@ -677,6 +694,59 @@ export class PiRuntime implements PiRuntimePort {
         .filter((image): image is NonNullable<typeof image> => image !== null)
       return { ...item, ...(images.length > 0 ? { images } : { images: undefined }) }
     })
+  }
+
+  /**
+   * 读某个 agent 的整棵会话树（条目级）。
+   *
+   * 标签不在这里算：标签是 Pi 的独立条目，最后一次改动才算数 ——
+   * 那条规则在 session manager 里，这里只把结果贴到节点上。
+   */
+  readTree(agentId: string): SessionTree {
+    const sessionManager = this.tabs.get(agentId)?.runtime?.session.sessionManager
+    if (!sessionManager) return { roots: [], leafId: null }
+    return entriesToTree(sessionManager.getEntries(), sessionManager.getLeafId(), (id) =>
+      sessionManager.getLabel(id)
+    )
+  }
+
+  /**
+   * 切支线。
+   *
+   * Pi 自己也会拦「正在生成」「正在压缩」，但那两句话是英文的、而且混在
+   * 别的报错里 —— 在这里先拦一遍，界面上拿到的就是能直接给用户看的中文。
+   */
+  async navigateTree(
+    agentId: string,
+    targetId: string,
+    options?: { summarize?: boolean }
+  ): Promise<TreeNavigateResult> {
+    const session = this.tabs.get(agentId)?.runtime?.session
+    assertTreeNavigable(session, options)
+    const result = await session.navigateTree(targetId, options?.summarize ? { summarize: true } : undefined)
+    return toNavigateResult(result)
+  }
+
+  /**
+   * 另开一个会话：把根到目标条目那条路径复制成一个新会话文件。
+   *
+   * **不动当前会话** —— 渲染层拿路径去开新标签。临时对话是内存会话，
+   * 没有文件可复制，`createBranchedSession()` 返回 undefined，这里报清楚。
+   */
+  async forkTree(agentId: string, targetId: string): Promise<string> {
+    const sessionManager = this.tabs.get(agentId)?.runtime?.session.sessionManager
+    if (!sessionManager) throw new Error('runtime 尚未启动')
+    const path = sessionManager.createBranchedSession(targetId)
+    if (!path) throw new Error('临时对话没有会话文件，无法另开会话')
+    return path
+  }
+
+  /** 加标签（书签）；空串等于清掉 */
+  async labelTree(agentId: string, targetId: string, label: string): Promise<void> {
+    const sessionManager = this.tabs.get(agentId)?.runtime?.session.sessionManager
+    if (!sessionManager) throw new Error('runtime 尚未启动')
+    const trimmed = label.trim()
+    sessionManager.appendLabelChange(targetId, trimmed ? trimmed : undefined)
   }
 
   // -------------------------------------------------------------------------

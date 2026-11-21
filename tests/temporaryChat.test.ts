@@ -1,3 +1,4 @@
+import { treeStubs } from './support/runtimeTree'
 import { afterEach, describe, expect, it } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -20,6 +21,12 @@ const MODEL: ModelOption = {
 }
 
 class FakePi implements PiRuntimePort {
+  // 树操作：这些用例用不到，挂一份空实现
+  readTree = treeStubs.readTree
+  navigateTree = treeStubs.navigateTree
+  forkTree = treeStubs.forkTree
+  labelTree = treeStubs.labelTree
+
   readonly tabs = new Map<string, { cwd: string; inMemory: boolean; model: ModelOption | null }>()
   readonly prompts: Array<{
     agentId: string

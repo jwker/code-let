@@ -6,6 +6,7 @@ import { AgentAvatar } from './AgentAvatar'
 import { AppMark } from './AppMark'
 import { AgentContextMenu, RenameAgentDialog, type AgentMenuAnchor } from './AgentContextMenu'
 import { IconBrowser, IconCode, IconDoc, IconPlus, IconSettings } from './icons'
+import { coversBrowser } from './overlay'
 
 /**
  * 窄导航轨（PLAN.md D51）。
@@ -39,17 +40,23 @@ export function Rail() {
   const popOverlay = useStore((s) => s.popOverlay)
 
   /*
-   * 气泡出现时要把浏览器的原生视图收起来 —— 它永远画在 DOM 之上，不然气泡被吃掉一半。
+   * 气泡如果会盖住右边的原生浏览器视图，就把它收起来 —— 不然气泡被吃一半。
    *
-   * 延迟 180ms 才出气泡：鼠标扫过一排头像时不该让页面闪个不停，
-   * 只有真的停下来看才收起。收起/恢复由 `BrowserPane` 根据 overlay 计数处理。
+   * 但只在这个气泡真的压到浏览器上时（区域 5 很窄、或者收起）才收：
+   * 气泡最宽 260px，从窄轨右边 64px 起，区域 5 正常宽度时离浏览器还远。
+   * 以前不看几何就收，鼠标扫过头像右边的页面会整片消失。
+   *
+   * 延迟 180ms 才出气泡：鼠标扫过一排头像时不该一路弹气泡。
    */
+  const browserSpan = useStore((s) => s.browserSpan)
   const tipOpen = tip !== null
+  // `.rail-tip` 的 max-width；按最宽算，宁可在边界上多收一次，也不让气泡被盖住
+  const tipCoversBrowser = tip !== null && coversBrowser({ left: tip.left, width: 260 }, browserSpan)
   useEffect(() => {
     if (!tipOpen) return
-    pushOverlay()
-    return () => popOverlay()
-  }, [tipOpen, pushOverlay, popOverlay])
+    pushOverlay(tipCoversBrowser)
+    return () => popOverlay(tipCoversBrowser)
+  }, [tipOpen, tipCoversBrowser, pushOverlay, popOverlay])
 
   useEffect(
     () => () => {

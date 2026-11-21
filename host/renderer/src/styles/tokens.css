@@ -43,6 +43,20 @@
 
   --dur: 160ms;
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /*
+   * 会话树（GLOSSARY.md「对话结构」）。
+   * 主干固定用 --graph-line，跟正文一样是不抢眼的中性色；别的支线一条一个颜色，四色循环。
+   */
+  --graph-line: #b9b9c2;
+  --branch-1: #6a58c4;
+  --branch-1-wash: #f0ecfb;
+  --branch-2: #a9781a;
+  --branch-2-wash: #fbf3e0;
+  --branch-3: #2f7d68;
+  --branch-3-wash: #e7f4f0;
+  --branch-4: #b05068;
+  --branch-4-wash: #fbeaf0;
 }
 
 [data-theme='dark'] {
@@ -107,6 +121,17 @@
   --sh-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --sh-md: 0 12px 30px -12px rgba(0, 0, 0, 0.65);
   --sh-lg: 0 30px 72px -26px rgba(0, 0, 0, 0.8);
+
+  /* 会话树：暗色里把四个支线色提亮，底色单独一档 */
+  --graph-line: #4a4a46;
+  --branch-1: #a08bf0;
+  --branch-1-wash: #241f38;
+  --branch-2: #e0b45c;
+  --branch-2-wash: #2c2413;
+  --branch-3: #5ecfa9;
+  --branch-3-wash: #122a24;
+  --branch-4: #ef8fa8;
+  --branch-4-wash: #321c23;
 }
 
 [data-theme='light'] {
@@ -175,4 +200,15 @@
   --sh-sm: 0 1px 2px rgba(20, 20, 16, 0.04);
   --sh-md: 0 8px 24px -8px rgba(20, 20, 16, 0.1);
   --sh-lg: 0 24px 60px -20px rgba(20, 20, 16, 0.18);
+
+  /* 会话树：亮色下面用一套同色相、降饱和的线 */
+  --graph-line: #c9c9d1;
+  --branch-1: #6a58c4;
+  --branch-1-wash: #f0ecfb;
+  --branch-2: #a9781a;
+  --branch-2-wash: #fbf3e0;
+  --branch-3: #2f7d68;
+  --branch-3-wash: #e7f4f0;
+  --branch-4: #b05068;
+  --branch-4-wash: #fbeaf0;
 }
