@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ConversationMode } from '@contract/index'
-import { useStore } from '../store'
+import { useStore, rightPanelOf } from '../store'
 import { host } from '../host'
-import { IconMoon, IconMore, IconSettings, IconSun } from './icons'
+import { IconMoon, IconMore, IconPanel, IconSettings, IconSun } from './icons'
 import { ProjectTabs } from './ProjectTabs'
 
 const MODES: Array<{ key: ConversationMode; label: string }> = [
@@ -23,6 +23,8 @@ export function TitleBar() {
   const setMode = useStore((s) => s.setMode)
   const theme = useStore((s) => s.theme)
   const toggleTheme = useStore((s) => s.toggleTheme)
+  const rightOpen = useStore((s) => rightPanelOf(s.snapshot).open)
+  const toggleRightPanel = useStore((s) => s.toggleRightPanel)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const [subOpen, setSubOpen] = useState(false)
@@ -211,6 +213,19 @@ export function TitleBar() {
             )}
           </div>
         )}
+
+        {/* 右栏的收起 / 展开 —— 放在标题栏最右侧，紧贴着两栏的分界 */}
+        <span className="titlebar-sep" />
+        <button
+          type="button"
+          aria-pressed={rightOpen}
+          aria-label="右栏"
+          title={rightOpen ? '收起右栏' : '展开右栏'}
+          onClick={toggleRightPanel}
+          className="titlebar-icon-btn"
+        >
+          <IconPanel />
+        </button>
       </div>
     </header>
   )

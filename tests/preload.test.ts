@@ -12,6 +12,12 @@ describe('preload 桥接', () => {
     expect(source).toContain('{ agentId, text, attachments, uploads }')
   })
 
+  it('setRightPanel 把两个字段展开传给 IPC，不把整个对象塞进去', () => {
+    const source = readFileSync(new URL('../host/preload/index.ts', import.meta.url), 'utf8')
+    expect(source).toContain('IPC.projectsSetRightPanel')
+    expect(source).toContain('{ tabId, open: panel.open, kind: panel.kind }')
+  })
+
   it('浏览器的每条调用都带 host —— 少传参数 TypeScript 不报错，只能靠这条守', () => {
     const source = readFileSync(new URL('../host/preload/index.ts', import.meta.url), 'utf8')
     for (const channel of [

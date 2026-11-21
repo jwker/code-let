@@ -28,17 +28,10 @@ export {
 } from './annotation'
 export type {
   AgentInfo,
-  PaneLayout,
-  PaneLayoutKey,
-  ProjectPane,
   ProjectPaneView,
-  ProjectTabInfo
-} from './agents'
-export {
-  PANE_LAYOUT,
-  ZONE5_MAX,
-  ZONE5_MIN,
-  paneLayoutFor
+  ProjectTabInfo,
+  RightPanelKind,
+  RightPanelState
 } from './agents'
 export type {
   AgentCapabilities,
@@ -91,7 +84,7 @@ import type {
   ConsoleListResult,
   ConsoleStats
 } from './console'
-import type { AgentInfo, ProjectPaneView, ProjectTabInfo } from './agents'
+import type { AgentInfo, ProjectPaneView, ProjectTabInfo, RightPanelState } from './agents'
 import type {
   AgentTypeDef,
   AgentTypeDraft,
@@ -164,6 +157,8 @@ export const IPC = {
   projectsCloseTab: 'host:projects:close-tab',
   /** 切某个项目标签的入口（代码 / 文档 / 浏览器 / 设置 / 某个 agent） */
   projectsSetPane: 'host:projects:set-pane',
+  /** 改某个项目标签的右栏状态（开着没有、开的是哪个功能区） */
+  projectsSetRightPanel: 'host:projects:set-right-panel',
   /** 往某个 agent 发一条用户消息 */
   promptSend: 'host:prompt:send',
   /** 中止某个 agent 正在跑的那一轮 */
@@ -962,6 +957,12 @@ export interface CodeletApi {
   closeProjectTab(tabId: string): Promise<HostSnapshot>
   /** 切项目标签的入口（代码 / 文档 / 浏览器 / 设置 / 某个 agent） */
   setPane(tabId: string, pane: ProjectPaneView): Promise<HostSnapshot>
+  /**
+   * 改某个项目标签的右栏状态。
+   *
+   * **不碰任何 agent**：不激活、不中止正在跑的那一轮 —— 它只改标签上的两个字段。
+   */
+  setRightPanel(tabId: string, panel: RightPanelState): Promise<HostSnapshot>
   /**
    * 重新加载某个标签：重建它的 runtime，从磁盘重新读会话。
    *

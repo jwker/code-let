@@ -87,14 +87,10 @@ export function ProjectTabs() {
   const hidden = tabs.slice(visibleCount)
 
   /**
-   * 切项目：同时也把窄轨停回这个项目上次的入口（R34）。
-   *
-   * 入口状态记在项目标签上（`ProjectTabInfo.pane`），所以切回来还是上次那页。
+   * 切项目：左列看什么、右栏开没开都跟着那个项目标签自己的状态走（R34 / R52）。
    */
   async function activateProject(tabId: string): Promise<void> {
     await host.activateProjectTab(tabId)
-    const tab = useStore.getState().snapshot.projectTabs.find((item) => item.id === tabId)
-    if (tab) useStore.getState().setPane(tab.pane)
   }
 
   async function openProject(): Promise<void> {

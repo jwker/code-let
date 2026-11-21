@@ -13,7 +13,10 @@ import type {
   FileContent,
   FileEntry,
   ModelOption,
-  ProjectPane,
+  ProjectPaneView,
+  ProjectTabInfo,
+  RightPanelKind,
+  RightPanelState,
   SessionEvent,
   StreamItem
 } from '@contract/index'
@@ -100,8 +103,7 @@ function saveTreeExpanded(value: Record<string, string[]>): void {
 
 const MODE_KEY = 'codelet:conversation-mode'
 
-const PANE_KEY = 'codelet:pane'
-const ZONE5_KEY = 'codelet:zone5-widths'
+const RIGHT_PANEL_WIDTH_KEY = 'codelet:right-panel-width'
 
 
 /** 代码区的两个 tab */
@@ -165,58 +167,37 @@ function activeCwd(snapshot: HostSnapshot): string {
   return snapshot.projectTabs.find((tab) => tab.id === snapshot.activeProjectTabId)?.cwd ?? ''
 }
 
-/**
- * 窄轨选中的入口。`'agent'` 表示看当前活动 agent 的对话。
- *
- * 放在渲染层而不是快照里：它是「我现在看哪儿」，不是事实。
- * 按项目分别记住要到 S7（项目标签接管入口状态）才做。
- */
-export type PaneTarget = ProjectPane | 'agent'
-
-const PANE_VALUES: readonly PaneTarget[] = ['code', 'docs', 'browser', 'settings', 'agent']
-
-function loadPane(): PaneTarget {
-  try {
-    const raw = localStorage.getItem(PANE_KEY)
-    if (raw && (PANE_VALUES as readonly string[]).includes(raw)) return raw as PaneTarget
-  } catch {
-    // 存不下就用默认
-  }
-  /*
-   * 默认看**对话**，不是「代码」。
-   *
-   * 打开应用第一眼应该是上次那个 agent 在聊什么；代码区是「我要翻文件」时才去的地方，
-   * 而且新项目里它是个空树 —— 拿空树当首页是劝退。记过选择的话用记的那个。
-   */
-  return 'agent'
+/** 活动项目标签 —— 左列和右栏的状态都从它读，不另外存一份 */
+export function activeProjectTab(snapshot: HostSnapshot): ProjectTabInfo | null {
+  return snapshot.projectTabs.find((tab) => tab.id === snapshot.activeProjectTabId) ?? null
 }
 
-function savePane(pane: PaneTarget): void {
+/** 左列当前看什么；没有项目标签时退回对话 */
+export function paneOf(snapshot: HostSnapshot): ProjectPaneView {
+  return activeProjectTab(snapshot)?.pane ?? 'agent'
+}
+
+/** 右栏状态；没有项目标签时是收起 */
+export function rightPanelOf(snapshot: HostSnapshot): RightPanelState {
+  return activeProjectTab(snapshot)?.rightPanel ?? { open: false, kind: null }
+}
+
+/** 右栏宽度的全局偏好（像素）—— 纯界面状态，不进项目标签 */
+function loadRightPanelWidth(): number | null {
   try {
-    localStorage.setItem(PANE_KEY, pane)
+    const raw = localStorage.getItem(RIGHT_PANEL_WIDTH_KEY)
+    if (!raw) return null
+    const value = Number(raw)
+    return Number.isFinite(value) ? value : null
   } catch {
-    // 存不下就算了
+    return null
   }
 }
 
-/** 区域 5 的宽度，按入口各记一份 —— 文件树和对话需要的宽度不一样 */
-function loadZone5Widths(): Record<string, number> {
+function saveRightPanelWidth(width: number | null): void {
   try {
-    const raw = localStorage.getItem(ZONE5_KEY)
-    const parsed = raw ? (JSON.parse(raw) as Record<string, unknown>) : {}
-    const out: Record<string, number> = {}
-    for (const [key, value] of Object.entries(parsed ?? {})) {
-      if (typeof value === 'number' && Number.isFinite(value)) out[key] = value
-    }
-    return out
-  } catch {
-    return {}
-  }
-}
-
-function saveZone5Widths(widths: Record<string, number>): void {
-  try {
-    localStorage.setItem(ZONE5_KEY, JSON.stringify(widths))
+    if (width === null) localStorage.removeItem(RIGHT_PANEL_WIDTH_KEY)
+    else localStorage.setItem(RIGHT_PANEL_WIDTH_KEY, String(width))
   } catch {
     // 存不下就算了
   }
@@ -260,13 +241,6 @@ interface RendererStore {
    * 启动拉一次，主进程推 `onAgentTypesChanged` 时整份替换。
    */
   agentTypes: AgentTypeDef[]
-  /**
-   * 窄轨当前选中的是什么（PLAN.md D51 / D52）。
-   *
-   * `'agent'` 表示看当前活动 agent 的对话；其余四个是项目级入口。
-   * 区域 5 有没有、多宽，由 `PANE_LAYOUT` 决定，不在这里存。
-   */
-  pane: PaneTarget
   /** 对话区当前排版模式（PLAN.md D10） */
   mode: ConversationMode
   /** 亮 / 暗，默认亮色 */
@@ -292,7 +266,7 @@ interface RendererStore {
    * 纯界面状态 —— 不落盘到宿主。记住它是为了「点文件看 diff，再点文件树」时不用重新选。
    */
   codeMode: CodeMode
-  /** Git 改动的状态、列表与当前选中的 diff —— 区域 5 显示列表，区域 6 显示 diff */
+  /** Git 改动的状态、列表与当前选中的 diff —— 列表和 diff 都在右栏 */
   git: GitViewState
   /** 文档区：分组清单、当前选中的一篇、它的内容 */
   docs: DocsViewState
@@ -300,16 +274,18 @@ interface RendererStore {
    * 会盖住原生浏览器视图的浮层数（气泡、菜单、对话框）。
    *
    * 浏览器页面是原生 view，画在 DOM 之上；这类浮层开着时要把原生视图收起来，
-   * 否则气泡被盖住、对话框点不到。窄轨上的气泡和右键菜单只占区域 5，
-   * 不算在里面 —— 判断在 `shell/overlay.ts`，用法见 `shell/useOverlay.ts`。
+   * 否则气泡被盖住、对话框点不到。
    */
   browserOverlayCount: number
   /** 原生浏览器视图现在占的横向范围（窗口坐标）；没有原生视图时为 null */
   browserSpan: HorizontalSpan | null
   /** 项目设置里选中的分类 */
   settingsCategory: 'agents' | 'conversations' | 'project'
-  /** 区域 5 的宽度，按入口各记一份 */
-  zone5Widths: Record<string, number>
+  /**
+   * 右栏宽度（像素）。`null` = 没拖过，跟窗口宽度的一半走。
+   * 全局偏好，不按项目标签记（R52：窗口宽度是窗口的事）。
+   */
+  rightPanelWidth: number | null
   /** 从输入框发起的改名请求 —— 项目设置 → 会话管理看到后打开改名对话框 */
   renameRequest: { path: string; nonce: number } | null
   /** 新建对话请求 —— App 看到后弹出「先起名再建」的对话框 */
@@ -379,34 +355,45 @@ interface RendererStore {
   loadAgentTypes: () => Promise<void>
   /** 收下主进程推来的整份清单 */
   setAgentTypes: (types: AgentTypeDef[]) => void
-  setPane: (pane: PaneTarget) => void
+  /**
+   * 切左列：看当前 agent 的对话，或者占满左列的项目设置。
+   *
+   * 写项目标签（切走再切回来还是这一样），不等本地状态 —— 推回来的快照就是权威。
+   */
+  setPane: (pane: ProjectPaneView) => void
+  /** 改右栏状态（开着没有、开的是哪个功能区） */
+  setRightPanel: (panel: RightPanelState) => void
+  /** 展开右栏并切到某个功能区 */
+  openRightPanel: (kind: RightPanelKind) => void
+  /** 收起 / 展开右栏 —— 再展开时还是上一次的功能区 */
+  toggleRightPanel: () => void
   setCodeMode: (mode: CodeMode) => void
-  /** 读 Git 状态（区域 5 的「改动」tab 用） */
+  /** 读 Git 状态（右栏代码功能区的「改动」tab 用） */
   loadGitStatus: (cwd: string) => Promise<void>
-  /** 选中一个改动 → 区域 6 读它的 diff */
+  /** 选中一个改动 → 右栏读它的 diff */
   selectChange: (path: string, scope: GitDiffScope) => Promise<void>
   /** 关掉 diff（回到文件预览） */
   closeChange: () => void
-  /** 读 AI 文档清单（区域 5 的文档区） */
   setSettingsCategory: (category: 'agents' | 'conversations' | 'project') => void
-  /** 登记一个浮层（挂载时）/ 撤销（卸载时） */
   /** 登记 / 撤销一个浮层。`coversBrowser` 为假时不动原生视图 */
   pushOverlay: (coversBrowser?: boolean) => void
   popOverlay: (coversBrowser?: boolean) => void
   /** 原生浏览器视图的横向范围变了（面板拖动、窗口缩放、页面收起） */
   setBrowserSpan: (span: HorizontalSpan | null) => void
+  /** 读 AI 文档清单（右栏文档功能区） */
   loadDocs: (cwd: string) => Promise<void>
-  /** 打开一篇文档 → 区域 6 读它的内容 */
+  /** 打开一篇文档 → 右栏读它的内容 */
   openDoc: (path: string) => Promise<void>
-  setZone5Width: (pane: string, width: number) => void
+  /** 右栏宽度（像素；null = 回到窗口一半） */
+  setRightPanelWidth: (width: number | null) => void
   /** 选中某一轮，右侧上下文看截至这一轮的最后两次请求 */
   setMode: (mode: ConversationMode) => void
   setTheme: (theme: Theme) => void
   toggleTheme: () => void
   /**
-   * 把窄轨切到浏览器入口（agent 在操作浏览器时用）。
+   * 把右栏开成浏览器（agent 在操作浏览器时用）。
    *
-   * agent 操作浏览器时调它 —— 用户不用自己找面板。
+   * 用户不用自己去找 —— 展开和切功能区都在这一下里。
    */
   focusBrowser: () => void
   /** 请求改某条会话的名字 —— 屏幕上的项目设置 → 会话管理消费它 */
@@ -468,7 +455,6 @@ interface RendererStore {
 export const useStore = create<RendererStore>((set, get) => ({
   snapshot: EMPTY_SNAPSHOT,
   agentTypes: [],
-  pane: loadPane(),
   mode: 'normal',
   theme: loadTheme(),
   eventCount: 0,
@@ -482,7 +468,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   browserOverlayCount: 0,
   browserSpan: null,
   settingsCategory: 'agents',
-  zone5Widths: loadZone5Widths(),
+  rightPanelWidth: loadRightPanelWidth(),
   renameRequest: null,
   newConversationRequest: null,
   composerTextRequest: null,
@@ -530,8 +516,24 @@ export const useStore = create<RendererStore>((set, get) => ({
   setAgentTypes: (types) => set({ agentTypes: types }),
 
   setPane: (pane) => {
-    savePane(pane)
-    set({ pane })
+    const tabId = get().snapshot.activeProjectTabId
+    if (!tabId) return
+    void host.setPane(tabId, pane)
+  },
+
+  setRightPanel: (panel) => {
+    const tabId = get().snapshot.activeProjectTabId
+    if (!tabId) return
+    void host.setRightPanel(tabId, panel)
+  },
+
+  openRightPanel: (kind) => {
+    get().setRightPanel({ open: true, kind })
+  },
+
+  toggleRightPanel: () => {
+    const panel = rightPanelOf(get().snapshot)
+    get().setRightPanel({ open: !panel.open, kind: panel.kind })
   },
 
   setCodeMode: (mode) => set({ codeMode: mode }),
@@ -698,10 +700,9 @@ export const useStore = create<RendererStore>((set, get) => ({
     }
   },
 
-  setZone5Width: (pane, width) => {
-    const next = { ...get().zone5Widths, [pane]: width }
-    saveZone5Widths(next)
-    set({ zone5Widths: next })
+  setRightPanelWidth: (width) => {
+    saveRightPanelWidth(width)
+    set({ rightPanelWidth: width })
   },
 
   setTempMinimized: (value) => set({ tempMinimized: value }),
@@ -794,11 +795,9 @@ export const useStore = create<RendererStore>((set, get) => ({
   },
 
   focusBrowser: () => {
-    // agent 操作浏览器时切到浏览器入口 —— 窄轨永远在，不用先展开什么
-    savePane('browser')
-    set({ pane: 'browser' })
+    // agent 操作浏览器时把右栏开成浏览器 —— 用户不用自己去切
+    get().openRightPanel('browser')
   },
-
 
 
   requestRename: (path) => {

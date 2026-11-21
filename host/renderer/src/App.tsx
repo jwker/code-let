@@ -1,42 +1,62 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { host } from './host'
 import { ModelPicker } from './shell/ModelPicker'
-import { PaneResizer } from './shell/PaneResizer'
 import { Rail } from './shell/Rail'
+import { RightPanel } from './shell/RightPanel'
 import { StatusBar } from './shell/StatusBar'
 import { TemporaryChat } from './shell/TemporaryChat'
 import { TitleBar } from './shell/TitleBar'
-import { Zone5 } from './shell/Zone5'
-import { Zone6 } from './shell/Zone6'
 import { createBrowserFocusController } from './shell/browserFocus'
 import { NewAgentDialog } from './shell/NewAgentDialog'
-import { ZONE5_MAX, ZONE5_MIN, paneLayoutFor } from '@contract/index'
-import { typeDefOf, useStore } from './store'
+import { ExtensionErrorBanner } from './shell/ExtensionErrorBanner'
+import { SettingsBody, SettingsList } from './shell/ProjectSettings'
+import { ConversationArea } from './conversation/ConversationArea'
+import {
+  RIGHT_PANEL_MAX,
+  RIGHT_PANEL_MIN,
+  clampRightPanelWidth,
+  defaultRightPanelWidth
+} from './shell/panelWidth'
+import { paneOf, rightPanelOf, useStore } from './store'
+
+/** 窗口变窄 / 变宽 —— 只在用户没拖过右栏时用来重算「窗口的一半」 */
+function useWindowWidth(): number {
+  const [width, setWidth] = useState(() => window.innerWidth)
+  useEffect(() => {
+    function onResize(): void {
+      setWidth(window.innerWidth)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  return width
+}
 
 /**
- * 应用外壳（PLAN.md D51）。
+ * 应用外壳。
  *
  * ```
- * 标题栏
- * 窄轨(56) │ 区域 5(可选) │ 区域 6
- * 状态栏
+ * ┌──────────────────────────┬──────────────┐
+ * │ 标题栏                    │ 右栏顶栏      │
+ * │ 窄轨 │ 左列（对话 / 设置） │ 功能区        │
+ * │ 状态栏                    │              │
+ * └──────────────────────────┴──────────────┘
  * ```
  *
- * 右侧检视器已经退场：它原来的东西分别进了区域 5/6（代码、文档）和独立窗口（控制台）。
- * 左侧栏也退场了（D63）：维护单位是 agent，窄轨的头像就是列表，剩下的入口各归各处。
+ * 左边是应用本身，右边是一条从顶边贯到底边的右栏。右栏收起时左列吃满窗口；
+ * 它装什么由项目标签上的 `rightPanel` 决定（切项目再切回来还是原样）。
  */
 export function App() {
   const setSnapshot = useStore((s) => s.setSnapshot)
   const applySessionEvents = useStore((s) => s.applySessionEvents)
   const setItems = useStore((s) => s.setItems)
   const theme = useStore((s) => s.theme)
+  const snapshot = useStore((s) => s.snapshot)
   const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
   const sessionReady = useStore((s) => s.snapshot.session.ready)
-  const pane = useStore((s) => s.pane)
   const agents = useStore((s) => s.snapshot.agents)
-  const agentTypes = useStore((s) => s.agentTypes)
-  const zone5Widths = useStore((s) => s.zone5Widths)
-  const setZone5Width = useStore((s) => s.setZone5Width)
+  const storedRightWidth = useStore((s) => s.rightPanelWidth)
+  const setRightPanelWidth = useStore((s) => s.setRightPanelWidth)
   const pickerAnchor = useStore((s) => s.modelPickerAnchor)
   const models = useStore((s) => s.models)
   const selectModel = useStore((s) => s.selectModel)
@@ -47,14 +67,14 @@ export function App() {
   const [creating, setCreating] = useState(false)
 
   const shellRef = useRef<HTMLDivElement>(null)
+  const windowWidth = useWindowWidth()
 
-  // 区域 5 的宽度按入口各记一份，没记过就用分派表的默认值
-  const activeAgent = agents.find((agent) => agent.id === activeAgentId) ?? null
-  const layout = paneLayoutFor(pane, typeDefOf(agentTypes, activeAgent?.type))
-  const zone5 = layout.zone5 !== null
-  const zone5Width = zone5Widths[pane] ?? layout.zone5 ?? ZONE5_MIN
-  const zone5Min = layout.zone5Min ?? ZONE5_MIN
-
+  const pane = paneOf(snapshot)
+  const rightPanel = rightPanelOf(snapshot)
+  // 没拖过就跟窗口一半走；拖过之后固定用拖出来的像素值，窗口缩放不再重算
+  const rightWidth = clampRightPanelWidth(
+    storedRightWidth ?? defaultRightPanelWidth(windowWidth)
+  )
 
   useEffect(() => {
     // macOS 的红绿灯压在标题栏顶上，躲开它
@@ -84,7 +104,7 @@ export function App() {
   }, [setSnapshot, applySessionEvents])
 
   /*
-   * agent 操作浏览器时把窄轨切到浏览器入口。
+   * agent 操作浏览器时把右栏开成浏览器。
    *
    * 判定在 browserFocus.ts 里：主进程每次 agent 调浏览器工具就换一份新的活动记录，
    * 渲染进程认出「换了一份」就切过去。用户自己点不触发 —— 那条路不写活动记录。
@@ -124,38 +144,51 @@ export function App() {
     }
   }, [activeAgentId, sessionReady, setItems])
 
-  // 宽度写在 shell 的 CSS 变量上，标题栏和下方几列共用同一份（见 .shell）
+  // 宽度写在 shell 的 CSS 变量上，右栏和拖动条共用同一份
   useLayoutEffect(() => {
     const el = shellRef.current
     if (!el) return
-    el.style.setProperty('--zone5-w', `${zone5Width}px`)
-  }, [zone5Width, zone5])
+    el.style.setProperty('--right-w', `${rightWidth}px`)
+  }, [rightWidth])
 
-  const shellClass = ['shell', zone5 ? '' : 'is-zone5-hidden'].filter(Boolean).join(' ')
+  const shellClass = ['shell', rightPanel.open ? 'has-right' : ''].filter(Boolean).join(' ')
 
   return (
     <div ref={shellRef} className={shellClass}>
-      <TitleBar />
-      <div className="shell-deck">
-        <Rail />
-        {zone5 && <Zone5 />}
-        <Zone6 />
+      <div className="shell-left">
+        <TitleBar />
+        <div className="shell-deck">
+          <Rail />
+          <main className="shell-card main">
+            {pane === 'settings' ? (
+              <div className="settings-pane">
+                <div className="settings-nav">
+                  <SettingsList />
+                </div>
+                <div className="settings-content">
+                  <SettingsBody />
+                </div>
+              </div>
+            ) : (
+              <div className="shell-main">
+                <ExtensionErrorBanner />
+                <ConversationArea />
+              </div>
+            )}
+          </main>
+        </div>
+        <StatusBar />
       </div>
-      <StatusBar />
 
-      {/*
-        区域 5 的拖动条。位置跟着「窄轨 + 区域 5 宽度」走 —— 用 CSS 变量算，不在这里量 DOM。
-      */}
-      {zone5 && (
-        <PaneResizer
-          variant="zone5"
-          label="调整区域 5 宽度"
-          width={zone5Width}
-          min={zone5Min}
-          defaultWidth={layout.zone5 ?? zone5Min}
-          ceiling={() => Math.min(ZONE5_MAX, window.innerWidth - 320)}
-          onDrag={(next) => shellRef.current?.style.setProperty('--zone5-w', `${next}px`)}
-          onCommit={(next) => setZone5Width(pane, next)}
+      {rightPanel.open && (
+        <RightPanel
+          panel={rightPanel}
+          width={rightWidth}
+          minWidth={RIGHT_PANEL_MIN}
+          maxWidth={RIGHT_PANEL_MAX}
+          defaultWidth={defaultRightPanelWidth(windowWidth)}
+          onDrag={(next) => shellRef.current?.style.setProperty('--right-w', `${next}px`)}
+          onCommit={(next) => setRightPanelWidth(next)}
         />
       )}
 

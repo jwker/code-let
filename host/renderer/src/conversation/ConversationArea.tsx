@@ -65,7 +65,7 @@ type ComposerNotice = { kind: 'info' | 'error'; text: string }
  * 一条内容流，三种排版。普通和终端读同一个数组（R3），
  * HTML 模式这一轮留空 —— 它不是排版，是 skill 的产物。
  */
-export function ConversationArea({ variant = 'main' }: { variant?: 'main' | 'narrow' } = {}) {
+export function ConversationArea() {
   const mode = useStore((s) => s.mode)
   const session = useStore((s) => s.snapshot.session)
   const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
@@ -860,12 +860,7 @@ export function ConversationArea({ variant = 'main' }: { variant?: 'main' | 'nar
         滚动容器自己给的 padding 做不到（跟着内容一起滚走）。
       */}
       <div className={`relative min-h-0 flex-1 pt-3 ${hasNav ? 'conv-has-nav' : ''}`}>
-        <ConversationNav
-          items={items}
-          mode={mode}
-          scrollRef={scrollRef}
-          treeEntry={variant !== 'narrow'}
-        />
+        <ConversationNav items={items} mode={mode} scrollRef={scrollRef} />
         {mode === 'normal' &&
           (items.length > 0 ? (
             <div className="conv-normal" ref={setRef}>

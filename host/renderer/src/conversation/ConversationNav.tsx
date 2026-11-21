@@ -13,19 +13,11 @@ import { ConversationTreeEntry } from './ConversationTreeEntry'
 export function ConversationNav({
   items,
   mode,
-  scrollRef,
-  treeEntry = true
+  scrollRef
 }: {
   items: StreamItem[]
   mode: 'normal' | 'terminal' | 'html'
   scrollRef: RefObject<HTMLDivElement | null>
-  /**
-   * 轨顶上要不要放会话树入口。
-   *
-   * 产品 agent 的对话在窄栏里，整个轨被 CSS 藏掉，树入口由窄栏标题栏自己放
-   * （`ConversationTreeEntry` 的 `head` 位）；那边传 false，免得同一份树拉两次。
-   */
-  treeEntry?: boolean
 }) {
   const turns = useMemo(() => userTurnsOf(items), [items])
   // assistant 的增量会不停改变 items；轮次没变时别反复重挂滚动监听
@@ -182,11 +174,9 @@ export function ConversationNav({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHovered(null)
       }}
     >
-      {treeEntry && (
-        <div className={`conv-nav-entry${show ? '' : ' is-hidden'}`}>
-          <ConversationTreeEntry placement="rail" />
-        </div>
-      )}
+      <div className={`conv-nav-entry${show ? '' : ' is-hidden'}`}>
+        <ConversationTreeEntry />
+      </div>
 
       {show && overflowing && (
         <span

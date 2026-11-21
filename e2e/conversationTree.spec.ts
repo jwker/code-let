@@ -167,7 +167,9 @@ test.describe.serial('会话树的读、切与另开', () => {
   }
 
   test('轨上的按钮带角标，弹窗里一条主干 + 一条别的支线', async () => {
-    await expect(page.getByRole('button', { name: '代码' })).toBeVisible({ timeout: 10_000 })
+    await expect(
+      page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '会话树' })
+    ).toBeVisible({ timeout: 10_000 })
     const button = page.getByRole('button', { name: /^对话结构/ })
     await expect(button).toContainText('1')
 

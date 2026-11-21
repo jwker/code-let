@@ -21,7 +21,7 @@ export function DocView({ cwd }: { cwd: string }) {
   const selected = docs.selected
 
   if (!selected) {
-    return <div className="zone6-empty">从区域 5 里选一份文档</div>
+    return <div className="zone6-empty">从文档树里选一份文档</div>
   }
 
   const { entry } = selected
@@ -36,7 +36,7 @@ export function DocView({ cwd }: { cwd: string }) {
         <button
           type="button"
           className="doc-view-action"
-          title="在区域 6 用文件预览打开（html 等格式）"
+          title="用文件预览打开（html 等格式）"
           onClick={() => void host.openFile(cwd, entry.relPath)}
         >
           用文件预览打开

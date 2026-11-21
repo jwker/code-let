@@ -1,7 +1,7 @@
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
-import type { ProjectPaneView } from '@contract/index'
+import type { ProjectPaneView, RightPanelState } from '@contract/index'
 
 /**
  * 标签列表的落盘与恢复（PLAN.md D4 修订）。
@@ -25,8 +25,10 @@ export interface StoredProjectTab {
   cwd: string
   /** 标签上显示的名字，默认取目录名 */
   title: string
-  /** 上次看的是哪个入口 */
+  /** 上次看的是左列的哪样东西（对话 / 项目设置） */
   pane: ProjectPaneView
+  /** 右栏开着没有、开的是哪个功能区 */
+  rightPanel: RightPanelState
   /** 上次看的 agent；`pane !== 'agent'` 时也留着 */
   activeAgentId: string | null
 }
@@ -93,7 +95,9 @@ export class TabStore {
       const raw = JSON.parse(readFileSync(this.file, 'utf8')) as TabsFile
       if (Array.isArray(raw?.tabs)) {
         if (raw.version === 2) {
-          this.tabs = raw.tabs.filter(isProjectTab)
+          this.tabs = raw.tabs
+            .map(normalizeProjectTab)
+            .filter((tab): tab is StoredProjectTab => tab !== null)
         } else {
           // v1：留着给迁移用。**不在这里转** —— 转换要连 agents.json 一起写，
           // 那是 HostState 的事，存储层只负责把旧数据端出来
@@ -194,8 +198,21 @@ export class TabStore {
   }
 }
 
-/** v2 项目标签的形状校验 —— 少字段就当坏的，不拿默认值补出个假标签 */
-function isProjectTab(value: unknown): value is StoredProjectTab {
+/** 右栏状态的形状校验 */
+function isRightPanel(value: unknown): value is RightPanelState {
+  if (!value || typeof value !== 'object') return false
+  const panel = value as Record<string, unknown>
+  return (
+    typeof panel.open === 'boolean' &&
+    (panel.kind === null ||
+      panel.kind === 'code' ||
+      panel.kind === 'docs' ||
+      panel.kind === 'browser')
+  )
+}
+
+/** 两种落盘形状都有的那几个字段 —— 少一个就当坏的，不拿默认值补出个假标签 */
+function hasBaseFields(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object') return false
   const tab = value as Record<string, unknown>
   return (
@@ -205,4 +222,48 @@ function isProjectTab(value: unknown): value is StoredProjectTab {
     typeof tab.pane === 'string' &&
     (tab.activeAgentId === null || typeof tab.activeAgentId === 'string')
   )
+}
+
+/**
+ * 读出一条项目标签，顺手把旧版落盘形状归一。
+ *
+ * 上一版把代码 / 文档 / 浏览器当成左列的入口，那时还没有右栏，旧标签没有
+ * `rightPanel` 字段。读出来时把这三个值搬进右栏（展开、功能区对应），左列变回对话；
+ * 设置和对话则右栏收起。新形状（有 `rightPanel`）的左列只可能是对话或设置 ——
+ * 别的组合只可能是手改坏的。
+ *
+ * 形状不对的返回 `null`，由调用方丢掉：不拿默认值拼出一个假标签。
+ */
+function normalizeProjectTab(value: unknown): StoredProjectTab | null {
+  if (!hasBaseFields(value)) return null
+  const tab = value as unknown as Record<string, unknown>
+  if (tab.rightPanel !== undefined) {
+    if (!isRightPanel(tab.rightPanel)) return null
+    if (tab.pane !== 'agent' && tab.pane !== 'settings') return null
+    return {
+      id: tab.id as string,
+      cwd: tab.cwd as string,
+      title: tab.title as string,
+      pane: tab.pane,
+      rightPanel: tab.rightPanel,
+      activeAgentId: tab.activeAgentId as string | null
+    }
+  }
+  const base = {
+    id: tab.id as string,
+    cwd: tab.cwd as string,
+    title: tab.title as string,
+    activeAgentId: tab.activeAgentId as string | null
+  }
+  if (tab.pane === 'code' || tab.pane === 'docs' || tab.pane === 'browser') {
+    return { ...base, pane: 'agent', rightPanel: { open: true, kind: tab.pane } }
+  }
+  if (tab.pane === 'settings') {
+    return { ...base, pane: 'settings', rightPanel: { open: false, kind: null } }
+  }
+  if (tab.pane === 'agent') {
+    return { ...base, pane: 'agent', rightPanel: { open: false, kind: null } }
+  }
+  // 不认识的值 —— 当坏数据
+  return null
 }

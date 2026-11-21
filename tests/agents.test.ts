@@ -2,7 +2,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PANE_LAYOUT, builtinTypeDef, paneLayoutFor } from '@contract/index'
 import {
   AgentStore,
   archiveRecord,
@@ -14,7 +13,7 @@ import {
 } from '../host/main/agents'
 
 /**
- * agent 清单与区域分派表（PLAN.md D52 / D53 / D55 / D59）。
+ * agent 清单（PLAN.md D53 / D55 / D59）。
  *
  * 这一层是纯逻辑：清单的增删改、自动归档筛选、旧标签迁移。runtime 和
  * 会话文件不在这里 —— 那些要模型和凭据，测不动。
@@ -48,29 +47,6 @@ function record(overrides: Partial<AgentRecord> = {}): AgentRecord {
 
 afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
-})
-
-describe('区域 5 的分派表', () => {
-  it('项目入口四条', () => {
-    expect(Object.keys(PANE_LAYOUT).sort()).toEqual(['browser', 'code', 'docs', 'settings'])
-  })
-
-  it('代码、文档、设置有一列，浏览器没有', () => {
-    expect(PANE_LAYOUT.code.zone5).toBe(268)
-    expect(PANE_LAYOUT.docs.zone5).toBe(268)
-    expect(PANE_LAYOUT.settings.zone5).toBe(268)
-    expect(PANE_LAYOUT.browser.zone5).toBeNull()
-  })
-
-  it('agent 走类型能力：只有产品有区域 5，对话比文件树宽', () => {
-    expect(paneLayoutFor('agent', builtinTypeDef('product')).zone5).toBe(380)
-    expect(paneLayoutFor('agent', builtinTypeDef('product')).zone5Min).toBe(320)
-    expect(paneLayoutFor('agent', builtinTypeDef('general')).zone5).toBeNull()
-    // 还不知道类型 —— 给空布局，界面显示「没选 agent」
-    expect(paneLayoutFor('agent', null).zone5).toBeNull()
-    expect(paneLayoutFor('code').zone5).toBe(268)
-    expect(PANE_LAYOUT.code.zone5Min).toBeUndefined()
-  })
 })
 
 describe('agent 清单', () => {

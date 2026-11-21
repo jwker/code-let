@@ -83,28 +83,28 @@ test.describe.serial('Git 面板', () => {
     }
   })
 
-  test('代码区的「改动」tab 显示分支、分组文件，点开看 diff', async () => {
-    // 改动列表现在在区域 5（代码入口的第二个 tab），diff 在区域 6
+  test('右栏代码功能区的「改动」tab 显示分支、分组文件，点开看 diff', async () => {
+    // 先开右栏，再进代码功能区 —— 改动列表在左边树栏，diff 在右边内容区
+    await page.getByRole('button', { name: '右栏', exact: true }).click()
     await page.getByRole('button', { name: '代码', exact: true }).click()
     await page.getByRole('tab', { name: /改动/ }).click()
 
-    const zone5 = page.locator('.shell-card.zone5')
-    await expect(zone5.getByText('main')).toBeVisible()
-    await expect(zone5.getByText('已暂存')).toBeVisible()
-    await expect(zone5.getByText('未暂存')).toBeVisible()
-    await expect(zone5.getByText('未跟踪')).toBeVisible()
-    await expect(zone5.getByText('a.txt')).toBeVisible()
-    await expect(zone5.getByText('b.txt')).toBeVisible()
-    await expect(zone5.getByText('c.txt')).toBeVisible()
+    const panel = page.locator('.right-panel')
+    await expect(panel.getByText('main')).toBeVisible()
+    await expect(panel.getByText('已暂存')).toBeVisible()
+    await expect(panel.getByText('未暂存')).toBeVisible()
+    await expect(panel.getByText('未跟踪')).toBeVisible()
+    await expect(panel.getByText('a.txt')).toBeVisible()
+    await expect(panel.getByText('b.txt')).toBeVisible()
+    await expect(panel.getByText('c.txt')).toBeVisible()
 
-    await zone5.getByText('a.txt').click()
+    await panel.getByText('a.txt').click()
 
-    const zone6 = page.locator('.shell-card.zone6')
-    await expect(zone6.getByText('+two')).toBeVisible()
-    await expect(zone6.getByText('相对 index')).toBeVisible()
+    await expect(panel.getByText('+two')).toBeVisible()
+    await expect(panel.getByText('相对 index')).toBeVisible()
 
-    // 返回 → 区域 6 回到文件预览
-    await zone6.getByRole('button', { name: '回到文件预览' }).click()
-    await expect(page.getByText('从区域 5 的文件树里选一个文件')).toBeVisible()
+    // 返回 → 右边内容区回到文件预览
+    await panel.getByRole('button', { name: '回到文件预览' }).click()
+    await expect(panel.getByText('从右侧的文件树里选一个文件')).toBeVisible()
   })
 })

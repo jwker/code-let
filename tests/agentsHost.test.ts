@@ -160,10 +160,10 @@ describe('一个项目一条标签', () => {
     await state.activateAgent(first.id)
     expect(state.snapshot().projectTabs[0].activeAgentId).toBe(first.id)
 
-    // 切到「代码」入口再回来 —— 活动 agent 不丢
+    // 切到项目设置再回来 —— 活动 agent 不丢
     const tabId = state.snapshot().projectTabs[0].id
-    await state.setPane(tabId, 'code')
-    expect(state.snapshot().projectTabs[0].pane).toBe('code')
+    await state.setPane(tabId, 'settings')
+    expect(state.snapshot().projectTabs[0].pane).toBe('settings')
     expect(state.snapshot().projectTabs[0].activeAgentId).toBe(first.id)
 
     await state.setPane(tabId, 'agent')
@@ -172,8 +172,29 @@ describe('一个项目一条标签', () => {
   })
 })
 
-describe('关项目标签不碰 agent（R44）', () => {
-  it('关掉标签之后，那个项目的 agent 一个都没被归档或关闭', async () => {
+describe('右栏状态只改标签', () => {
+  it('改右栏状态不碰 agent：不激活、不中止、不归档', async () => {
+    const { dir, state, pi } = setup()
+    await state.init()
+    const agent = await state.newAgent(dir, 'general')
+    const tabId = state.snapshot().projectTabs[0].id
+    pi.streaming.add(agent.id)
+    pi.calls.length = 0
+
+    await state.setRightPanel(tabId, { open: true, kind: 'browser' })
+
+    expect(state.snapshot().projectTabs[0].rightPanel).toEqual({ open: true, kind: 'browser' })
+    // 一个 runtime 调用都不该发生 —— 包括 activate 和 abort
+    expect(pi.calls).toEqual([])
+    // agent 还在跑，还在原来的位置
+    expect(state.snapshot().agents[0].streaming).toBe(true)
+    expect(state.snapshot().agents[0].archivedAt).toBeNull()
+    expect(state.snapshot().projectTabs[0].activeAgentId).toBe(agent.id)
+    await state.dispose()
+  })
+})
+
+describe('关项目标签不碰 agent（R44）', () => {  it('关掉标签之后，那个项目的 agent 一个都没被归档或关闭', async () => {
     const { dir, state, pi } = setup()
     await state.init()
     const agent = await state.newAgent(dir, 'general')
@@ -190,6 +211,36 @@ describe('关项目标签不碰 agent（R44）', () => {
     expect(still?.streaming).toBe(true)
     expect(pi.calls).not.toContain(`close:${agent.id}`)
     expect(pi.calls).not.toContain(`abort:${agent.id}`)
+    await state.dispose()
+  })
+})
+
+describe('项目里最后一个 agent 消失后的退路', () => {
+  it('归档最后一个 agent：右栏落到代码，左列停在对话', async () => {
+    const { dir, state } = setup()
+    await state.init()
+    const agent = await state.newAgent(dir, 'general')
+
+    await state.archiveAgent(agent.id)
+
+    const tab = state.snapshot().projectTabs[0]
+    expect(tab.activeAgentId).toBeNull()
+    expect(tab.pane).toBe('agent')
+    expect(tab.rightPanel).toEqual({ open: true, kind: 'code' })
+    await state.dispose()
+  })
+
+  it('删除最后一个 agent 也一样', async () => {
+    const { dir, state } = setup()
+    await state.init()
+    const agent = await state.newAgent(dir, 'general')
+
+    await state.deleteAgent(agent.id)
+
+    const tab = state.snapshot().projectTabs[0]
+    expect(tab.activeAgentId).toBeNull()
+    expect(tab.pane).toBe('agent')
+    expect(tab.rightPanel).toEqual({ open: true, kind: 'code' })
     await state.dispose()
   })
 })

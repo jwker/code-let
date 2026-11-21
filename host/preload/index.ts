@@ -91,6 +91,8 @@ const api: CodeletApi = {
     ipcRenderer.invoke(IPC.projectsCloseTab, { tabId }) as Promise<HostSnapshot>,
   setPane: (tabId, pane) =>
     ipcRenderer.invoke(IPC.projectsSetPane, { tabId, pane }) as Promise<HostSnapshot>,
+  setRightPanel: (tabId, panel) =>
+    ipcRenderer.invoke(IPC.projectsSetRightPanel, { tabId, open: panel.open, kind: panel.kind }) as Promise<HostSnapshot>,
   prompt: (agentId, text, attachments, uploads) =>
     ipcRenderer.invoke(IPC.promptSend, { agentId, text, attachments, uploads }),
   abortPrompt: (agentId) => ipcRenderer.invoke(IPC.promptAbort, { agentId }) as Promise<void>,

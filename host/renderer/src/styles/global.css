@@ -97,33 +97,38 @@
  * ------------------------------------------------------------------------- */
 
 .shell {
-  /* 两栏宽度只在这里定义；区域 5 由 App 往 shell 上写，标题栏跟着走 */
+  /* 窄轨宽度 */
   --rail-w: 56px;
-  /* 区域 5 的默认宽度；按入口各记一份，首屏 JS 还没跑时先按这个渲染 */
-  --zone5-w: 268px;
+  /* 右栏当前宽度；由 App 往 shell 上写，收起时用不到 */
+  --right-w: 380px;
   /* 侧栏左上角的圆角；分隔线按这个半径拐弯，改大改小只要动这里 */
   --panel-radius: 12px;
 
   position: relative;
+  display: flex;
+  height: 100vh;
+  background: var(--canvas);
+}
+
+/*
+ * 左半边：标题栏 / 卡片区 / 状态栏三行。
+ *
+ * 右栏收起时它吃满整个窗口；展开时右栏是它的兄弟节点，宽度由 --right-w 给。
+ */
+.shell-left {
+  flex: 1;
+  min-width: 0;
   display: grid;
-  /*
-   * 三行：标题栏 / 卡片区 / 状态栏，都铺满整宽。
-   *
-   * 标题栏和状态栏都是画布色、直接写在背景上；卡片区里的卡浮在中间。
-   * 列宽不写在 grid 里 —— 卡是 flex 排的，宽度由各自的 CSS 变量给（见 .shell-deck）。
-   */
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: var(--titlebar-h) minmax(0, 1fr) var(--statusbar-h);
   grid-template-areas:
     'title'
     'deck'
     'bar';
-  height: 100vh;
-  background: var(--canvas);
 }
 
 /*
- * 卡片区：窄轨、区域 5（可选）、区域 6（必填）各一张卡，横向排开。
+ * 卡片区：窄轨和左列的内容卡横向排开。
  *
  * 卡之间 7px 的画布缝，窗口右边和下边也留 7px；顶上不留 ——
  * 卡片的上边框紧贴标题栏下沿（跟参考图一致）。
@@ -166,16 +171,6 @@
   flex: none;
   width: var(--rail-w);
 }
-.shell-card.zone5 {
-  flex: none;
-  width: var(--zone5-w);
-}
-.shell-card.zone6 {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
 
 /* ---------------------------------------------------------------------------
  * 窄导航轨（PLAN.md D51）
@@ -192,23 +187,6 @@
   padding: 12px 0;
   gap: 2px;
 }
-/*
- * 窄轨顶部的 logo。
- *
- * 标记 32px、左右各 12px（(56-32)/2）；窄轨的上内边距也是 12px —— 三边距离相同。
- * 这里不再加 padding，位置由 `.rail` 的内边距和这一行的居中决定。
- */
-.rail-brand {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  flex: none;
-  margin-bottom: 8px;
-}
-.app-mark {
-  display: block;
-}
-
 .rail-zone {
   display: flex;
   flex-direction: column;
@@ -495,69 +473,236 @@
 }
 
 /* ---------------------------------------------------------------------------
- * 区域 5 / 区域 6
+ * 右栏（票 02）
  * ------------------------------------------------------------------------- */
-.zone5 {
+.right-panel {
+  position: relative;
+  flex: none;
+  width: var(--right-w);
   display: flex;
   flex-direction: column;
-  background: var(--panel);
   min-height: 0;
-  overflow: hidden;
+  background: var(--panel);
+  border-left: 1px solid var(--hairline-strong);
 }
-.zone5-head {
+/* 顶栏跟标题栏同高 —— 两栏从同一条顶线开始 */
+.rp-head {
+  height: var(--titlebar-h);
+  flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  flex: none;
-  padding: 0 12px;
+  gap: 4px;
+  padding: 0 6px 0 12px;
+  background: var(--canvas);
   border-bottom: 1px solid var(--hairline);
 }
-.zone5-title {
-  font-size: 13px;
-  font-weight: 500;
+.rp-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12.5px;
   color: var(--fg-1);
 }
-.zone5-meta {
-  margin-left: auto;
-  font-family: var(--font-code);
-  font-size: 11.5px;
+.rp-title svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
   color: var(--fg-3);
+}
+.rp-title-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.zone5-body {
+.rp-head-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+/* 功能切换器先占位：图标和文字都是当前功能区，下拉在票 04 接上 */
+.rp-func {
+  height: 26px;
+  padding: 0 7px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-2);
+  border: 1px solid transparent;
+}
+.rp-func:disabled {
+  cursor: default;
+}
+.rp-func svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.rp-func-chev {
+  display: flex;
+  color: var(--fg-3);
+}
+.rp-func-chev svg {
+  width: 11px;
+  height: 11px;
+}
+.rp-close {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--fg-2);
+}
+.rp-close:hover {
+  background: var(--sunken);
+  color: var(--fg-1);
+}
+.rp-close svg {
+  width: 15px;
+  height: 15px;
+}
+.rp-body {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-/*
- * 产品 agent 的窄对话（区域 5）。
- *
- * 对话组件本来是给主区写的，塞进 320–560 要收两处：
- * 1. 左侧那列圆点导航——它固定要 52px，窄栏里占掉六分之一，藏掉；
- * 2. 内容列不再左移，改成居中、两侧各留 16px。
- * composer 里的快捷键说明和模型名由 @container 自己收，不用管。
- */
-.zone5-chat {
-  overflow: hidden;
+
+/* 空态 / 「还没接上」：居中一块说明 */
+.rp-empty {
+  margin: auto;
+  padding: 24px;
+  max-width: 380px;
+  text-align: center;
 }
-.zone5-chat .conv-nav {
-  display: none;
+.rp-empty-icon {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 12px;
+  border-radius: var(--r-md);
+  border: 1px dashed var(--hairline-strong);
+  display: grid;
+  place-items: center;
+  color: var(--fg-3);
 }
-.zone5-chat .conv-has-nav .conv-stream,
-.zone5-chat .conv-has-nav .conv-terminal > div {
-  width: min(var(--content-max), calc(100% - 32px));
-  margin-left: auto;
-  margin-right: auto;
+.rp-empty-icon svg {
+  width: 18px;
+  height: 18px;
 }
-.zone5-chat .conv-footer {
-  padding-inline: 12px;
+.rp-empty h3 {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.rp-empty p {
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--fg-2);
+  margin-bottom: 16px;
+}
+.rp-pick {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.rp-pick button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hairline-strong);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--fg-2);
+  box-shadow: var(--sh-sm);
+}
+.rp-pick button:hover:not(:disabled) {
+  color: var(--fg-1);
+  border-color: var(--fg-3);
+}
+.rp-pick button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.rp-pick svg {
+  width: 14px;
+  height: 14px;
+}
+.rp-empty-note {
+  margin: auto;
+  padding: 24px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-3);
 }
 
+/*
+ * 代码功能区：左边文件树、右边内容。
+ *
+ * 树固定 216px，不跟着按比例缩 —— 右栏拖到 380 时两列都很挤，
+ * 树再缩就只剩半行字（见 ADR-0005）。
+ */
+.code-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.code-tree {
+  width: 216px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--hairline);
+}
+.code-tree-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.code-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+/* 左列的项目设置：分类 + 内容，都在这唯一的一列里 */
+.settings-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.settings-nav {
+  width: 172px;
+  flex: none;
+  border-right: 1px solid var(--hairline);
+  padding: 10px 8px;
+  overflow-y: auto;
+}
+.settings-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 旧类名：搬进右栏的组件内部还在用（见 ADR-0005），不再产生新的 */
 .zone5-empty,
 .zone6-empty {
   margin: auto;
@@ -566,14 +711,6 @@
   font-size: 12px;
   line-height: 1.7;
   color: var(--fg-3);
-}
-.zone6 {
-  background: var(--surface);
-}
-.zone6-empty {
-  flex: 1;
-  display: grid;
-  place-items: center;
 }
 
 /* 代码区的两个 tab（区域 5 顶部） */
@@ -1128,18 +1265,11 @@
   flex: 1;
 }
 
-/*
- * 区域 5 的拖动条：位置是「卡片区左边距 + 窄轨 + 两处缝 + 区域 5 宽度 + 半个缝」。
- *
- * 前两处 7px 是 .shell-deck 的 padding 和 gap，最后半个缝是因为拖动条用
- * translateX(-50%) 压在自己 left 上 —— 要让它的中线落在两张卡中间的缝正中。
- * 改 deck 的 gap 记得同步这两个 7px。
- */
-.shell-grip-zone5 {
-  left: calc(7px + var(--rail-w) + 7px + var(--zone5-w) + 3.5px);
-}
-.shell.is-zone5-hidden .shell-grip-zone5 {
-  display: none;
+/* 右栏拖动条：压在左边缘，拖拽中整条线跟着高亮 */
+.shell-grip-right {
+  top: 0;
+  bottom: 0;
+  left: 0;
 }
 
 /* 拖拽中不要 180ms 过渡，否则宽度跟不上鼠标 */
@@ -1207,6 +1337,14 @@
 .titlebar-more svg {
   width: 16px;
   height: 16px;
+}
+/* 更多菜单与右栏开关之间的细线 */
+.titlebar-sep {
+  width: 1px;
+  height: 18px;
+  flex: none;
+  background: var(--hairline-strong);
+  margin: 0 4px;
 }
 .drag-region {
   -webkit-app-region: drag;
@@ -2596,17 +2734,15 @@ ol.md-list {
 /* ============================================================
    会话树：轨上的入口 + 弹窗（GLOSSARY.md「对话结构」）
    ============================================================ */
-/* 会话树入口：主区在圆点轨顶部，产品 agent 在窄栏标题栏右侧 */
+/* 会话树入口：长在对话左侧圆点轨的顶部 */
 .conv-tree-entry {
   position: relative;
   z-index: 2;
   flex: none;
   display: flex;
   align-items: center;
-  pointer-events: auto;
-}
-.conv-tree-entry.is-rail {
   padding: 2px 0 6px;
+  pointer-events: auto;
 }
 /* 只剩一轮又没有别的支线时，轨上的入口先藏着 —— 但别卸载：条数是它拉树之后才知道的 */
 .conv-nav-entry.is-hidden,

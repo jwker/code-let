@@ -129,7 +129,14 @@ export const agentRenameSchema = z.object({
 /** 切项目标签的入口 */
 export const projectPaneSchema = z.object({
   tabId: z.string().min(1),
-  pane: z.enum(['code', 'docs', 'browser', 'settings', 'agent'])
+  pane: z.enum(['agent', 'settings'])
+})
+
+/** 改右栏状态：只带两个字段，没有 agent */
+export const projectRightPanelSchema = z.object({
+  tabId: z.string().min(1),
+  open: z.boolean(),
+  kind: z.enum(['code', 'docs', 'browser']).nullable()
 })
 
 export const promptSchema = z.object({

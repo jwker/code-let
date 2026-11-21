@@ -8,68 +8,29 @@
  * 本文件不 import 任何运行时依赖（跟 contract 其他文件一样）。
  */
 
-import { capabilitiesOf } from './agentTypes'
-import type { AgentTypeDef } from './agentTypes'
-
-/** 项目级入口。agent 不在这里 —— 它在窄轨里是另一段（D51） */
-export type ProjectPane = 'code' | 'docs' | 'browser' | 'settings'
+/** 右栏里能放的功能区。`null` 是空态：右栏展开着但还没选 */
+export type RightPanelKind = 'code' | 'docs' | 'browser'
 
 /**
- * 项目标签当前看的是什么。
+ * 一条项目标签的右栏状态。
  *
- * `'agent'` 表示看 `activeAgentId` 指向的那个 agent；切到「代码」再切回来时
- * `activeAgentId` 仍然留着，不用重选。
+ * 跟左列的 `pane` 一起落盘、一起随快照推给渲染进程：切走再切回来，
+ * 右栏还是原来那个样子。宽度不在这里 —— 那是窗口级偏好。
  */
-export type ProjectPaneView = ProjectPane | 'agent'
-
-/** 分派表的键：项目入口。agent 类型那几张已经并进 `capabilitiesOf` */
-export type PaneLayoutKey = ProjectPane
-
-/** 一个入口的布局。`zone5: null` = 没有区域 5，区域 6 直接吃满 */
-export interface PaneLayout {
-  /** 区域 5 的默认宽度（像素） */
-  zone5: number | null
-  /** 区域 5 的可拖下限。不给就用 ZONE5_MIN */
-  zone5Min?: number
+export interface RightPanelState {
+  /** 右栏展开着没有 */
+  open: boolean
+  /** 开着的是哪个功能区；`null` 是空态 */
+  kind: RightPanelKind | null
 }
 
 /**
- * 区域 5 的分派表（D52）。
+ * 项目标签的左列看什么。
  *
- * 项目入口的布局差异只有这一个字段 —— 不给每个入口写一套布局代码。
- * 宽度是默认值，用户可以拖，拖完按入口各记一份。
- *
- * agent 那几条不在表里：它们由类型的能力给出（`capabilitiesOf`），
- * 因为「一个类型能不能有区域 5」不是这张表能表达的。
+ * 左列只剩两种内容：当前 agent 的对话，或者占满一列的项目设置。
+ * 代码、文档、浏览器在右栏里（`rightPanel.kind`），不再是左列的取值。
  */
-export const PANE_LAYOUT: Record<PaneLayoutKey, PaneLayout> = {
-  // 文件树 / 文档树 / 设置分类：一列名字，268 够用
-  code: { zone5: 268 },
-  docs: { zone5: 268 },
-  settings: { zone5: 268 },
-  // 没有区域 5 的入口
-  browser: { zone5: null }
-}
-
-/** 区域 5 的默认可拖下限 */
-export const ZONE5_MIN = 220
-/** 区域 5 的可拖上限 */
-export const ZONE5_MAX = 560
-
-/**
- * 某个入口的区域 5 布局。
- *
- * `pane === 'agent'` 时问类型的能力；类型还不知道（没选 agent）就没有区域 5。
- */
-export function paneLayoutFor(
-  pane: ProjectPaneView,
-  def?: AgentTypeDef | null
-): PaneLayout {
-  if (pane === 'agent') {
-    return capabilitiesOf(def ?? null).zone5 ?? { zone5: null }
-  }
-  return PANE_LAYOUT[pane]
-}
+export type ProjectPaneView = 'agent' | 'settings'
 
 /**
  * 一个项目标签。
@@ -84,8 +45,10 @@ export interface ProjectTabInfo {
   cwd: string
   /** 标签上显示的名字，默认取目录名 */
   title: string
-  /** 当前看的是什么 */
+  /** 当前看的是什么（左列） */
   pane: ProjectPaneView
+  /** 右栏开着没有、开的是哪个功能区 */
+  rightPanel: RightPanelState
   /** 上次看的 agent；`pane !== 'agent'` 时也留着，切回来不用重选 */
   activeAgentId: string | null
 }

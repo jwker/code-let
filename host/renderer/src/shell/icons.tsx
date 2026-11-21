@@ -109,6 +109,21 @@ export const IconPlus = () => (
   </Icon>
 )
 
+/** 右栏：一个方框，右半边那条分割线表示「这里是右侧那一栏」 */
+export const IconPanel = () => (
+  <Icon>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <path d="M13 4v16" />
+  </Icon>
+)
+
+/** 收起右栏：向右的尖角，指向右栏所在的一侧 */
+export const IconPanelCollapse = () => (
+  <Icon>
+    <path d="M9 6l6 6-6 6" />
+  </Icon>
+)
+
 export const IconFolder = ({ size = 18 }: { size?: number }) => (
   <Icon size={size}>
     <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H9l2 2h7.5A2.5 2.5 0 0 1 21 9.5v7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5z" />

@@ -106,7 +106,7 @@ export function FilePreview({
             </div>
           </>
         ) : (
-          <div className="file-viewer-state">从区域 5 的文件树里选一个文件</div>
+          <div className="file-viewer-state">从右侧的文件树里选一个文件</div>
         )}
       </div>
     </div>

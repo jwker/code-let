@@ -61,11 +61,12 @@ async function openNewAgent(): Promise<void> {
     await expect(dialog).toHaveCount(0)
     // 窄轨里出现这个名字的 agent（悬停气泡里也有）
     await expect(page.getByRole('button', { name: created, exact: true })).toBeVisible()
-    // 基础 agent 只有一栏：没有区域 5，也没有浏览器
-    await expect(page.locator('.shell')).toHaveClass(/is-zone5-hidden/)
+    // 左列就是它那一列对话；右栏没被它顶开
+    await expect(page.locator('.shell-card.main textarea').first()).toBeVisible()
+    await expect(page.locator('.right-panel')).toHaveCount(0)
   })
 
-  test('选「产品」名字跟着变，建出来是两栏', async () => {
+  test('选「产品」名字跟着变，建出来还是左列对话', async () => {
     await openNewAgent()
 
     const dialog = page.getByRole('dialog', { name: '新建 agent' })
@@ -77,9 +78,12 @@ async function openNewAgent(): Promise<void> {
     await input.press('Enter')
     await expect(dialog).toHaveCount(0)
 
-    // 区域 6 是它自己的浏览器 —— 看地址栏，别看类型卡上的字
-    await expect(page.locator('.shell')).not.toHaveClass(/is-zone5-hidden/)
-    await expect(page.locator('.shell-card.zone6').getByPlaceholder(/localhost/)).toBeVisible()
+    /*
+     * 只是打开一个产品 agent、没让它做事 —— 左列是它那一列对话，
+     * 右栏保持原来的状态（这里是收起的）。自动展开留给 agent 真的动浏览器那一单。
+     */
+    await expect(page.locator('.shell-card.main textarea').first()).toBeVisible()
+    await expect(page.locator('.right-panel')).toHaveCount(0)
     await expect(page.getByRole('button', { name: created, exact: true })).toBeVisible()
   })
 

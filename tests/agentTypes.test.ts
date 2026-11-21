@@ -3,12 +3,10 @@ import {
   AGENT_COLORS,
   AGENT_TYPE_LIMITS,
   BUILTIN_AGENT_TYPES,
-  PANE_LAYOUT,
   builtinTypeDef,
   capabilitiesOf,
   defaultAgentName,
   leastUsedColor,
-  paneLayoutFor,
   validateTypeDraft,
   type AgentColorId,
   type AgentTypeDef,
@@ -53,59 +51,37 @@ describe('内置类型', () => {
 })
 
 describe('能力分派', () => {
-  it('产品 agent：有预览、区域 5 是 380，不参与自动归档', () => {
+  it('产品 agent：有预览，不参与自动归档', () => {
     expect(capabilitiesOf(builtinTypeDef('product'))).toEqual({
       preview: true,
-      autoArchive: false,
-      zone5: { zone5: 380, zone5Min: 320 }
+      autoArchive: false
     })
   })
 
   it('基础 agent：只有自动归档', () => {
     expect(capabilitiesOf(builtinTypeDef('general'))).toEqual({
       preview: false,
-      autoArchive: true,
-      zone5: null
+      autoArchive: true
     })
   })
 
   it('开发与自定义类型：什么都不带', () => {
     expect(capabilitiesOf(builtinTypeDef('dev'))).toEqual({
       preview: false,
-      autoArchive: false,
-      zone5: null
+      autoArchive: false
     })
     expect(capabilitiesOf(custom())).toEqual({
       preview: false,
-      autoArchive: false,
-      zone5: null
+      autoArchive: false
     })
   })
 
   it('未知类型什么都不能做', () => {
-    expect(capabilitiesOf(null)).toEqual({ preview: false, autoArchive: false, zone5: null })
+    expect(capabilitiesOf(null)).toEqual({ preview: false, autoArchive: false })
   })
 
   it('自定义类型即使把 id 写成 product 也拿不到预览 —— 只认内置', () => {
     expect(capabilitiesOf(custom({ id: 'product' })).preview).toBe(false)
-  })
-})
-
-describe('区域 5 的布局', () => {
-  it('项目入口仍走那张表', () => {
-    expect(Object.keys(PANE_LAYOUT).sort()).toEqual(['browser', 'code', 'docs', 'settings'])
-    expect(paneLayoutFor('code').zone5).toBe(268)
-    expect(paneLayoutFor('browser').zone5).toBeNull()
-  })
-
-  it('agent 按类型的能力取', () => {
-    expect(paneLayoutFor('agent', builtinTypeDef('product')).zone5).toBe(380)
-    expect(paneLayoutFor('agent', builtinTypeDef('product')).zone5Min).toBe(320)
-    expect(paneLayoutFor('agent', builtinTypeDef('general')).zone5).toBeNull()
-    // 自定义类型与未知类型都只有一列
-    expect(paneLayoutFor('agent', custom()).zone5).toBeNull()
-    expect(paneLayoutFor('agent', null).zone5).toBeNull()
-    expect(paneLayoutFor('agent').zone5).toBeNull()
   })
 })
 

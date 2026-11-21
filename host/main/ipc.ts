@@ -48,6 +48,7 @@ import {
   agentTypeRemoveSchema,
   projectTabIdSchema,
   projectPaneSchema,
+  projectRightPanelSchema,
   temporaryIdSchema,
   temporaryModelSelectSchema,
   temporaryPromptSchema,
@@ -287,6 +288,12 @@ export function registerIpc(
   ipcMain.handle(IPC.projectsSetPane, async (_event, payload: unknown) => {
     const { tabId, pane } = projectPaneSchema.parse(payload)
     await state.setPane(tabId, pane)
+    return state.snapshot()
+  })
+
+  ipcMain.handle(IPC.projectsSetRightPanel, async (_event, payload: unknown) => {
+    const { tabId, open, kind } = projectRightPanelSchema.parse(payload)
+    await state.setRightPanel(tabId, { open, kind })
     return state.snapshot()
   })
 

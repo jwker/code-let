@@ -24,6 +24,7 @@ import type {
   PickAttachmentsResult,
   ProjectPaneView,
   ProjectTabInfo,
+  RightPanelState,
   SessionState,
   SessionTree,
   ThinkingLevel,
@@ -393,6 +394,7 @@ export class HostState extends EventEmitter {
       cwd: tab.cwd,
       title: tab.title,
       pane: tab.pane,
+      rightPanel: { ...tab.rightPanel },
       activeAgentId: tab.activeAgentId
     }
   }
@@ -596,6 +598,7 @@ export class HostState extends EventEmitter {
           cwd: agent.cwd,
           title: basename(agent.cwd) || agent.cwd,
           pane: 'agent',
+          rightPanel: { open: false, kind: null },
           activeAgentId: agent.id
         })
       }
@@ -683,6 +686,17 @@ export class HostState extends EventEmitter {
     return this.tabs.find((tab) => tab.activeAgentId === agentId) ?? null
   }
 
+  /**
+   * 项目里一条 agent 都不剩时的退路。
+   *
+   * 左列没有可聊的东西，右栏落到代码 —— 至少有仉能看的，不让人对着一片空白。
+   */
+  private fallbackWhenNoAgent(tab: StoredProjectTab): void {
+    if (tab.activeAgentId) return
+    tab.pane = 'agent'
+    tab.rightPanel = { open: true, kind: 'code' }
+  }
+
   /** 找一个项目的标签；没有就建一条 */
   private ensureProjectTab(cwd: string): StoredProjectTab {
     const found = this.tabs.find((tab) => tab.cwd === cwd)
@@ -692,6 +706,7 @@ export class HostState extends EventEmitter {
       cwd,
       title: basename(cwd) || cwd,
       pane: 'agent',
+      rightPanel: { open: false, kind: null },
       activeAgentId: null
     }
     this.tabs.push(tab)
@@ -952,7 +967,7 @@ export class HostState extends EventEmitter {
     const tab = this.tabOfAgent(agentId)
     if (tab) {
       tab.activeAgentId = successor
-      if (!tab.activeAgentId) tab.pane = 'code'
+      this.fallbackWhenNoAgent(tab)
       this.persistTabs()
       // 活动标签换了人 —— 懒加载的这时才建 runtime，否则切过去是一块空白
       if (successor && tab.id === this.activeTabId) await this.pi.activateAgent(successor)
@@ -983,6 +998,7 @@ export class HostState extends EventEmitter {
     const tab = this.tabOfAgent(agentId)
     if (tab) {
       tab.activeAgentId = successor
+      this.fallbackWhenNoAgent(tab)
       this.persistTabs()
     }
     await this.refreshConversations()
@@ -1017,7 +1033,7 @@ export class HostState extends EventEmitter {
     this.push()
   }
 
-  /** 切某个项目标签的入口（代码 / 文档 / 浏览器 / 设置 / 某个 agent） */
+  /** 切某个项目标签的左列（看对话 / 项目设置） */
   async setPane(tabId: string, pane: ProjectPaneView): Promise<void> {
     const tab = this.tabById(tabId)
     if (!tab) return
@@ -1025,6 +1041,19 @@ export class HostState extends EventEmitter {
     this.persistTabs()
     if (pane === 'agent' && tab.activeAgentId) await this.pi.activateAgent(tab.activeAgentId)
     this.readSession()
+    this.push()
+  }
+
+  /**
+   * 改某个项目标签的右栏状态。
+   *
+   * **不碰任何 agent**：不激活、不中止正在跑的一轮 —— 展开右栏不该打断工作。
+   */
+  async setRightPanel(tabId: string, panel: RightPanelState): Promise<void> {
+    const tab = this.tabById(tabId)
+    if (!tab) return
+    tab.rightPanel = { open: panel.open, kind: panel.kind }
+    this.persistTabs()
     this.push()
   }
 
@@ -1098,7 +1127,7 @@ export class HostState extends EventEmitter {
       for (const tab of this.tabs) {
         if (!successors.has(tab.id)) continue
         tab.activeAgentId = successors.get(tab.id) ?? null
-        if (!tab.activeAgentId && tab.pane === 'agent') tab.pane = 'code'
+        this.fallbackWhenNoAgent(tab)
         tabsChanged = true
       }
       if (tabsChanged) this.persistTabs()

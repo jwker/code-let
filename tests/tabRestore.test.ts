@@ -135,6 +135,11 @@ function writeLegacyTabs(file: string, tabs: Array<{ id: string; cwd: string; pa
   writeFileSync(file, JSON.stringify({ tabs }))
 }
 
+/** 写一份 v2（项目标签）的 tabs.json。故意不经过 TabStore，好造旧形状与坏数据 */
+function writeProjectTabs(file: string, tabs: unknown[]): void {
+  writeFileSync(file, JSON.stringify({ version: 2, tabs }))
+}
+
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'codelet-tabrestore-'))
   const projects = new ProjectStore(join(dir, 'projects.json'))
@@ -180,6 +185,89 @@ describe('标签落盘', () => {
       agents: { sessionPath: string | null }[]
     }
     expect(agents.agents[0].sessionPath).toBeTruthy()
+
+    await state.dispose()
+    rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe('右栏状态迁移', () => {
+  it('旧标签停在代码 / 文档 / 浏览器：变成左列对话 + 右栏开着对应功能区', async () => {
+    const { dir, projects, tabFile } = setup()
+    writeProjectTabs(tabFile, [
+      { id: 'tab-code', cwd: join(dir, 'a'), title: 'a', pane: 'code', activeAgentId: null },
+      { id: 'tab-docs', cwd: join(dir, 'b'), title: 'b', pane: 'docs', activeAgentId: null },
+      { id: 'tab-browser', cwd: join(dir, 'c'), title: 'c', pane: 'browser', activeAgentId: null }
+    ])
+
+    const state = new HostState({ pi: new FakePi(), tabStore: new TabStore(tabFile), projects })
+    await state.init()
+
+    const tabs = state.snapshot().projectTabs
+    expect(tabs.map((tab) => [tab.pane, tab.rightPanel])).toEqual([
+      ['agent', { open: true, kind: 'code' }],
+      ['agent', { open: true, kind: 'docs' }],
+      ['agent', { open: true, kind: 'browser' }]
+    ])
+    // 迁移结果落盘 —— 下次启动不再走一遍迁移
+    const saved = JSON.parse(readFileSync(tabFile, 'utf8')) as {
+      tabs: Array<{ rightPanel: { open: boolean; kind: string | null } }>
+    }
+    expect(saved.tabs.map((tab) => tab.rightPanel)).toEqual([
+      { open: true, kind: 'code' },
+      { open: true, kind: 'docs' },
+      { open: true, kind: 'browser' }
+    ])
+
+    await state.dispose()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('旧标签停在项目设置或对话：右栏保持收起', async () => {
+    const { dir, projects, tabFile } = setup()
+    writeProjectTabs(tabFile, [
+      { id: 'tab-settings', cwd: dir, title: '设置', pane: 'settings', activeAgentId: null },
+      { id: 'tab-agent', cwd: join(dir, 'a'), title: 'a', pane: 'agent', activeAgentId: null }
+    ])
+
+    const state = new HostState({ pi: new FakePi(), tabStore: new TabStore(tabFile), projects })
+    await state.init()
+
+    const tabs = state.snapshot().projectTabs
+    expect(tabs.map((tab) => [tab.pane, tab.rightPanel])).toEqual([
+      ['settings', { open: false, kind: null }],
+      ['agent', { open: false, kind: null }]
+    ])
+
+    await state.dispose()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('形状不对的标签丢掉，不拿默认值拼出假标签', async () => {
+    const { dir, projects, tabFile } = setup()
+    writeProjectTabs(tabFile, [
+      { id: 'tab-ok', cwd: dir, title: '好的', pane: 'agent', activeAgentId: null },
+      // 少 title
+      { id: 'tab-no-title', cwd: join(dir, 'a'), pane: 'agent', activeAgentId: null },
+      // 右栏形状不对
+      {
+        id: 'tab-bad-panel',
+        cwd: join(dir, 'b'),
+        title: 'b',
+        pane: 'agent',
+        rightPanel: { open: 'yes' },
+        activeAgentId: null
+      },
+      // 左列取值不认识
+      { id: 'tab-unknown-pane', cwd: join(dir, 'c'), title: 'c', pane: 'somewhere', activeAgentId: null }
+    ])
+
+    const state = new HostState({ pi: new FakePi(), tabStore: new TabStore(tabFile), projects })
+    await state.init()
+
+    const tabs = state.snapshot().projectTabs
+    expect(tabs.map((tab) => tab.id)).toEqual(['tab-ok'])
+    expect(tabs[0].rightPanel).toEqual({ open: false, kind: null })
 
     await state.dispose()
     rmSync(dir, { recursive: true, force: true })

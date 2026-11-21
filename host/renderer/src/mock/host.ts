@@ -18,7 +18,9 @@ import type {
   ModelEntry,
   ModelOption,
   ProjectInfo,
+  ProjectPaneView,
   ProviderInfo,
+  RightPanelState,
   SessionEvent,
   SessionTree,
   StreamItem,
@@ -627,6 +629,18 @@ export function createMockApi(): CodeletApi {
   const renamedConversations = new Map<string, string>()
   /** 假数据里「用户选中的项目」 */
   let projects: ProjectInfo[] = FAKE_PROJECTS.map((p) => ({ ...p }))
+  /** 每个项目的左列与右栏状态 —— 真宿主按项目标签记，这里按 cwd 记 */
+  const projectState = new Map<string, { pane: ProjectPaneView; rightPanel: RightPanelState }>()
+  function stateOf(cwd: string): { pane: ProjectPaneView; rightPanel: RightPanelState } {
+    const found = projectState.get(cwd)
+    if (found) return found
+    const value: { pane: ProjectPaneView; rightPanel: RightPanelState } = {
+      pane: 'agent',
+      rightPanel: { open: false, kind: null }
+    }
+    projectState.set(cwd, value)
+    return value
+  }
   /** 假树：每个标签的当前叶，以及条目上的标签 */
   const treeLeaf = new Map<string, string>()
   const treeLabels = new Map<string, string>()
@@ -697,7 +711,8 @@ export function createMockApi(): CodeletApi {
         id: `fake-project-${index + 1}`,
         cwd,
         title: basenameOf(cwd),
-        pane: 'agent' as const,
+        pane: stateOf(cwd).pane,
+        rightPanel: { ...stateOf(cwd).rightPanel },
         activeAgentId: tabs.find((tab) => tab.cwd === cwd)?.id ?? null
       })),
       activeProjectTabId: `fake-project-${Math.max(1, cwds.indexOf(tabs.find((tab) => tab.id === activeTabId)?.cwd ?? cwds[0] ?? '') + 1)}`,
@@ -898,7 +913,18 @@ export function createMockApi(): CodeletApi {
     },
     activateProjectTab: async () => publish(),
     closeProjectTab: async () => publish(),
-    setPane: async () => publish(),
+    setPane: async (tabId, pane) => {
+      const index = Number(tabId.replace('fake-project-', '')) - 1
+      const cwd = [...new Set(tabs.map((tab) => tab.cwd))][index]
+      if (cwd) stateOf(cwd).pane = pane
+      return publish()
+    },
+    setRightPanel: async (tabId, panel) => {
+      const index = Number(tabId.replace('fake-project-', '')) - 1
+      const cwd = [...new Set(tabs.map((tab) => tab.cwd))][index]
+      if (cwd) stateOf(cwd).rightPanel = { ...panel }
+      return publish()
+    },
 
     reloadAgent: async (agentId) => {
       // 假宿主里没有「外部修改」，重载就等于重读自己的条目

@@ -10,14 +10,9 @@ import { treeToRows } from './treeRows'
 /**
  * 会话树的入口：一个 26×26 的按钮 + 角标，点开弹窗。
  *
- * 两个位置：
- * - `rail` —— 主区对话左侧圆点轨的顶部（通用 / 开发 agent，对话在区域 6）；
- * - `head` —— 产品 agent 窄栏对话的标题栏（对话在区域 5）。
- *
- * 窄栏里圆点轨整列被藏掉（32–560px 放不下），所以树入口不能长在轨里 ——
- * 那会让产品 agent 连有分叉都打不开弹窗。
+ * 只长在对话左侧圆点轨的顶部 —— 左列现在只有一列对话，不需要第二个位置。
  */
-export function ConversationTreeEntry({ placement }: { placement: 'rail' | 'head' }) {
+export function ConversationTreeEntry() {
   const agentId = useStore((s) => s.snapshot.activeAgentId)
   const cwd = useStore((s) => s.snapshot.session.cwd ?? '')
   const streaming = useStore((s) => (s.snapshot.activeAgentId ? (s.streaming[s.snapshot.activeAgentId] ?? false) : false))
@@ -57,7 +52,7 @@ export function ConversationTreeEntry({ placement }: { placement: 'rail' | 'head
   if (!agentId) return null
 
   return (
-    <div className={`conv-tree-entry is-${placement}`}>
+    <div className="conv-tree-entry">
       <button
         type="button"
         className={`conv-tree-entry-hit${open ? ' is-open' : ''}`}

@@ -2,17 +2,14 @@
  * agent 类型的定义（ADR-0004）。
  *
  * 一个类型只决定四件展示与文本上的事 —— 名字、说明、头像颜色、提示词。
- * **能力不在这里**：能不能开预览、有没有区域 5、参不参自动归档，由
- * `capabilitiesOf()` 按内置 id 判定，用户改不了。
+ * **能力不在这里**：能不能开预览、参不参自动归档，由 `capabilitiesOf()`
+ * 按内置 id 判定，用户改不了。
  *
  * 内置三个类型（基础 / 开发 / 产品）是这里的常量、不落盘；用户新增的
  * （自定义 agent）存在 `<userData>/agentTypes.json`，由 `AgentTypeStore` 读出来。
  *
- * 本文件跟 contract 其它文件一样不 import 运行时依赖 —— 只有一处 `import type`，
- * 编译后不留 require，所以跟 `agents.ts` 不构成运行时循环。
+ * 本文件跟 contract 其它文件一样不 import 任何东西，编译后不留 require。
  */
-
-import type { PaneLayout } from './agents'
 
 /**
  * 用户可选的配色。
@@ -105,12 +102,10 @@ export interface AgentTypeDef {
 
 /** 一个类型能做什么。用户不能配置，全由代码按内置 id 判定 */
 export interface AgentCapabilities {
-  /** 区域 6 是原型预览（产品 agent 独有） */
+  /** 带自己的预览（产品 agent 独有） */
   preview: boolean
   /** 参与自动归档（只认基础 agent） */
   autoArchive: boolean
-  /** 区域 5 的布局；null 表示没有区域 5 */
-  zone5: PaneLayout | null
 }
 
 /**
@@ -159,15 +154,14 @@ export function builtinTypeDef(id: string): AgentTypeDef | null {
  * 这里才是加分支的地方。
  */
 export function capabilitiesOf(def: AgentTypeDef | null): AgentCapabilities {
-  if (!def) return { preview: false, autoArchive: false, zone5: null }
+  if (!def) return { preview: false, autoArchive: false }
   if (def.builtin && def.id === 'product') {
-    // 对话比文件树宽，下限也更高
-    return { preview: true, autoArchive: false, zone5: { zone5: 380, zone5Min: 320 } }
+    return { preview: true, autoArchive: false }
   }
   if (def.builtin && def.id === 'general') {
-    return { preview: false, autoArchive: true, zone5: null }
+    return { preview: false, autoArchive: true }
   }
-  return { preview: false, autoArchive: false, zone5: null }
+  return { preview: false, autoArchive: false }
 }
 
 /**
