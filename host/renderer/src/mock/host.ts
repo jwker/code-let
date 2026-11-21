@@ -1,4 +1,8 @@
 import type {
+  AgentTypeDef,
+  AgentTypeDraft,
+  AgentTypeRemoveResult,
+  AgentTypeSaveResult,
   ConsoleRecordMeta,
   ConsoleStats,
   CodeletApi,
@@ -32,6 +36,37 @@ import { entriesToTree } from '@contract/tree'
  *
  * 假数据只到「长得像」为止：不连 Pi，不落盘，不发消息。
  */
+
+/**
+ * 预览模式的类型定义清单。
+ *
+ * 内置三个跟真身一致；两个自定义的用来在浏览器里看两列网格、颜色和长提示词的效果。
+ */
+const FAKE_BUILTIN_TYPES: AgentTypeDef[] = [
+  { id: 'general', name: '基础', description: '普通对话，没有额外能力。', prompt: '', color: null, builtin: true },
+  { id: 'dev', name: '开发', description: '改代码为主。', prompt: '', color: null, builtin: true },
+  { id: 'product', name: '产品', description: '写原型，右侧带预览。', prompt: '', color: null, builtin: true }
+]
+
+const FAKE_AGENT_TYPES: AgentTypeDef[] = [
+  ...FAKE_BUILTIN_TYPES,
+  {
+    id: 't-aaaa1111',
+    name: '写作',
+    description: '写文案与文档',
+    prompt: '回答先给结论，再给理由。不要用「赋能」「闭环」这类词。',
+    color: 'teal',
+    builtin: false
+  },
+  {
+    id: 't-bbbb2222',
+    name: '调研',
+    description: '查资料、列来源',
+    prompt: '',
+    color: 'orange',
+    builtin: false
+  }
+]
 
 const FAKE_BROWSER: BrowserState = {
   host: 'project',
@@ -604,6 +639,12 @@ export function createMockApi(): CodeletApi {
 
   const snapshotListeners = new Set<(snapshot: HostSnapshot) => void>()
   const eventListeners = new Set<(events: SessionEvent[]) => void>()
+  /** 预览模式的类型清单 —— 每个实例一份，改的是副本 */
+  const fakeAgentTypes: AgentTypeDef[] = FAKE_AGENT_TYPES.map((def) => ({ ...def }))
+  const agentTypeListeners = new Set<(types: AgentTypeDef[]) => void>()
+  function emitAgentTypes(): void {
+    for (const listener of agentTypeListeners) listener(fakeAgentTypes.map((def) => ({ ...def })))
+  }
   /** 收到中止请求的标签 —— prompt 的循环靠它提前退出 */
   const aborted = new Set<string>()
   /** 正在中止的标签 —— 快照里暴露出去，界面靠它显示「停止中」 */
@@ -638,7 +679,7 @@ export function createMockApi(): CodeletApi {
       // 演示用：会话名跟 agent 名故意不一样，好在悬停气泡里看出两行
       sessionTitle: `${tab.title} · 会话`,
       // 演示用：第二个 agent 当成产品 agent，好看到「窄对话 + 预览」的形态
-      type: (index === 2 ? 'product' : 'general') as 'general' | 'product',
+      type: index === 2 ? 'product' : index === 3 ? 't-aaaa1111' : 'general',
       // 演示用：第一个 agent 摆进归档区，好在设置里看到「恢复 / 删除」
       archivedAt: index === 0 ? 1794800000000 : null,
       instance: index + 1,
@@ -1131,6 +1172,62 @@ export function createMockApi(): CodeletApi {
     }),
     setSetting: async () => true,
     openSettingsWindow: async () => undefined,
+
+    // —— agent 类型（预览模式：内存里改，刷新就还原）——
+    listAgentTypes: async () => [...fakeAgentTypes],
+    createAgentType: async (draft: AgentTypeDraft): Promise<AgentTypeSaveResult> => {
+      const name = draft.name.trim()
+      if (!name) return { ok: false, error: '名字不能为空' }
+      if (fakeAgentTypes.some((def) => def.name === name)) {
+        return { ok: false, error: '已经有同名的 agent' }
+      }
+      const def: AgentTypeDef = {
+        id: `t-${Math.random().toString(16).slice(2, 10)}`,
+        name,
+        description: draft.description,
+        prompt: draft.prompt,
+        color: draft.color,
+        builtin: false
+      }
+      fakeAgentTypes.push(def)
+      emitAgentTypes()
+      return { ok: true, type: def }
+    },
+    updateAgentType: async (id: string, draft: AgentTypeDraft): Promise<AgentTypeSaveResult> => {
+      const def = fakeAgentTypes.find((item) => item.id === id)
+      if (!def) return { ok: false, error: '这个 agent 类型不在了' }
+      if (def.builtin) {
+        def.prompt = draft.prompt
+      } else {
+        const name = draft.name.trim()
+        if (!name) return { ok: false, error: '名字不能为空' }
+        if (fakeAgentTypes.some((item) => item.id !== id && item.name === name)) {
+          return { ok: false, error: '已经有同名的 agent' }
+        }
+        Object.assign(def, {
+          name,
+          description: draft.description,
+          prompt: draft.prompt,
+          color: draft.color
+        })
+      }
+      emitAgentTypes()
+      return { ok: true, type: { ...def } }
+    },
+    removeAgentType: async (id: string): Promise<AgentTypeRemoveResult> => {
+      const def = fakeAgentTypes.find((item) => item.id === id)
+      if (!def) return { ok: false, error: '这个 agent 类型不在了' }
+      if (def.builtin) return { ok: false, error: '内置的 agent 类型不能删除' }
+      const usedBy = snapshot().agents.filter((agent) => agent.type === id).length
+      if (usedBy > 0) return { ok: false, error: `有 ${usedBy} 个 agent 在用`, usedBy }
+      fakeAgentTypes.splice(fakeAgentTypes.indexOf(def), 1)
+      emitAgentTypes()
+      return { ok: true }
+    },
+    onAgentTypesChanged: (listener) => {
+      agentTypeListeners.add(listener)
+      return () => agentTypeListeners.delete(listener)
+    },
     onConsoleEvent: () => () => undefined,
 
     // —— 大模型管理（预览模式的假数据）——

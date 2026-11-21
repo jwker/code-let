@@ -1,9 +1,9 @@
 import { PANE_LAYOUT, paneLayoutFor } from '@contract/index'
-import type { AgentType, ProjectPane } from '@contract/index'
+import type { AgentTypeDef, ProjectPane } from '@contract/index'
 import { useEffect } from 'react'
 import { ConversationArea } from '../conversation/ConversationArea'
 import { ConversationTreeEntry } from '../conversation/ConversationTreeEntry'
-import { useStore } from '../store'
+import { typeDefOf, useStore } from '../store'
 import { FileTree } from './FileTree'
 import { DocsList } from './DocsList'
 import { SettingsList } from './ProjectSettings'
@@ -59,8 +59,9 @@ export function Zone5() {
   const projectTabs = useStore((s) => s.snapshot.projectTabs)
   const activeProjectTabId = useStore((s) => s.snapshot.activeProjectTabId)
 
+  const agentTypes = useStore((s) => s.agentTypes)
   const activeAgent = agents.find((agent) => agent.id === activeAgentId) ?? null
-  const agentType: AgentType | null = activeAgent?.type ?? null
+  const agentDef = typeDefOf(agentTypes, activeAgent?.type)
   // 目录取自**活动项目标签**，不要拿活动 agent 去推 —— 那个可能属于别的项目
   const cwd = projectTabs.find((tab) => tab.id === activeProjectTabId)?.cwd ?? ''
 
@@ -124,7 +125,7 @@ export function Zone5() {
     )
   }
 
-  if (pane === 'agent' && agentType === 'product') {
+  if (pane === 'agent' && agentDef?.id === 'product' && agentDef.builtin) {
     /*
      * 产品 agent：区域 5 是**对话**、区域 6 是它自己的预览（D52）。
      *
@@ -156,11 +157,14 @@ export function Zone5() {
 }
 
 /** 这个入口有没有区域 5 —— App 用它决定要不要渲染整列 */
-export function hasZone5(pane: ReturnType<typeof useStore.getState>['pane'], agentType: AgentType | null): boolean {
-  return paneLayoutFor(pane, agentType).zone5 !== null
+export function hasZone5(
+  pane: ReturnType<typeof useStore.getState>['pane'],
+  agentDef: AgentTypeDef | null
+): boolean {
+  return paneLayoutFor(pane, agentDef).zone5 !== null
 }
 
 /** 这个入口的区域 5 默认宽度 */
-export function zone5Default(pane: ProjectPane | 'agent', agentType: AgentType | null): number {
-  return paneLayoutFor(pane, agentType).zone5 ?? PANE_LAYOUT.code.zone5 ?? 268
+export function zone5Default(pane: ProjectPane | 'agent', agentDef: AgentTypeDef | null): number {
+  return paneLayoutFor(pane, agentDef).zone5 ?? PANE_LAYOUT.code.zone5 ?? 268
 }

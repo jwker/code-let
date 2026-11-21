@@ -352,10 +352,11 @@ export async function openSettingsWindow(): Promise<void> {
     return
   }
   const win = new BrowserWindow({
-    width: 1000,
-    height: 800,
-    minWidth: 560,
-    minHeight: 420,
+    // 两栏面板（列表 + 编辑区）要放得下：160 导航 + 240 列表 + 至少 480 编辑
+    width: 1200,
+    height: 820,
+    minWidth: 960,
+    minHeight: 600,
     title: '设置',
     show: false,
     webPreferences: {

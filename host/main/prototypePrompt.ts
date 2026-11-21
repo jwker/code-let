@@ -1,11 +1,15 @@
 import { resolve } from 'node:path'
-import type { AgentType } from '@contract/index'
+import { capabilitiesOf } from '@contract/index'
+import type { AgentTypeDef } from '@contract/index'
 
 /**
  * 产品 agent 的系统提示片段：原型写到哪、每一块要带 `data-block`。
  *
- * 只给产品 agent 用（通用 / 开发 agent 返回空数组）—— 这是产品 agent 的产品行为，
+ * 只有带预览能力的类型（今天就是内置的产品 agent）拿得到 —— 这是产品行为，
  * 不是某个工具的提示，所以不进全局系统提示。
+ *
+ * 「能不能有预览」问的是能力（`capabilitiesOf`），不是类型名：自定义 agent
+ * 不走这条路，以后真让类型带预览，改的是能力函数而不是这里。
  *
  * 块号的四条规矩（保住已有的号、不重排、不复用、找不到就明说）挂在
  * `browser_blocks` 的工具提示上，这里不重复。
@@ -14,12 +18,12 @@ import type { AgentType } from '@contract/index'
  * 或新开一个才会用新的目录。
  */
 export function prototypePromptFragment(input: {
-  type: AgentType
+  type: AgentTypeDef | null
   cwd: string
   /** 项目内的原型目录（相对路径），来自项目设置 */
   prototypeDir: string
 }): string[] {
-  if (input.type !== 'product') return []
+  if (!capabilitiesOf(input.type).preview) return []
   const dir = resolve(input.cwd, input.prototypeDir)
   return [
     [

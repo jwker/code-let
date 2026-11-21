@@ -28,7 +28,6 @@ export {
 } from './annotation'
 export type {
   AgentInfo,
-  AgentType,
   PaneLayout,
   PaneLayoutKey,
   ProjectPane,
@@ -36,13 +35,34 @@ export type {
   ProjectTabInfo
 } from './agents'
 export {
-  AGENT_TYPE_LABEL,
   PANE_LAYOUT,
   ZONE5_MAX,
   ZONE5_MIN,
-  defaultAgentName,
   paneLayoutFor
 } from './agents'
+export type {
+  AgentCapabilities,
+  AgentColorId,
+  AgentTypeDef,
+  AgentTypeDraft,
+  AgentTypeRemoveResult,
+  AgentTypeSaveResult,
+  AgentTypeValidation
+} from './agentTypes'
+export {
+  AGENT_COLORS,
+  AGENT_COLOR_LABEL,
+  AGENT_TYPE_LIMITS,
+  BUILTIN_AGENT_TYPES,
+  UNKNOWN_AGENT_TYPE_LABEL,
+  UNKNOWN_AGENT_TYPE_NAME,
+  builtinTypeDef,
+  capabilitiesOf,
+  charCount,
+  defaultAgentName,
+  leastUsedColor,
+  validateTypeDraft
+} from './agentTypes'
 export type {
   ConsoleEvent,
   ConsoleExportProgress,
@@ -71,7 +91,13 @@ import type {
   ConsoleListResult,
   ConsoleStats
 } from './console'
-import type { AgentInfo, AgentType, ProjectPaneView, ProjectTabInfo } from './agents'
+import type { AgentInfo, ProjectPaneView, ProjectTabInfo } from './agents'
+import type {
+  AgentTypeDef,
+  AgentTypeDraft,
+  AgentTypeRemoveResult,
+  AgentTypeSaveResult
+} from './agentTypes'
 import type { AnnotationEvent, AnnotationState, BlockCitation } from './annotation'
 import type { PreviewEntry } from './preview'
 import type { SessionTree, TreeNavigateResult } from './tree'
@@ -260,6 +286,14 @@ export const IPC = {
   settingsSet: 'host:settings:set',
   /** 设置：打开设置窗口 */
   settingsOpen: 'host:settings:open',
+  /** agent 类型：定义清单 */
+  agentTypesList: 'host:agentTypes:list',
+  /** agent 类型：新建一个自定义 agent */
+  agentTypesCreate: 'host:agentTypes:create',
+  /** agent 类型：改一个（内置只收提示词） */
+  agentTypesUpdate: 'host:agentTypes:update',
+  /** agent 类型：删一个自定义 agent（在用就不让删） */
+  agentTypesRemove: 'host:agentTypes:remove',
   /** 大模型：provider 清单（带凭据状态） */
   modelProviders: 'host:model:providers',
   /** 大模型：模型清单 */
@@ -302,7 +336,9 @@ export const IPC_EVENTS = {
   /** 调试控制台：有新记录 / 导出进度 */
   console: 'host:event:console',
   /** 大模型：登录过程中的事件 */
-  model: 'host:event:model'
+  model: 'host:event:model',
+  /** agent 类型清单变了 —— 直接带新的一份，不让人再拉一次 */
+  agentTypes: 'host:event:agentTypes'
 } as const
 
 export type IpcEventChannel = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS]
@@ -905,7 +941,7 @@ export interface CodeletApi {
   /** 打开一个已有会话 → 开成新标签 */
   openConversation(path: string, cwd: string): Promise<HostSnapshot>
   /** 在某个目录里新建会话 → 开成新标签。name 为空时标题退回首条用户消息 */
-  newConversation(cwd: string, name?: string, type?: AgentType): Promise<HostSnapshot>
+  newConversation(cwd: string, name?: string, type?: string): Promise<HostSnapshot>
   /** 切到某个标签 */
   activateAgent(agentId: string): Promise<HostSnapshot>
   /** 以此 agent 新建实例：配置照搬，会话是新的 */
@@ -1112,6 +1148,16 @@ export interface CodeletApi {
   getSettings(): Promise<Record<string, unknown>>
   /** 设置：写一个取值 */
   setSetting(id: string, value: unknown): Promise<boolean>
+  /** agent 类型：定义清单（内置三个在前，自定义按创建顺序） */
+  listAgentTypes(): Promise<AgentTypeDef[]>
+  /** agent 类型：新建一个自定义 agent */
+  createAgentType(draft: AgentTypeDraft): Promise<AgentTypeSaveResult>
+  /** agent 类型：改一个（内置类型只收提示词） */
+  updateAgentType(id: string, draft: AgentTypeDraft): Promise<AgentTypeSaveResult>
+  /** agent 类型：删一个自定义 agent；被 agent 使用时拒绝并给出数量 */
+  removeAgentType(id: string): Promise<AgentTypeRemoveResult>
+  /** 订阅 agent 类型清单的变化 */
+  onAgentTypesChanged(listener: (types: AgentTypeDef[]) => void): () => void
   /** 打开设置窗口 */
   openSettingsWindow(): Promise<void>
   /** 大模型：provider 清单（带凭据状态） */

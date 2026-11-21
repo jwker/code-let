@@ -100,6 +100,38 @@
   --av-dev-fg: #7fa8e8;
   --av-product-bg: #241a3a;
   --av-product-fg: #a98ae0;
+  /*
+   * 自定义 agent 的 12 组配色（`contract/agentTypes.ts` 的 AgentColorId）。
+   * 深色一套、浅色一套，用户选的是「一组」而不是一个色值 ——
+   * 头像上还有字，对比度得由令牌保证。
+   */
+  --av-c-graphite-bg: #26262b;
+  --av-c-graphite-fg: #a8a8b0;
+  --av-c-blue-bg: #16233a;
+  --av-c-blue-fg: #7fa8e8;
+  --av-c-sky-bg: #12262f;
+  --av-c-sky-fg: #78c9e6;
+  --av-c-teal-bg: #12262a;
+  --av-c-teal-fg: #5ecfd6;
+  --av-c-green-bg: #16281c;
+  --av-c-green-fg: #7ae3b2;
+  --av-c-olive-bg: #22260f;
+  --av-c-olive-fg: #c3cf7a;
+  --av-c-yellow-bg: #2a2113;
+  --av-c-yellow-fg: #e5b75c;
+  --av-c-orange-bg: #2b1d12;
+  --av-c-orange-fg: #f0a566;
+  --av-c-red-bg: #2c1717;
+  --av-c-red-fg: #f2776b;
+  --av-c-pink-bg: #2b1622;
+  --av-c-pink-fg: #f59ac0;
+  --av-c-purple-bg: #241a3a;
+  --av-c-purple-fg: #a98ae0;
+  --av-c-berry-bg: #2a1426;
+  --av-c-berry-fg: #e07ab4;
+  /* 未知类型：灰，不在用户可选的 12 组里 */
+  --av-unknown-bg: #24242a;
+  --av-unknown-fg: #7d7d88;
   /* ANSI 基础 16 色 —— 工具输出的颜色还原走这里（R4） */
   --ansi-black: #6a6a76;
   --ansi-red: #f2776b;
@@ -179,6 +211,33 @@
   --av-dev-fg: #2a5db0;
   --av-product-bg: #f0eafc;
   --av-product-fg: #6b46b8;
+  /* 自定义 agent 的 12 组配色 —— 浅色一套 */
+  --av-c-graphite-bg: #ececee;
+  --av-c-graphite-fg: #6e6e76;
+  --av-c-blue-bg: #e7effc;
+  --av-c-blue-fg: #2a5db0;
+  --av-c-sky-bg: #e6f4fb;
+  --av-c-sky-fg: #1b6f92;
+  --av-c-teal-bg: #e2f4f4;
+  --av-c-teal-fg: #0f7b83;
+  --av-c-green-bg: #e4f5ec;
+  --av-c-green-fg: #2e7d53;
+  --av-c-olive-bg: #f1f3df;
+  --av-c-olive-fg: #6b7320;
+  --av-c-yellow-bg: #fdf3d9;
+  --av-c-yellow-fg: #8a6310;
+  --av-c-orange-bg: #fcefe2;
+  --av-c-orange-fg: #a35a12;
+  --av-c-red-bg: #fcecea;
+  --av-c-red-fg: #b8342a;
+  --av-c-pink-bg: #fcecf3;
+  --av-c-pink-fg: #b83a7a;
+  --av-c-purple-bg: #f0eafc;
+  --av-c-purple-fg: #6b46b8;
+  --av-c-berry-bg: #f9e9f0;
+  --av-c-berry-fg: #8e2f5f;
+  --av-unknown-bg: #f0f0f1;
+  --av-unknown-fg: #8b8b96;
   /* ANSI 基础 16 色 —— 工具输出的颜色还原走这里（R4） */
   --ansi-black: #4b4b55;
   --ansi-red: #b8342a;

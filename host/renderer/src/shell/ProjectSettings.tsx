@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AGENT_TYPE_LABEL, type AgentInfo, type ConversationInfo } from '@contract/index'
-import { useStore } from '../store'
+import { UNKNOWN_AGENT_TYPE_LABEL, type AgentInfo, type ConversationInfo } from '@contract/index'
+import { typeDefOf, useStore } from '../store'
 import { host } from '../host'
 import { AgentAvatar } from './AgentAvatar'
 import { RenameAgentDialog } from './AgentContextMenu'
@@ -97,6 +97,7 @@ function ArchiveList({ agents }: { agents: ReturnType<typeof useStore.getState>[
   const [pendingDelete, setPendingDelete] = useState<string | null>(null)
   /** 正在改名的那个 —— 归档的 agent 不在窄轨里，右键不到，所以这里要有入口 */
   const [renaming, setRenaming] = useState<AgentInfo | null>(null)
+  const agentTypes = useStore((s) => s.agentTypes)
   const archived = agents.filter((agent) => agent.archivedAt !== null)
   const target = archived.find((agent) => agent.id === pendingDelete) ?? null
 
@@ -118,11 +119,11 @@ function ArchiveList({ agents }: { agents: ReturnType<typeof useStore.getState>[
 
       {archived.map((agent) => (
         <div key={agent.id} className="archive-row">
-          <AgentAvatar type={agent.type} size={26} />
+          <AgentAvatar def={typeDefOf(agentTypes, agent.type)} size={26} />
           <div className="archive-row-text">
             <div className="archive-row-name">{agent.name}</div>
             <div className="archive-row-meta">
-              {AGENT_TYPE_LABEL[agent.type]} · {agent.turns} 轮 ·{' '}
+              {typeDefOf(agentTypes, agent.type)?.name ?? UNKNOWN_AGENT_TYPE_LABEL} · {agent.turns} 轮 ·{' '}
               {agent.archivedAt ? `归档于 ${formatDate(agent.archivedAt)}` : '已归档'}
             </div>
           </div>

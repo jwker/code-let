@@ -120,7 +120,7 @@ describe('新建对话的名字', () => {
     const { state, pi } = makeState()
     await state.newConversation('/tmp/project')
     // 没填名字的 agent 先用默认名（D53）；第一条消息落盘后由会话标题接管
-    expect(state.snapshot().agents[0]!.name).toBe('通用 1')
+    expect(state.snapshot().agents[0]!.name).toBe('基础 1')
     expect(pi.named).toHaveLength(0)
   })
 

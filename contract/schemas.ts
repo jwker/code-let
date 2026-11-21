@@ -107,10 +107,12 @@ export const agentCreateSchema = z.object({
   /** 新建时定的名字；不给就用默认名 */
   name: z.string().optional(),
   /**
-   * 基础 agent 的类型（D62）。不给就是通用 —— 老调用方（比如测试）不用改。
+   * 类型 id（D62）。内置三个之一，或者是用户自定义的 `t-xxxxxxxx`。
+   * 不给就是基础 —— 老调用方（比如测试）不用改。
    * **创建后不可改**：它决定区域 5/6 的布局，也决定实例编号。
+   * 不在这里枚举合法值：类型清单是用户可改的数据（ADR-0004）。
    */
-  type: z.enum(['general', 'dev', 'product']).optional()
+  type: z.string().min(1).optional()
 })
 
 /** 导入会话：只要会话文件路径，cwd 从会话清单里查 */
@@ -264,6 +266,30 @@ export const modelSelectSchema = z.object({
   provider: z.string().min(1),
   id: z.string().min(1),
   persist: z.boolean()
+})
+
+/**
+ * agent 类型的草稿。
+ *
+ * 这里只卡形状（都是字符串），长度与颜色由 `validateTypeDraft` 统一校验 ——
+ * 渲染层用同一份函数做即时提示，两边不会出现两套规则。
+ */
+export const agentTypeDraftSchema = z.object({
+  name: z.string(),
+  description: z.string(),
+  prompt: z.string(),
+  color: z.string()
+})
+
+export const agentTypeCreateSchema = agentTypeDraftSchema
+
+export const agentTypeUpdateSchema = z.object({
+  id: z.string().min(1),
+  draft: agentTypeDraftSchema
+})
+
+export const agentTypeRemoveSchema = z.object({
+  id: z.string().min(1)
 })
 
 export type AgentIdPayload = z.infer<typeof agentIdSchema>

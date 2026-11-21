@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type {
+  AgentTypeDef,
   AnnotationState,
   BlockCitation,
   ConversationMode,
@@ -241,8 +242,24 @@ function saveModes(modes: ModeMap): void {
   }
 }
 
+/** 按 id 找一份类型定义；找不到（未知 agent）就是 null */
+export function typeDefOf(
+  types: readonly AgentTypeDef[],
+  id: string | null | undefined
+): AgentTypeDef | null {
+  if (!id) return null
+  return types.find((def) => def.id === id) ?? null
+}
+
 interface RendererStore {
   snapshot: HostSnapshot
+  /**
+   * agent 类型的定义清单（内置三个在前）。
+   *
+   * **不在快照里** —— 50 条 × 4000 字的提示词不该随每次会话快照传输。
+   * 启动拉一次，主进程推 `onAgentTypesChanged` 时整份替换。
+   */
+  agentTypes: AgentTypeDef[]
   /**
    * 窄轨当前选中的是什么（PLAN.md D51 / D52）。
    *
@@ -358,6 +375,10 @@ interface RendererStore {
   treeErrors: Record<string, string>
 
   setSnapshot: (snapshot: HostSnapshot) => void
+  /** 拉一次类型定义清单 */
+  loadAgentTypes: () => Promise<void>
+  /** 收下主进程推来的整份清单 */
+  setAgentTypes: (types: AgentTypeDef[]) => void
   setPane: (pane: PaneTarget) => void
   setCodeMode: (mode: CodeMode) => void
   /** 读 Git 状态（区域 5 的「改动」tab 用） */
@@ -446,6 +467,7 @@ interface RendererStore {
 
 export const useStore = create<RendererStore>((set, get) => ({
   snapshot: EMPTY_SNAPSHOT,
+  agentTypes: [],
   pane: loadPane(),
   mode: 'normal',
   theme: loadTheme(),
@@ -500,6 +522,12 @@ export const useStore = create<RendererStore>((set, get) => ({
     })
   },
 
+
+  loadAgentTypes: async () => {
+    set({ agentTypes: await host.listAgentTypes() })
+  },
+
+  setAgentTypes: (types) => set({ agentTypes: types }),
 
   setPane: (pane) => {
     savePane(pane)

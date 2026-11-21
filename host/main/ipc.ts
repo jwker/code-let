@@ -43,6 +43,9 @@ import {
   agentImportSchema,
   agentRenameSchema,
   agentOpenSchema,
+  agentTypeCreateSchema,
+  agentTypeUpdateSchema,
+  agentTypeRemoveSchema,
   projectTabIdSchema,
   projectPaneSchema,
   temporaryIdSchema,
@@ -54,9 +57,30 @@ import {
   treeNavigateSchema
 } from '@contract/schemas'
 import { compactSessionEvent, trimMessageUpdate } from '@contract/stream'
+import type { AgentColorId, AgentTypeDef, AgentTypeDraft } from '@contract/index'
 import type { HostState } from './state'
 import type { BrowserManager } from './browser'
 import { listDocs } from './docs'
+
+/**
+ * 渲染层发来的草稿。
+ *
+ * 形状已经由 zod 卡过（四个字符串），颜色在这里收窄成色板 id ——
+ * 具体的合法值由 `validateTypeDraft` 判定，不在 IPC 层重复一份枚举。
+ */
+function toDraft(payload: {
+  name: string
+  description: string
+  prompt: string
+  color: string
+}): AgentTypeDraft {
+  return {
+    name: payload.name,
+    description: payload.description,
+    prompt: payload.prompt,
+    color: payload.color as AgentColorId
+  }
+}
 
 function broadcast(channel: string, payload: unknown): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -118,6 +142,11 @@ export function registerIpc(
 
   state.on('snapshot', (snapshot) => {
     broadcast(IPC_EVENTS.snapshot, snapshot)
+  })
+
+  // 定义清单变了就推一份新的 —— 设置窗口与主窗口都要立刻跟上
+  state.on('agent-types', (types: AgentTypeDef[]) => {
+    broadcast(IPC_EVENTS.agentTypes, types)
   })
 
   state.on('session-event', (event: { type: string; data: unknown; agentId: string }) => {
@@ -518,6 +547,25 @@ export function registerIpc(
     await state.selectModel(agentId, provider, id, persist)
   })
 
+  // —— agent 类型 ——
+
+  ipcMain.handle(IPC.agentTypesList, () => state.listAgentTypes())
+
+  ipcMain.handle(IPC.agentTypesCreate, async (_event, payload: unknown) => {
+    const draft = agentTypeCreateSchema.parse(payload)
+    return state.createAgentType(toDraft(draft))
+  })
+
+  ipcMain.handle(IPC.agentTypesUpdate, async (_event, payload: unknown) => {
+    const { id, draft } = agentTypeUpdateSchema.parse(payload)
+    return state.updateAgentType(id, toDraft(draft))
+  })
+
+  ipcMain.handle(IPC.agentTypesRemove, async (_event, payload: unknown) => {
+    const { id } = agentTypeRemoveSchema.parse(payload)
+    return state.removeAgentType(id)
+  })
+
   return () => {
     coalescer.dispose()
     ipcMain.removeHandler(IPC.snapshotGet)
@@ -549,6 +597,10 @@ export function registerIpc(
     ipcMain.removeHandler(IPC.filesOpenExternal)
     ipcMain.removeHandler(IPC.filesReload)
     ipcMain.removeHandler(IPC.modelsList)
+    ipcMain.removeHandler(IPC.agentTypesList)
+    ipcMain.removeHandler(IPC.agentTypesCreate)
+    ipcMain.removeHandler(IPC.agentTypesUpdate)
+    ipcMain.removeHandler(IPC.agentTypesRemove)
     ipcMain.removeHandler(IPC.attachmentsPick)
     ipcMain.removeHandler(IPC.browserGet)
     ipcMain.removeHandler(IPC.previewEntry)

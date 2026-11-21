@@ -17,17 +17,25 @@ export interface MenuItemState {
 /**
  * 哪些项在什么状态下可点。
  *
- * 只有「归档」受状态限制：正在跑的不许归档（D53）。
+ * 「归档」受运行状态限制：正在跑的不许归档（D53）。
  * 删除反过来**允许**在运行时做 —— 它会先 abort 再移文件，用户点之前已经被确认过。
+ *
+ * 「以此 agent 新建实例」多一个限制：类型定义已经找不到（未知 agent）时置灰 ——
+ * 新建出来的会是一条同样挂着未知类型的记录，没有意义。
  */
-export function agentMenuState(agent: Pick<AgentInfo, 'streaming'>): {
+export function agentMenuState(
+  agent: Pick<AgentInfo, 'streaming'> & { typeKnown?: boolean }
+): {
   newInstance: MenuItemState
   rename: MenuItemState
   archive: MenuItemState
   remove: MenuItemState
 } {
   return {
-    newInstance: { enabled: true },
+    newInstance:
+      agent.typeKnown === false
+        ? { enabled: false, reason: '这个 agent 的类型已经不在了，新建出来也是未知类型' }
+        : { enabled: true },
     rename: { enabled: true },
     archive: agent.streaming
       ? { enabled: false, reason: '正在跑，先停下来再归档' }

@@ -8,8 +8,8 @@
  * 本文件不 import 任何运行时依赖（跟 contract 其他文件一样）。
  */
 
-/** agent 的类型。类型决定区域 5/6 怎么分派（D52），也是头像形状与颜色的来源 */
-export type AgentType = 'general' | 'dev' | 'product'
+import { capabilitiesOf } from './agentTypes'
+import type { AgentTypeDef } from './agentTypes'
 
 /** 项目级入口。agent 不在这里 —— 它在窄轨里是另一段（D51） */
 export type ProjectPane = 'code' | 'docs' | 'browser' | 'settings'
@@ -22,8 +22,8 @@ export type ProjectPane = 'code' | 'docs' | 'browser' | 'settings'
  */
 export type ProjectPaneView = ProjectPane | 'agent'
 
-/** 分派表的键：项目入口，或者 agent 类型（D52） */
-export type PaneLayoutKey = ProjectPane | AgentType
+/** 分派表的键：项目入口。agent 类型那几张已经并进 `capabilitiesOf` */
+export type PaneLayoutKey = ProjectPane
 
 /** 一个入口的布局。`zone5: null` = 没有区域 5，区域 6 直接吃满 */
 export interface PaneLayout {
@@ -36,8 +36,11 @@ export interface PaneLayout {
 /**
  * 区域 5 的分派表（D52）。
  *
- * 七个入口的布局差异只有这一个字段 —— 不给每个入口写一套布局代码。
+ * 项目入口的布局差异只有这一个字段 —— 不给每个入口写一套布局代码。
  * 宽度是默认值，用户可以拖，拖完按入口各记一份。
+ *
+ * agent 那几条不在表里：它们由类型的能力给出（`capabilitiesOf`），
+ * 因为「一个类型能不能有区域 5」不是这张表能表达的。
  */
 export const PANE_LAYOUT: Record<PaneLayoutKey, PaneLayout> = {
   // 文件树 / 文档树 / 设置分类：一列名字，268 够用
@@ -45,12 +48,7 @@ export const PANE_LAYOUT: Record<PaneLayoutKey, PaneLayout> = {
   docs: { zone5: 268 },
   settings: { zone5: 268 },
   // 没有区域 5 的入口
-  browser: { zone5: null },
-  // 通用与开发 agent 第一版只有对话
-  general: { zone5: null },
-  dev: { zone5: null },
-  // 产品 agent：窄边是对话，宽边是原型。对话比文件树要宽，下限也高
-  product: { zone5: 380, zone5Min: 320 }
+  browser: { zone5: null }
 }
 
 /** 区域 5 的默认可拖下限 */
@@ -61,32 +59,16 @@ export const ZONE5_MAX = 560
 /**
  * 某个入口的区域 5 布局。
  *
- * `pane === 'agent'` 时按 agent 类型查表；类型还不知道（没选 agent）就没有区域 5。
+ * `pane === 'agent'` 时问类型的能力；类型还不知道（没选 agent）就没有区域 5。
  */
 export function paneLayoutFor(
   pane: ProjectPaneView,
-  agentType?: AgentType | null
+  def?: AgentTypeDef | null
 ): PaneLayout {
   if (pane === 'agent') {
-    return agentType ? PANE_LAYOUT[agentType] : { zone5: null }
+    return capabilitiesOf(def ?? null).zone5 ?? { zone5: null }
   }
   return PANE_LAYOUT[pane]
-}
-
-/** agent 类型的中文名 */
-export const AGENT_TYPE_LABEL: Record<AgentType, string> = {
-  general: '通用',
-  dev: '开发',
-  product: '产品'
-}
-
-/**
- * 新建 agent 时的默认名字：类型 + 实例序号。
- *
- * 用户改过名之后就用他自己的名字，这个只在创建时算一次。
- */
-export function defaultAgentName(type: AgentType, instance: number): string {
-  return `${AGENT_TYPE_LABEL[type]} ${instance}`
 }
 
 /**
@@ -126,7 +108,8 @@ export interface AgentInfo {
    * 窄轨的悬停气泡把它作为第二行显示，方便对照。
    */
   sessionTitle: string | null
-  type: AgentType
+  /** 类型 id。内置是 `general` / `dev` / `product`，也可能是用户自定义的 */
+  type: string
   /**
    * 同类型里的第几个实例。
    *

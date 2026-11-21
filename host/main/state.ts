@@ -3,7 +3,10 @@ import { existsSync, statSync } from 'node:fs'
 import { basename, dirname, join, normalize, relative, resolve } from 'node:path'
 import type {
   AgentInfo,
-  AgentType,
+  AgentTypeDef,
+  AgentTypeDraft,
+  AgentTypeRemoveResult,
+  AgentTypeSaveResult,
   CommandArgumentOption,
   GitDiff,
   GitDiffScope,
@@ -56,6 +59,7 @@ import {
 import { PiRuntime, type PiEvent, type PiRuntimePort } from './pi/runtime'
 import { DEFAULT_PROTOTYPE_DIR, normalizePrototypeDir, ProjectStore } from './projects'
 import { prototypePromptFragment } from './prototypePrompt'
+import { AgentTypeStore } from './agentTypes'
 import {
   AgentStore,
   dueForArchive,
@@ -120,6 +124,8 @@ export class HostState extends EventEmitter {
   private readonly projects: ProjectStore
   private readonly tabStore: TabStore
   private readonly agentStore: AgentStore
+  /** agent 类型的定义清单（内置 + 自定义） */
+  private readonly agentTypes: AgentTypeStore
   private readonly pickDirectory: () => Promise<string | null>
   private readonly pickFiles: () => Promise<string[] | null>
   /** 项目标签（一个项目一条，PLAN.md D50） */
@@ -197,6 +203,7 @@ export class HostState extends EventEmitter {
     pi?: PiRuntimePort
     tabStore?: TabStore
     agentStore?: AgentStore
+    agentTypeStore?: AgentTypeStore
     projects?: ProjectStore
     pickDirectory?: () => Promise<string | null>
     pickFiles?: () => Promise<string[] | null>
@@ -210,6 +217,9 @@ export class HostState extends EventEmitter {
     this.tabStore = options?.tabStore ?? new TabStore()
     // 默认跟 tabs.json 放同一个目录（生产的 userData、测试的临时目录都是这个规则）
     this.agentStore = options?.agentStore ?? new AgentStore(join(dirname(this.tabStore.path), 'agents.json'))
+    this.agentTypes =
+      options?.agentTypeStore ??
+      new AgentTypeStore(join(dirname(this.tabStore.path), 'agentTypes.json'))
     this.pickDirectory = options?.pickDirectory ?? pickDirectory
     this.pickFiles = options?.pickFiles ?? pickFiles
     this.console = new DebugConsoleStore(options?.consoleDir ?? null)
@@ -267,17 +277,71 @@ export class HostState extends EventEmitter {
   }
 
   /**
-   * 产品 agent 的系统提示片段：原型写到项目的原型目录、每块带 `data-block`。
+   * 这个 agent 的系统提示片段：用户的提示词 + 程序片段。
    *
-   * 通用 / 开发 agent 返回空数组；项目管理里没有这个项目时按默认目录算。
+   * 顺序固定：用户在前、程序在后，界面不给调序。用户提示词为空（或只有空白）
+   * 就不占位置 —— 空串进 `appendSystemPrompt` 会让 pi 多一段空内容。
+   * 类型找不到定义（未知 agent）时只可能拿到空数组。
+   *
+   * 只在建 runtime 时取：改了提示词之后，已开的会话要 `/reload` 或新建才会变。
    */
-  private prototypePromptFor(agent: Pick<AgentRecord, 'type' | 'cwd'>): string[] {
-    const project = this.projects.list().find((item) => item.path === agent.cwd)
+  private promptFragmentsFor(agent: Pick<AgentRecord, 'type' | 'cwd'>): string[] {
+    const def = this.agentTypes.get(agent.type)
+    const user = def && def.prompt.trim() !== '' ? [def.prompt] : []
+    return [...user, ...this.programFragmentFor(def, agent.cwd)]
+  }
+
+  /**
+   * 程序片段：按类型能力生成、用户改不了的那部分。
+   *
+   * 今天只有带预览能力的类型（内置产品 agent）有；项目管理里没有这个项目时
+   * 按默认原型目录算。
+   */
+  private programFragmentFor(def: AgentTypeDef | null, cwd: string): string[] {
+    const project = this.projects.list().find((item) => item.path === cwd)
     return prototypePromptFragment({
-      type: agent.type,
-      cwd: agent.cwd,
+      type: def,
+      cwd,
       prototypeDir: project?.prototypeDir ?? DEFAULT_PROTOTYPE_DIR
     })
+  }
+
+  // ---------------------------------------------------------------------
+  // agent 类型（ADR-0004）
+  // ---------------------------------------------------------------------
+
+  /** 定义清单：内置三个在前，自定义按创建顺序 */
+  listAgentTypes(): AgentTypeDef[] {
+    return this.agentTypes.list()
+  }
+
+  /** 新建一个自定义 agent。成功之后推一份新的清单给所有窗口 */
+  createAgentType(draft: AgentTypeDraft): AgentTypeSaveResult {
+    const result = this.agentTypes.create(draft, Date.now())
+    if (result.ok) this.emit('agent-types', this.agentTypes.list())
+    return result
+  }
+
+  /** 改一个。内置类型只收提示词（`AgentTypeStore.update` 里挡） */
+  updateAgentType(id: string, draft: AgentTypeDraft): AgentTypeSaveResult {
+    const result = this.agentTypes.update(id, draft)
+    if (result.ok) this.emit('agent-types', this.agentTypes.list())
+    return result
+  }
+
+  /**
+   * 删一个自定义类型。
+   *
+   * **有 agent 在用就不让删** —— 不是怕麻烦：删掉之后那些 agent 会变成
+   * 未知 agent，用户看到的是「头像变灰、提示词没了」，而他只是想清理列表。
+   * 归档的也算在用 —— 记录还在，恢复回来还要靠这个类型。
+   */
+  removeAgentType(id: string): AgentTypeRemoveResult {
+    const usedBy = this.agentStore.list().filter((agent) => agent.type === id).length
+    if (usedBy > 0) return { ok: false, error: `有 ${usedBy} 个 agent 在用`, usedBy }
+    const result = this.agentTypes.remove(id)
+    if (result.ok) this.emit('agent-types', this.agentTypes.list())
+    return result
   }
 
   /**
@@ -496,7 +560,7 @@ export class HostState extends EventEmitter {
         cwd: agent.cwd,
         path: hasFile ? (agent.sessionPath ?? undefined) : undefined,
         lazy: true,
-        appendSystemPrompt: this.prototypePromptFor(agent)
+        appendSystemPrompt: this.promptFragmentsFor(agent)
       })
       // 文件已经不在了 —— 上面重开了一条新会话，旧路径留着只会误导
       if (!hasFile) this.agentStore.update(agent.id, { sessionPath: null })
@@ -673,7 +737,7 @@ export class HostState extends EventEmitter {
    */
   private async createAgent(options: {
     cwd: string
-    type?: AgentType
+    type?: string
     name?: string
     sessionPath?: string | null
     from?: AgentRecord | null
@@ -684,12 +748,14 @@ export class HostState extends EventEmitter {
     await this.pi.openAgent(id, {
       cwd: options.cwd,
       ...(options.sessionPath ? { path: options.sessionPath } : {}),
-      appendSystemPrompt: this.prototypePromptFor({ type, cwd: options.cwd })
+      appendSystemPrompt: this.promptFragmentsFor({ type, cwd: options.cwd })
     })
     const sessionPath = options.sessionPath ?? this.pi.agentState(id).sessionFile
+    const def = this.agentTypes.get(type)
     const record = newAgentRecord({
       id,
       type,
+      ...(def ? { typeDef: def } : {}),
       instance: this.agentStore.nextInstance(type, options.cwd),
       cwd: options.cwd,
       sessionPath,
@@ -793,7 +859,7 @@ export class HostState extends EventEmitter {
    * 也当 agent 名。名字在会话文件还没建的时候只存在内存里，
    * 等第一条消息落盘时一并写出去 —— Pi 就是这么设计的，不用额外处理。
    */
-  async newConversation(cwd: string, name?: string, type?: AgentType): Promise<void> {
+  async newConversation(cwd: string, name?: string, type?: string): Promise<void> {
     const trimmed = name?.trim() ?? ''
     const agent = await this.createAgent({
       cwd,
@@ -802,12 +868,14 @@ export class HostState extends EventEmitter {
     })
     if (!trimmed) return
     await this.pi.setSessionName(agent.id, trimmed)
+    // 新建时写的 `session_info` 条目也算我们自己的写入
+    this.markWritten(agent.id)
     this.readSession()
     this.push()
   }
 
-  /** 新建一个 agent（默认通用） */
-  async newAgent(cwd: string, type: AgentType = 'general', name?: string): Promise<AgentRecord> {
+  /** 新建一个 agent（默认基础） */
+  async newAgent(cwd: string, type = 'general', name?: string): Promise<AgentRecord> {
     return this.createAgent({ cwd, type, ...(name ? { name } : {}) })
   }
 
@@ -1174,7 +1242,7 @@ export class HostState extends EventEmitter {
     if (!this.pi.hasAgent(agentId)) await this.registerAgent(agent)
     // 重建时按当前项目设置刷新提示片段 —— 这样 /reload 就能吃到改过的原型目录
     await this.trackRefresh(() =>
-      this.pi.reloadAgent(agentId, { appendSystemPrompt: this.prototypePromptFor(agent) })
+      this.pi.reloadAgent(agentId, { appendSystemPrompt: this.promptFragmentsFor(agent) })
     )
     // 重建后路径可能变了（原来是「没说过话的空 agent」的话）
     const state = this.pi.agentState(agentId)

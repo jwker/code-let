@@ -1,9 +1,38 @@
-# 原型标注
+# Codelet
 
-产品 agent 在右侧预览 HTML 原型时，人和 agent 用同一套号指代原型里的某一块。
-这份词表只收这套功能自己的词。
+Codelet 自己的词，按小节归类。写工单、测试名和界面文案时用这里的说法；需要表达一个这里没有的概念，先确认是不是在造词。
 
 ## Language
+
+### agent 类型
+
+**基础 agent（base agent）**：
+agent 的类型之一（代码里的 id 仍是 `general`），也是自定义 agent 的底：没有程序提供的提示词，没有预览能力，界面上是一列对话。自动归档只针对它。
+_Avoid_: 通用 agent、通用、类型 agent、general agent
+
+**自定义 agent（custom agent）**：
+用户自己新增的一种 agent 类型：有自己的名字、说明、颜色和提示词，能力跟基础 agent 一样。
+_Avoid_: 自定义类型、自定义 agent 类型、自定义基础 agent
+
+**agent 类型（agent type）**：
+agent 的一个类别，决定界面上叫什么、头像是什么颜色、带哪段提示词。内置三个（基础 / 开发 / 产品），其余是自定义 agent。界面文案只在需要区分时用它，平时直接说基础 agent / 自定义 agent。
+_Avoid_: 基础类型、种类
+
+**提示词（prompt）**：
+用户给某个 agent 类型写的一段文字，会在该类型的会话启动时追加到系统提示末尾。空字符串等于没有，不留空串。
+_Avoid_: 自定义提示词、语气设定、persona
+
+**程序片段（program fragment）**：
+应用为某个 agent 类型生成、用户不能改的提示词片段。今天只有产品 agent 有：原型写到哪、每块要带 `data-block`。
+_Avoid_: 内置提示词、固定提示词、系统片段
+
+**未知 agent（unknown agent）**：
+agent 记录里的类型在定义清单里找不到时的状态。按一列对话显示，不注入提示词。
+_Avoid_: 失效类型、孤儿类型、坏类型
+
+### 原型标注
+
+产品 agent 在右侧预览 HTML 原型时，人和 agent 用同一套号指代原型里的某一块。
 
 **块**：
 原型 HTML 里可以被单独指代的一个区域，通常是 agent 划分出来的一段 section、一张卡片或一组按钮。

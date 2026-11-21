@@ -11,7 +11,7 @@ import { Zone6 } from './shell/Zone6'
 import { createBrowserFocusController } from './shell/browserFocus'
 import { NewAgentDialog } from './shell/NewAgentDialog'
 import { ZONE5_MAX, ZONE5_MIN, paneLayoutFor } from '@contract/index'
-import { useStore } from './store'
+import { typeDefOf, useStore } from './store'
 
 /**
  * 应用外壳（PLAN.md D51）。
@@ -34,6 +34,7 @@ export function App() {
   const sessionReady = useStore((s) => s.snapshot.session.ready)
   const pane = useStore((s) => s.pane)
   const agents = useStore((s) => s.snapshot.agents)
+  const agentTypes = useStore((s) => s.agentTypes)
   const zone5Widths = useStore((s) => s.zone5Widths)
   const setZone5Width = useStore((s) => s.setZone5Width)
   const pickerAnchor = useStore((s) => s.modelPickerAnchor)
@@ -49,7 +50,7 @@ export function App() {
 
   // 区域 5 的宽度按入口各记一份，没记过就用分派表的默认值
   const activeAgent = agents.find((agent) => agent.id === activeAgentId) ?? null
-  const layout = paneLayoutFor(pane, activeAgent?.type ?? null)
+  const layout = paneLayoutFor(pane, typeDefOf(agentTypes, activeAgent?.type))
   const zone5 = layout.zone5 !== null
   const zone5Width = zone5Widths[pane] ?? layout.zone5 ?? ZONE5_MIN
   const zone5Min = layout.zone5Min ?? ZONE5_MIN
@@ -67,6 +68,10 @@ export function App() {
   useEffect(() => {
     // 首屏拉一次快照，之后只收主进程推的
     void host.getSnapshot().then(setSnapshot)
+    // 类型定义不在快照里 —— 单独拉一次，改的时候主进程整份推过来
+    const { loadAgentTypes, setAgentTypes } = useStore.getState()
+    void loadAgentTypes()
+    const offTypes = host.onAgentTypesChanged(setAgentTypes)
 
     const offSnapshot = host.onSnapshot(setSnapshot)
     const offEvents = host.onSessionEvent(applySessionEvents)
@@ -74,6 +79,7 @@ export function App() {
     return () => {
       offSnapshot()
       offEvents()
+      offTypes()
     }
   }, [setSnapshot, applySessionEvents])
 

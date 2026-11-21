@@ -4,6 +4,10 @@ import {
   IPC_EVENTS,
   type AnnotationEvent,
   type AnnotationState,
+  type AgentTypeDef,
+  type AgentTypeDraft,
+  type AgentTypeRemoveResult,
+  type AgentTypeSaveResult,
   type BlockCitation,
   type ConsoleEvent,
   type ConsoleExportRequest,
@@ -225,6 +229,21 @@ const api: CodeletApi = {
   getSettings: () => ipcRenderer.invoke(IPC.settingsGet) as Promise<Record<string, unknown>>,
   setSetting: (id, value) => ipcRenderer.invoke(IPC.settingsSet, { id, value }) as Promise<boolean>,
   openSettingsWindow: () => ipcRenderer.invoke(IPC.settingsOpen) as Promise<void>,
+
+  listAgentTypes: () => ipcRenderer.invoke(IPC.agentTypesList) as Promise<AgentTypeDef[]>,
+  createAgentType: (draft: AgentTypeDraft) =>
+    ipcRenderer.invoke(IPC.agentTypesCreate, draft) as Promise<AgentTypeSaveResult>,
+  updateAgentType: (id: string, draft: AgentTypeDraft) =>
+    ipcRenderer.invoke(IPC.agentTypesUpdate, { id, draft }) as Promise<AgentTypeSaveResult>,
+  removeAgentType: (id: string) =>
+    ipcRenderer.invoke(IPC.agentTypesRemove, { id }) as Promise<AgentTypeRemoveResult>,
+  onAgentTypesChanged: (listener) => {
+    const handler = (_event: unknown, types: AgentTypeDef[]): void => listener(types)
+    ipcRenderer.on(IPC_EVENTS.agentTypes, handler)
+    return () => {
+      ipcRenderer.removeListener(IPC_EVENTS.agentTypes, handler)
+    }
+  },
 
   listProviders: () => ipcRenderer.invoke(IPC.modelProviders) as Promise<ProviderInfo[]>,
   listAllModels: () => ipcRenderer.invoke(IPC.modelList) as Promise<ModelEntry[]>,

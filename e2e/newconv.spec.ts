@@ -47,21 +47,21 @@ async function openNewAgent(): Promise<void> {
     }
   })
 
-  test('默认是通用 agent，名字预填「通用 + 序号」，回车直接建', async () => {
+  test('默认是基础 agent，名字预填「基础 + 序号」，回车直接建', async () => {
     await openNewAgent()
 
     const dialog = page.getByRole('dialog', { name: '新建 agent' })
-    // 启动时会先建一个兜底的通用 agent，所以这一条是「通用 2」
+    // 启动时会先建一个兜底的基础 agent，所以这一条是「基础 2」
     const input = dialog.getByRole('textbox')
-    await expect(input).toHaveValue(/^通用 \d+$/)
-    await expect(dialog.getByRole('radio', { name: /通用/ })).toHaveAttribute('aria-checked', 'true')
+    await expect(input).toHaveValue(/^基础 \d+$/)
+    await expect(dialog.getByRole('radio', { name: /基础/ })).toHaveAttribute('aria-checked', 'true')
 
     const created = await input.inputValue()
     await input.press('Enter')
     await expect(dialog).toHaveCount(0)
     // 窄轨里出现这个名字的 agent（悬停气泡里也有）
     await expect(page.getByRole('button', { name: created, exact: true })).toBeVisible()
-    // 通用 agent 只有一栏：没有区域 5，也没有浏览器
+    // 基础 agent 只有一栏：没有区域 5，也没有浏览器
     await expect(page.locator('.shell')).toHaveClass(/is-zone5-hidden/)
   })
 

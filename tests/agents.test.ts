@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PANE_LAYOUT, defaultAgentName, paneLayoutFor } from '@contract/index'
+import { PANE_LAYOUT, builtinTypeDef, paneLayoutFor } from '@contract/index'
 import {
   AgentStore,
   archiveRecord,
@@ -32,7 +32,7 @@ function makeStore(): { store: AgentStore; file: string } {
 function record(overrides: Partial<AgentRecord> = {}): AgentRecord {
   return {
     id: 'a1',
-    name: '通用 1',
+    name: '基础 1',
     type: 'general',
     instance: 1,
     cwd: '/repo',
@@ -51,38 +51,25 @@ afterEach(() => {
 })
 
 describe('区域 5 的分派表', () => {
-  it('七个入口都有布局', () => {
-    expect(Object.keys(PANE_LAYOUT).sort()).toEqual(
-      ['browser', 'code', 'dev', 'docs', 'general', 'product', 'settings'].sort()
-    )
+  it('项目入口四条', () => {
+    expect(Object.keys(PANE_LAYOUT).sort()).toEqual(['browser', 'code', 'docs', 'settings'])
   })
 
-  it('只有代码、文档、设置、产品 agent 有区域 5', () => {
+  it('代码、文档、设置有一列，浏览器没有', () => {
     expect(PANE_LAYOUT.code.zone5).toBe(268)
     expect(PANE_LAYOUT.docs.zone5).toBe(268)
     expect(PANE_LAYOUT.settings.zone5).toBe(268)
-    expect(PANE_LAYOUT.product.zone5).toBe(380)
     expect(PANE_LAYOUT.browser.zone5).toBeNull()
-    expect(PANE_LAYOUT.general.zone5).toBeNull()
-    expect(PANE_LAYOUT.dev.zone5).toBeNull()
   })
 
-  it('产品 agent 的对话比文件树宽，下限也更高', () => {
-    expect(PANE_LAYOUT.product.zone5Min).toBe(320)
-    expect(PANE_LAYOUT.code.zone5Min).toBeUndefined()
-  })
-
-  it('按入口取布局时，agent 走类型那张表', () => {
-    expect(paneLayoutFor('agent', 'product').zone5).toBe(380)
-    expect(paneLayoutFor('agent', 'general').zone5).toBeNull()
+  it('agent 走类型能力：只有产品有区域 5，对话比文件树宽', () => {
+    expect(paneLayoutFor('agent', builtinTypeDef('product')).zone5).toBe(380)
+    expect(paneLayoutFor('agent', builtinTypeDef('product')).zone5Min).toBe(320)
+    expect(paneLayoutFor('agent', builtinTypeDef('general')).zone5).toBeNull()
     // 还不知道类型 —— 给空布局，界面显示「没选 agent」
     expect(paneLayoutFor('agent', null).zone5).toBeNull()
     expect(paneLayoutFor('code').zone5).toBe(268)
-  })
-
-  it('默认名字带类型和实例序号', () => {
-    expect(defaultAgentName('general', 1)).toBe('通用 1')
-    expect(defaultAgentName('product', 3)).toBe('产品 3')
+    expect(PANE_LAYOUT.code.zone5Min).toBeUndefined()
   })
 })
 
@@ -124,7 +111,7 @@ describe('agent 清单', () => {
     expect(new AgentStore(file).get('old')?.previewUrl).toBeNull()
   })
 
-  it('缺字段的记录被丢掉，不拿默认值补', () => {
+  it('缺字段的记录被丢掉，但类型不认识的保留 —— 删一个类型不能删掉它的 agent', () => {
     const dir = mkdtempSync(join(tmpdir(), 'codelet-agents-'))
     dirs.push(dir)
     const file = join(dir, 'agents.json')
@@ -133,15 +120,15 @@ describe('agent 清单', () => {
       JSON.stringify({
         version: 1,
         agents: [
-          { id: 'ok', name: '通用 1', type: 'general', instance: 1, cwd: '/r', sessionPath: null, lastActiveAt: 1 },
+          { id: 'ok', name: '基础 1', type: 'general', instance: 1, cwd: '/r', sessionPath: null, lastActiveAt: 1 },
           // 缺 cwd
-          { id: 'bad', name: '通用 2', type: 'general', instance: 2, sessionPath: null, lastActiveAt: 1 },
-          // 类型不认识
+          { id: 'bad', name: '基础 2', type: 'general', instance: 2, sessionPath: null, lastActiveAt: 1 },
+          // 类型不认识（自定义类型被删了、或者文件被手改过）
           { id: 'bad2', name: 'x', type: 'reviewer', instance: 1, cwd: '/r', lastActiveAt: 1 }
         ]
       })
     )
-    expect(new AgentStore(file).list().map((agent) => agent.id)).toEqual(['ok'])
+    expect(new AgentStore(file).list().map((agent) => agent.id)).toEqual(['ok', 'bad2'])
   })
 
   it('文件坏了当空的，不抛', () => {
@@ -216,7 +203,7 @@ describe('自动归档', () => {
     expect(dueForArchive(agents, now, 30).map((agent) => agent.id)).toEqual(['over'])
   })
 
-  it('只挑通用 agent —— 开发与产品可能有没干完的活', () => {
+  it('只挑基础 agent —— 开发与产品可能有没干完的活', () => {
     const agents = [
       record({ id: 'g', lastActiveAt: 0 }),
       record({ id: 'd', type: 'dev', lastActiveAt: 0 }),
@@ -246,7 +233,7 @@ describe('自动归档', () => {
 describe('旧标签迁移', () => {
   const now = 5_000
 
-  it('每个标签一个通用 agent，名字沿用会话名', () => {
+  it('每个标签一个基础 agent，名字沿用会话名', () => {
     const result = migrateLegacyTabs(
       [
         { id: 't1', cwd: '/repo', path: '/repo/a.jsonl', title: '修一下登录' },
@@ -335,7 +322,7 @@ describe('旧标签迁移', () => {
 describe('名字来源', () => {
   it('给了名字就用它，没给就用默认名 —— 两种都不会自动跟着会话标题变', () => {
     const auto = newAgentRecord({ id: 'a', type: 'general', instance: 1, cwd: '/r', sessionPath: null, now: 1 })
-    expect(auto.name).toBe('通用 1')
+    expect(auto.name).toBe('基础 1')
 
     const named = newAgentRecord({
       id: 'b', type: 'general', instance: 2, cwd: '/r', sessionPath: null, now: 1, name: '查登录'

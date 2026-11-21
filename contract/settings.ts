@@ -34,7 +34,7 @@ export interface SettingItem {
   /** action 项：渲染进程按这个 id 找对应的处理函数 */
   action?: 'consoleClear' | 'consoleOpen'
   /** panel 项：这一类交给一个专门的面板渲染 */
-  panel?: 'modelManagement'
+  panel?: 'modelManagement' | 'agentTypes'
   /** 危险操作 —— 按钮用危险色 */
   danger?: boolean
   /** 操作前要确认 */
@@ -43,11 +43,21 @@ export interface SettingItem {
 
 export const SETTINGS_CATEGORIES: SettingCategory[] = [
   { id: 'agents', title: 'Agent', order: 1 },
-  { id: 'debug', title: '调试', order: 2 },
-  { id: 'models', title: '大模型', order: 3 }
+  { id: 'agentTypes', title: 'agent 类型', order: 2 },
+  { id: 'debug', title: '调试', order: 3 },
+  { id: 'models', title: '大模型', order: 4 }
 ]
 
 export const SETTINGS_ITEMS: SettingItem[] = [
+  {
+    id: 'agentTypes.panel',
+    category: 'agentTypes',
+    label: 'agent 类型',
+    description:
+      '内置三个（基础 / 开发 / 产品）的名字、说明、颜色由应用提供，只有提示词能改；自定义 agent 的名字、说明、颜色、提示词都能改。提示词在会话启动时追加到系统提示末尾 —— 改完已开的会话不受影响，新建或 /reload 之后才生效。',
+    control: 'panel',
+    panel: 'agentTypes'
+  },
   {
     id: 'models.panel',
     category: 'models',

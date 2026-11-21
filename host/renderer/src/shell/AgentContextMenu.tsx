@@ -1,13 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AgentInfo } from '@contract/index'
-import { AGENT_TYPE_LABEL } from '@contract/index'
+import { UNKNOWN_AGENT_TYPE_LABEL } from '@contract/index'
+import { typeDefOf, useStore } from '../store'
 import { AgentAvatar } from './AgentAvatar'
 import { ConfirmDialog } from './ConfirmDialog'
 import { PromptDialog } from './PromptDialog'
 import { agentMenuState } from './agentMenuItems'
 import { useOverlay } from './useOverlay'
 import { coversBrowser } from './overlay'
-import { useStore } from '../store'
 
 /**
  * agent 头像的右键菜单（PLAN.md D53）。
@@ -43,7 +43,9 @@ export function AgentContextMenu({
   onDelete: () => void
 }) {
   const { agent } = anchor
-  const state = agentMenuState(agent)
+  const agentTypes = useStore((s) => s.agentTypes)
+  const agentDef = typeDefOf(agentTypes, agent.type)
+  const state = agentMenuState({ streaming: agent.streaming, typeKnown: agentDef !== null })
   const ref = useRef<HTMLDivElement>(null)
   const [pendingDelete, setPendingDelete] = useState(false)
 
@@ -126,14 +128,14 @@ export function AgentContextMenu({
       >
         <div className="agent-menu-head">
           <span className="agent-menu-avatar">
-            <AgentAvatar type={agent.type} size={22} />
+            <AgentAvatar def={agentDef} size={22} />
           </span>
           <div className="agent-menu-id">
             <div className="agent-menu-name" title={agent.name}>
               {agent.name}
             </div>
             <div className="agent-menu-meta">
-              {AGENT_TYPE_LABEL[agent.type]} · {agent.turns} 轮 ·{' '}
+              {agentDef?.name ?? UNKNOWN_AGENT_TYPE_LABEL} · {agent.turns} 轮 ·{' '}
               {agent.streaming ? '正在跑' : agent.archivedAt ? '已归档' : '空闲'}
             </div>
           </div>
@@ -228,11 +230,13 @@ export function RenameAgentDialog({
   onCancel: () => void
   onConfirm: (name: string) => void
 }) {
+  const agentTypes = useStore((s) => s.agentTypes)
+  const agentDef = typeDefOf(agentTypes, agent.type)
   return (
     <PromptDialog
       title="重命名 agent"
       subtitle={[
-        `${AGENT_TYPE_LABEL[agent.type]} agent · 只改窄轨里显示的名字`,
+        `${agentDef?.name ?? UNKNOWN_AGENT_TYPE_LABEL} agent · 只改窄轨里显示的名字`,
         agent.sessionTitle ? `会话名是「${agent.sessionTitle}」` : ''
       ]
         .filter(Boolean)

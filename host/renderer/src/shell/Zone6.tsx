@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { ConversationArea } from '../conversation/ConversationArea'
-import type { AgentType } from '@contract/index'
+
 import { agentBrowserHost, PROJECT_BROWSER } from '@contract/browser'
-import { useStore } from '../store'
+import { typeDefOf, useStore } from '../store'
 import { host } from '../host'
 import { BrowserPane } from './BrowserPane'
 import { ExtensionErrorBanner } from './ExtensionErrorBanner'
@@ -32,9 +32,10 @@ export function Zone6() {
   const activeProjectTabId = useStore((s) => s.snapshot.activeProjectTabId)
   const cwd = projectTabs.find((tab) => tab.id === activeProjectTabId)?.cwd ?? ''
 
+  const agentTypes = useStore((s) => s.agentTypes)
   const activeAgent = agents.find((agent) => agent.id === activeAgentId) ?? null
-  const agentType: AgentType | null = activeAgent?.type ?? null
-  const zone5 = hasZone5(pane, agentType)
+  const agentDef = typeDefOf(agentTypes, activeAgent?.type)
+  const zone5 = hasZone5(pane, agentDef)
 
   /*
    * 活动文件变了就去读它的内容。
@@ -104,7 +105,7 @@ export function Zone6() {
   }
 
   // pane === 'agent'
-  if (agentType === 'product' && activeAgent) {
+  if (agentDef?.id === 'product' && agentDef.builtin && activeAgent) {
     /*
      * 产品 agent：区域 6 是**它自己的**预览宿主（D57）。
      * 项目级浏览器那一套标签跟它没关系 —— agent 的工具也只碰这一套。

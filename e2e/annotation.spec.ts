@@ -92,7 +92,7 @@ test.describe.serial('原型标注', () => {
     const now = Date.now()
     const agent = (over: Record<string, unknown>) => ({
       id: 'agent-a',
-      name: '通用 1',
+      name: '基础 1',
       type: 'general',
       instance: 1,
       cwd: projectDir,
@@ -113,7 +113,7 @@ test.describe.serial('原型标注', () => {
         {
           version: 1,
           agents: [
-            agent({ id: 'agent-a', name: '通用 1' }),
+            agent({ id: 'agent-a', name: '基础 1' }),
             agent({ id: 'agent-p', name: '产品 1', type: 'product' })
           ]
         },

@@ -244,9 +244,9 @@ describe('归档与恢复', () => {
     await state.dispose()
   })
 
-  it('自动归档：只挑超过天数没活动的通用 agent，正在跑的跳过', async () => {
+  it('自动归档：只挑超过天数没活动的基础 agent，正在跑的跳过', async () => {
     const { dir, pi, agentFile } = setup()
-    // 先建三个 agent：两个通用、一个开发
+    // 先建三个 agent：两个基础、一个开发
     const first = new HostState({
       pi,
       tabStore: new TabStore(join(dir, 'tabs.json')),
@@ -275,7 +275,7 @@ describe('归档与恢复', () => {
 
     const archived = await second.runAutoArchive(30)
 
-    // 只有「通用且没在跑」的那一个被归档；开发的那个不受影响
+    // 只有「基础且没在跑」的那一个被归档；开发的那个不受影响
     expect(archived).toBe(1)
     const after = new AgentStore(agentFile)
     expect(after.get(general.id)?.archivedAt).toBeTruthy()
@@ -539,7 +539,7 @@ describe('新建 agent（D62）', () => {
     await state.dispose()
   })
 
-  it('不给类型就是通用 —— 老调用方不用改', async () => {
+  it('不给类型就是基础 —— 老调用方不用改', async () => {
     const { dir, state } = setup()
     await state.init()
     await state.newConversation(dir)

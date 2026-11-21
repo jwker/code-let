@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { AgentType } from '@contract/index'
-import { defaultAgentName } from '@contract/index'
+import type { AgentTypeDef } from '@contract/index'
+import { builtinTypeDef, defaultAgentName } from '@contract/index'
 
 /**
  * agent 清单的落盘与读写（PLAN.md D53）。
@@ -17,7 +17,14 @@ export interface AgentRecord {
   /** agent 的稳定 id —— runtime 以它为键（D58） */
   id: string
   name: string
-  type: AgentType
+  /**
+   * 类型 id，指向一份基础 agent 的定义（`AgentTypeDef`）。
+   *
+   * 是普通字符串：用户自定义的类型也在这里，内置三个只是其中三条。
+   * 定义被删掉、或文件被手改坏时，这条记录**照旧保留**，界面按未知类型显示 ——
+   * 以前按三型白名单校验，删一个类型等于把它名下所有 agent 都删了。
+   */
+  type: string
   /** 同类型里的第几个实例，从 1 开始 */
   instance: number
   cwd: string
@@ -51,12 +58,6 @@ interface AgentsFile {
   agents: AgentRecord[]
 }
 
-const AGENT_TYPES: readonly AgentType[] = ['general', 'dev', 'product']
-
-function isType(value: unknown): value is AgentType {
-  return typeof value === 'string' && (AGENT_TYPES as readonly string[]).includes(value)
-}
-
 /** 一天的毫秒数 —— 归档天数按它折算 */
 const DAY = 24 * 60 * 60 * 1000
 
@@ -71,7 +72,7 @@ function readRecord(raw: unknown): AgentRecord | null {
   const value = raw as Record<string, unknown>
   if (typeof value.id !== 'string' || value.id === '') return null
   if (typeof value.name !== 'string') return null
-  if (!isType(value.type)) return null
+  if (typeof value.type !== 'string' || value.type === '') return null
   if (typeof value.instance !== 'number' || !Number.isFinite(value.instance)) return null
   if (typeof value.cwd !== 'string' || value.cwd === '') return null
   // 可选字段缺省等同于 null —— 手改过的文件、或者更早的版本写出来的记录都别丢
@@ -175,7 +176,7 @@ export class AgentStore {
    * 窄轨只列当前项目的 agent（D51），所以「第 3 个」必须是在这个项目里数第 3 个；
    * 全局编号会出现「这个项目只有一个 agent，角标却写着 5」这种看不懂的情况。
    */
-  nextInstance(type: AgentType, cwd: string): number {
+  nextInstance(type: string, cwd: string): number {
     const used = this.agents
       .filter((agent) => agent.type === type && agent.cwd === cwd)
       .map((agent) => agent.instance)
@@ -211,16 +212,19 @@ export class AgentStore {
 /** 新建一条 agent 记录 */
 export function newAgentRecord(input: {
   id: string
-  type: AgentType
+  type: string
+  /** 类型的定义 —— 给了就用它的名字算默认名，没给就按内置 id 查 */
+  typeDef?: AgentTypeDef | null
   instance: number
   cwd: string
   sessionPath: string | null
   now: number
   name?: string
 }): AgentRecord {
+  const def = input.typeDef ?? builtinTypeDef(input.type)
   return {
     id: input.id,
-    name: input.name ?? defaultAgentName(input.type, input.instance),
+    name: input.name ?? defaultAgentName(def, input.instance),
     type: input.type,
     instance: input.instance,
     cwd: input.cwd,

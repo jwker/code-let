@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SETTINGS_CATEGORIES, SETTINGS_ITEMS, type SettingItem } from '@contract/settings'
 import type { ConsoleStats } from '@contract/index'
 import { host } from '../host'
+import { AgentTypeManagement } from './AgentTypeManagement'
 import { ConfirmDialog } from './ConfirmDialog'
 import { ModelManagement } from './ModelManagement'
 import { WindowHeader } from './WindowHeader'
@@ -132,7 +133,8 @@ export function SettingsApp() {
           )}
 
           {/* panel 项：这一类由专门的面板渲染（标题与说明已经在上面了） */}
-          {items.some((item) => item.control === 'panel') && <ModelManagement />}
+          {items.some((item) => item.panel === 'modelManagement') && <ModelManagement />}
+          {items.some((item) => item.panel === 'agentTypes') && <AgentTypeManagement />}
 
           {items
             .filter((item) => item.control !== 'panel')

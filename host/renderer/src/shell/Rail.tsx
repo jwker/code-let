@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import type { AgentInfo, ProjectPane } from '@contract/index'
-import { useStore } from '../store'
+import { typeDefOf, useStore } from '../store'
 import { host } from '../host'
 import { AgentAvatar } from './AgentAvatar'
 import { AppMark } from './AppMark'
@@ -85,6 +85,7 @@ export function Rail() {
   const pane = useStore((s) => s.pane)
   const setPane = useStore((s) => s.setPane)
   const agents = useStore((s) => s.snapshot.agents)
+  const agentTypes = useStore((s) => s.agentTypes)
   const activeAgentId = useStore((s) => s.snapshot.activeAgentId)
   const projectTabs = useStore((s) => s.snapshot.projectTabs)
   const activeProjectTabId = useStore((s) => s.snapshot.activeProjectTabId)
@@ -188,7 +189,7 @@ export function Rail() {
               }}
               className={['rail-agent', agent.streaming ? 'is-running' : ''].join(' ')}
             >
-              <AgentAvatar type={agent.type} />
+              <AgentAvatar def={typeDefOf(agentTypes, agent.type)} />
               {/* 同类型的第 2 个起才显示角标 —— 第 1 个不用标 */}
               {agent.instance > 1 && <span className="rail-badge">{agent.instance}</span>}
             </button>

@@ -50,7 +50,7 @@ test.describe.serial('新外壳：项目标签 / 窄轨 / 区域分派', () => {
     const now = Date.now()
     const agent = (over: Partial<SeedAgent>): SeedAgent => ({
       id: 'agent-a',
-      name: '通用 1',
+      name: '基础 1',
       type: 'general',
       instance: 1,
       cwd: projectDir,
@@ -67,7 +67,7 @@ test.describe.serial('新外壳：项目标签 / 窄轨 / 区域分派', () => {
       JSON.stringify({ projects: [projectDir, otherProjectDir] }, null, 2)
     )
     /*
-     * 三个 agent：本项目的通用与产品、另一个项目的通用。
+     * 三个 agent：本项目的基础与产品、另一个项目的基础。
      * 这里直接写 agents.json 造数据，不走对话框 —— 断言的是区域分派，不是新建流程
      * （新建流程在 newconv.spec.ts 里测）。
      */
@@ -77,11 +77,11 @@ test.describe.serial('新外壳：项目标签 / 窄轨 / 区域分派', () => {
         {
           version: 1,
           agents: [
-            agent({ id: 'agent-a', name: '通用 1', instance: 1 }),
+            agent({ id: 'agent-a', name: '基础 1', instance: 1 }),
             agent({ id: 'agent-p', name: '产品 1', type: 'product', instance: 1 }),
             agent({
               id: 'agent-b',
-              name: '通用 2',
+              name: '基础 2',
               cwd: otherProjectDir,
               instance: 1,
               createdAt: now + 1,
@@ -154,9 +154,9 @@ test.describe.serial('新外壳：项目标签 / 窄轨 / 区域分派', () => {
 
     // 窄轨里是**本项目**的两个 agent，不含另一个项目的
     const rail = page.getByRole('navigation', { name: '项目导航' })
-    await expect(rail.getByRole('button', { name: '通用 1' })).toBeVisible()
+    await expect(rail.getByRole('button', { name: '基础 1' })).toBeVisible()
     await expect(rail.getByRole('button', { name: '产品 1' })).toBeVisible()
-    await expect(rail.getByRole('button', { name: '通用 2' })).toHaveCount(0)
+    await expect(rail.getByRole('button', { name: '基础 2' })).toHaveCount(0)
   })
 
   test('★ 关项目标签不归档、不中止 agent', async () => {
@@ -179,7 +179,7 @@ test.describe.serial('新外壳：项目标签 / 窄轨 / 区域分派', () => {
     // 本项目那条标签还在，窄轨也还在
     await expect(page.getByRole('button', { name: `关闭 ${projectName()}`, exact: true })).toBeVisible()
     await expect(
-      page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '通用 1' })
+      page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '基础 1' })
     ).toBeVisible()
   })
 
@@ -187,22 +187,22 @@ test.describe.serial('新外壳：项目标签 / 窄轨 / 区域分派', () => {
     const rail = page.getByRole('navigation', { name: '项目导航' })
 
     // 右键头像 → 归档
-    await rail.getByRole('button', { name: '通用 1' }).click({ button: 'right' })
+    await rail.getByRole('button', { name: '基础 1' }).click({ button: 'right' })
     await page.getByRole('menuitem', { name: '归档' }).click()
 
     // 窄轨里没了，但盘上还在（只改状态）
-    await expect(rail.getByRole('button', { name: '通用 1' })).toHaveCount(0)
+    await expect(rail.getByRole('button', { name: '基础 1' })).toHaveCount(0)
     expect(readAgents().find((agent) => agent.id === 'agent-a')?.archivedAt).toBeTruthy()
 
     // 设置 → 归档的 agent → 恢复
     await rail.getByRole('button', { name: '项目设置' }).click()
     await page.getByRole('button', { name: /归档的 agent/ }).click()
     const body = page.locator('.shell-card.zone6')
-    await expect(body.getByText('通用 1')).toBeVisible()
+    await expect(body.getByText('基础 1')).toBeVisible()
     await body.getByRole('button', { name: '恢复' }).first().click()
 
     // 回到窄轨
-    await expect(rail.getByRole('button', { name: '通用 1' })).toBeVisible()
+    await expect(rail.getByRole('button', { name: '基础 1' })).toBeVisible()
     expect(readAgents().find((agent) => agent.id === 'agent-a')?.archivedAt).toBeNull()
   })
 
@@ -214,8 +214,8 @@ test.describe.serial('新外壳：项目标签 / 窄轨 / 区域分派', () => {
     await expect(page.locator('.shell-card.zone5 textarea').first()).toBeVisible()
     await expect(page.locator('.shell-card.zone6').getByLabel('浏览器地址')).toBeVisible()
 
-    // 通用 agent 没有区域 5：切过去只剩一列
-    await rail.getByRole('button', { name: '通用 1' }).click()
+    // 基础 agent 没有区域 5：切过去只剩一列
+    await rail.getByRole('button', { name: '基础 1' }).click()
     await expect(page.locator('.shell-card.zone5')).toHaveCount(0)
     await expect(page.locator('.shell-card.zone6 textarea').first()).toBeVisible()
   })

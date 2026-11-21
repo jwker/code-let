@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentInfo, AgentType } from '@contract/index'
-import { AGENT_TYPE_LABEL, defaultAgentName } from '@contract/index'
+import type { AgentInfo, AgentTypeDef } from '@contract/index'
+import { BUILTIN_AGENT_TYPES, capabilitiesOf, defaultAgentName } from '@contract/index'
+import { useStore } from '../store'
 import { AgentAvatar } from './AgentAvatar'
 import { useOverlay } from './useOverlay'
 
@@ -9,29 +10,22 @@ import { useOverlay } from './useOverlay'
  *
  * 三个入口共用这一个框：窄轨的「＋」、输入框的 `/new`、项目设置里的「新建 agent」。
  *
- * **只有两个字段：基础 agent 和名字。**
- * 技能、工具、模型不在这里选 —— 那些属于「基础 agent 的定义」，要改就改基础本身，
+ * **只有两个字段：类型和名字。**
+ * 技能、工具、模型不在这里选 —— 那些属于类型定义，要改就改定义本身，
  * 否则十个 agent 十套配置，没人记得住哪个是什么。
  *
  * 类型**创建后不可改**（D62）：它决定区域 5/6 的布局，也决定实例编号（按类型分配，改了会撞号）。
- */
-
-const TYPES: AgentType[] = ['general', 'dev', 'product']
-
-/**
- * 卡片上写的不是「类型」，是**点开之后长什么样**。
  *
- * 三种类型唯一让人感知到的差别就是布局 —— 开发 agent 现在和通用完全一样，
- * 卡片上就如实写「一列 · 对话」，不替它编造差别。
+ * 卡片上写的不是「类型」，是**点开之后长什么样**。类型之间唯一让人感知到的差别
+ * 就是布局，所以卡片上如实写「一列 · 对话」或「两列 · 对话 + 原型」，不替它编造差别。
  */
-const LAYOUT_HINT: Record<AgentType, string> = {
-  general: '一列 · 对话',
-  dev: '一列 · 对话',
-  product: '两列 · 对话 + 原型'
+function layoutHint(def: AgentTypeDef): string {
+  return capabilitiesOf(def).preview ? '两列 · 对话 + 原型' : '一列 · 对话'
 }
 
 export interface NewAgentChoice {
-  type: AgentType
+  /** 类型 id：内置三个之一，或者用户自定义的 */
+  type: string
   name: string
 }
 
@@ -52,20 +46,31 @@ export function NewAgentDialog({
 }) {
   useOverlay()
 
+  /*
+   * 类型清单从 store 取；还没拉到时先用内置三个顶上 ——
+   * 对话框不该因为「清单还在路上」而空白一片。
+   */
+  const storedTypes = useStore((s) => s.agentTypes)
+  const types = storedTypes.length > 0 ? storedTypes : BUILTIN_AGENT_TYPES
+  const firstType = types[0]!
+
   /** 每种类型在本项目的下一个实例序号 —— 打开时算一次，对话框开着的时候不会有人新建 */
   const nextInstance = useMemo(() => {
-    const map = { general: 1, dev: 1, product: 1 } as Record<AgentType, number>
-    for (const kind of TYPES) {
-      const used = agents.filter((agent) => agent.type === kind).map((agent) => agent.instance)
-      map[kind] = used.length === 0 ? 1 : Math.max(...used) + 1
+    const map: Record<string, number> = {}
+    for (const def of types) {
+      const used = agents.filter((agent) => agent.type === def.id).map((agent) => agent.instance)
+      map[def.id] = used.length === 0 ? 1 : Math.max(...used) + 1
     }
     return map
-  }, [agents])
+  }, [agents, types])
 
-  const defaultNameFor = (kind: AgentType): string => defaultAgentName(kind, nextInstance[kind])
+  const defOf = (id: string): AgentTypeDef | null => types.find((def) => def.id === id) ?? null
 
-  const [type, setType] = useState<AgentType>('general')
-  const [name, setName] = useState(() => defaultAgentName('general', nextInstance.general))
+  const defaultNameFor = (id: string): string =>
+    defaultAgentName(defOf(id), nextInstance[id] ?? 1)
+
+  const [type, setType] = useState<string>(firstType.id)
+  const [name, setName] = useState(() => defaultAgentName(firstType, nextInstance[firstType.id] ?? 1))
   /** 用户动过名字之后，换类型不再覆盖它 */
   const edited = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -86,7 +91,7 @@ export function NewAgentDialog({
     return () => document.removeEventListener('keydown', onKey)
   }, [onCancel, busy])
 
-  function pickType(next: AgentType): void {
+  function pickType(next: string): void {
     setType(next)
     if (!edited.current) setName(defaultNameFor(next))
   }
@@ -117,36 +122,43 @@ export function NewAgentDialog({
           {project}
         </div>
 
-        <div className="mt-3.5 text-[11.5px] text-fg-2">基础 agent</div>
-        <div role="radiogroup" aria-label="基础 agent" className="mt-1.5 flex gap-2">
-          {TYPES.map((kind) => {
-            const active = kind === type
+        <div className="mt-3.5 text-[11.5px] text-fg-2">agent 类型</div>
+        <div
+          role="radiogroup"
+          aria-label="agent 类型"
+          className="mt-1.5 grid max-h-[280px] grid-cols-2 gap-2 overflow-y-auto pr-0.5"
+        >
+          {types.map((def) => {
+            const active = def.id === type
+            const hint = layoutHint(def)
             return (
               <button
-                key={kind}
+                key={def.id}
                 type="button"
                 role="radio"
                 aria-checked={active}
                 disabled={busy}
-                title={`${AGENT_TYPE_LABEL[kind]} · ${LAYOUT_HINT[kind]}`}
-                onClick={() => pickType(kind)}
+                title={`${def.name} · ${hint}`}
+                onClick={() => pickType(def.id)}
                 className={[
-                  'flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-[10px] border px-1.5 pb-2 pt-2.5',
+                  'flex min-w-0 flex-col items-center gap-1 rounded-[10px] border px-1.5 pb-1.5 pt-2',
                   'transition-colors disabled:opacity-60',
                   active
                     ? 'border-fg-1 bg-accent-wash'
                     : 'border-hairline-strong bg-surface hover:bg-panel'
                 ].join(' ')}
               >
-                <AgentAvatar type={kind} size={32} />
-                <span className="text-[12.5px] font-medium text-fg-1">{AGENT_TYPE_LABEL[kind]}</span>
+                <AgentAvatar def={def} size={28} />
+                <span className="w-full truncate text-center text-[12.5px] font-medium text-fg-1">
+                  {def.name}
+                </span>
                 <span
                   className={[
-                    'text-center text-[11px] leading-[1.45]',
+                    'text-center text-[11px] leading-[1.4]',
                     active ? 'text-fg-2' : 'text-fg-3'
                   ].join(' ')}
                 >
-                  {LAYOUT_HINT[kind]}
+                  {hint}
                 </span>
               </button>
             )
@@ -175,8 +187,8 @@ export function NewAgentDialog({
         />
 
         <div className="mt-1 text-[11px] leading-5 text-fg-3">
-          名字默认是「基础名 + 本项目该类型的下一个序号」，已全选，直接回车就建。
-          换基础 agent 点上面的卡片。Esc 取消。
+          名字默认是「类型名 + 本项目该类型的下一个序号」，已全选，直接回车就建。
+          换类型点上面的卡片。Esc 取消。
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
