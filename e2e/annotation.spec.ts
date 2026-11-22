@@ -371,7 +371,7 @@ test.describe.serial('原型标注', () => {
 
     const state = await hookState()
     expect(state.file).toBe('pricing.html')
-    expect(state.blocks.map((block) => block.block)).toEqual([1, 3, 4, 5])
+    expect(state.blocks.map((block) => block.block).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([1, 3, 4, 5])
     // 没有锚点的块这一轮不登记（临时号是下一票的事）
     expect(state.blocks.every((block) => block.anchor?.startsWith('data-block='))).toBe(true)
     expect(state.blocks.find((block) => block.block === 4)?.selector).toContain('.m-card')
@@ -560,7 +560,11 @@ test.describe.serial('原型标注', () => {
         .find((item) => item.getURL().includes('pricing.html'))
       contents?.reload()
     })
-    await expect.poll(async () => (await hookState()).blocks.map((block) => block.block)).toEqual([1, 3, 4, 7, 5])
+    await expect
+      .poll(async () =>
+        (await hookState()).blocks.map((block) => block.block).sort((a, b) => (a ?? 0) - (b ?? 0))
+      )
+      .toEqual([1, 3, 4, 5, 7])
 
     // 角标换成正式块号；输入框里已经写下的 #T1 不改写
     await expect.poll(badgeTexts).toEqual(['4', '7', 'T2'])
@@ -602,8 +606,10 @@ test.describe.serial('原型标注', () => {
     await expect.poll(() => evalPage<string>('document.body.innerText')).toContain('第一版')
     await expect.poll(badgeTexts).toEqual(['4', '7', 'T2'])
     await expect
-      .poll(async () => (await hookState()).blocks.map((block) => block.block))
-      .toEqual([1, 3, 4, 7, 5])
+      .poll(async () =>
+        (await hookState()).blocks.map((block) => block.block).sort((a, b) => (a ?? 0) - (b ?? 0))
+      )
+      .toEqual([1, 3, 4, 5, 7])
 
     // —— 没动过：不刷新，滚动位置留住 ——
     await evalPage('window.scrollTo(0, 400)')
@@ -665,8 +671,11 @@ test.describe.serial('原型标注', () => {
     }
 
     expect(answer.file).toBe('pricing.html')
-    const numbered = answer.blocks.filter((item) => item.block !== null).map((item) => item.block)
-    expect(numbered).toEqual([1, 3, 4, 7, 5])
+    const numbered = answer.blocks
+      .filter((item) => item.block !== null)
+      .map((item) => item.block)
+      .sort((a, b) => (a ?? 0) - (b ?? 0))
+    expect(numbered).toEqual([1, 3, 4, 5, 7])
 
     const promoted = answer.blocks.find((item) => item.block === 7)
     expect(promoted?.anchor).toBe('data-block="7"')

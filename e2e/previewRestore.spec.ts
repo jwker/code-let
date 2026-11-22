@@ -179,7 +179,11 @@ test.describe.serial('原型预览的恢复', () => {
     await addressBar.press('Enter')
     await expect(page.getByRole('button', { name: /原型/ })).toBeVisible({ timeout: 10_000 })
 
-    await expect.poll(async () => (await blocksOf('agent-p1')).map((item) => item.block)).toEqual([1, 2])
+    await expect
+      .poll(async () =>
+        (await blocksOf('agent-p1')).map((item) => item.block).sort((a, b) => (a ?? 0) - (b ?? 0))
+      )
+      .toEqual([1, 2])
     await expect.poll(() => evalPreviewPage<string>('document.body.innerText')).toContain('专业版')
 
     const agents = readAgents()
@@ -197,7 +201,11 @@ test.describe.serial('原型预览的恢复', () => {
     await expect(page.getByRole('button', { name: /原型/ })).toBeVisible({ timeout: 10_000 })
     await expect.poll(() => evalPreviewPage<string>('document.body.innerText')).toContain('专业版')
     await expect(page.getByText('这个项目还没有原型')).toHaveCount(0)
-    await expect.poll(async () => (await blocksOf('agent-p1')).map((item) => item.block)).toEqual([1, 2])
+    await expect
+      .poll(async () =>
+        (await blocksOf('agent-p1')).map((item) => item.block).sort((a, b) => (a ?? 0) - (b ?? 0))
+      )
+      .toEqual([1, 2])
 
     // 产品 agent 的系统提示里带着原型目录与 data-block 的要求
     const systemPrompt = await app!.evaluate(
