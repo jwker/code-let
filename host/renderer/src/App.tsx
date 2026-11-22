@@ -7,6 +7,7 @@ import { StatusBar } from './shell/StatusBar'
 import { TemporaryChat } from './shell/TemporaryChat'
 import { TitleBar } from './shell/TitleBar'
 import { createBrowserFocusController } from './shell/browserFocus'
+import { browserHostFor } from './shell/browserHost'
 import { NewAgentDialog } from './shell/NewAgentDialog'
 import { ExtensionErrorBanner } from './shell/ExtensionErrorBanner'
 import { SettingsBody, SettingsList } from './shell/ProjectSettings'
@@ -17,7 +18,7 @@ import {
   clampRightPanelWidth,
   defaultRightPanelWidth
 } from './shell/panelWidth'
-import { paneOf, rightPanelOf, useStore } from './store'
+import { paneOf, rightPanelOf, typeDefOf, useStore } from './store'
 
 /** 窗口变窄 / 变宽 —— 只在用户没拖过右栏时用来重算「窗口的一半」 */
 function useWindowWidth(): number {
@@ -110,10 +111,17 @@ export function App() {
    *
    * 判定在 browserFocus.ts 里：主进程每次 agent 调浏览器工具就换一份新的活动记录，
    * 渲染进程认出「换了一份」就切过去。用户自己点不触发 —— 那条路不写活动记录。
+   *
+   * 只对**当前左列会显示的那个宿主**动作：后台 agent 动浏览器不该抢走眼前的面板。
    */
   useEffect(() => {
-    const controller = createBrowserFocusController(() => {
-      useStore.getState().focusBrowser()
+    const controller = createBrowserFocusController((browserHost) => {
+      const store = useStore.getState()
+      const agent =
+        store.snapshot.agents.find((item) => item.id === store.snapshot.activeAgentId) ?? null
+      const def = typeDefOf(store.agentTypes, agent?.type)
+      if (browserHost !== browserHostFor(paneOf(store.snapshot), agent, def)) return
+      store.focusBrowser()
     })
     const off = host.onBrowserState((state) => controller.handle(state))
     return () => off()

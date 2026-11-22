@@ -99,6 +99,7 @@ test.describe.serial('自己写的提示不触发 stale', () => {
               cwd: projectDir,
               title: projectDir.split('/').pop(),
               pane: 'agent',
+              rightPanel: { open: true, kind: 'browser' },
               activeAgentId: 'agent-p'
             }
           ],

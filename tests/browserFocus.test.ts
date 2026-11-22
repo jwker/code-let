@@ -11,62 +11,54 @@ function state(agent: BrowserAgentActivity | null, host = 'project'): BrowserEve
   return { host, state: value }
 }
 
-describe('agent 操作项目浏览器时把窄轨切到浏览器', () => {
-  it('来了一份新的活动记录 → 切过去', () => {
-    let focused = 0
-    const controller = createBrowserFocusController(() => {
-      focused += 1
-    })
-    controller.handle(state(activity('browser_click')))
-    expect(focused).toBe(1)
+/** 记下被通知的宿主 —— 调用方靠它判断要不要打开右栏 */
+function track(): { focused: string[]; onFocus: (host: string) => void } {
+  const focused: string[] = []
+  return { focused, onFocus: (host) => focused.push(host) }
+}
+
+describe('agent 操作浏览器时打开右栏的浏览器功能区', () => {
+  it('项目级宿主来了新活动 → 通知一次，带的是 project', () => {
+    const { focused, onFocus } = track()
+    createBrowserFocusController(onFocus).handle(state(activity('browser_click')))
+    expect(focused).toEqual(['project'])
   })
 
-  it('同一份活动记录被重复推 → 不切', () => {
-    let focused = 0
-    const controller = createBrowserFocusController(() => {
-      focused += 1
-    })
+  it('agent 宿主来了新活动 → 也通知，带的是那个 agent 的宿主', () => {
+    const { focused, onFocus } = track()
+    createBrowserFocusController(onFocus).handle(state(activity('browser_open'), 'agent:a1'))
+    expect(focused).toEqual(['agent:a1'])
+  })
+
+  it('同一份活动记录被重复推 → 不重复触发', () => {
+    const { focused, onFocus } = track()
+    const controller = createBrowserFocusController(onFocus)
     const same = activity('browser_click')
     controller.handle(state(same))
     controller.handle(state(same))
-    expect(focused).toBe(1)
+    expect(focused).toHaveLength(1)
   })
 
-  it('又换了一份新的活动记录 → 再切一次', () => {
-    let focused = 0
-    const controller = createBrowserFocusController(() => {
-      focused += 1
-    })
+  it('又换了一份新的活动记录 → 再通知一次', () => {
+    const { focused, onFocus } = track()
+    const controller = createBrowserFocusController(onFocus)
     controller.handle(state(activity('browser_click')))
     controller.handle(state(activity('browser_type')))
-    expect(focused).toBe(2)
+    expect(focused).toHaveLength(2)
   })
 
-  it('没有活动记录（用户自己在面板里点）→ 不切', () => {
-    let focused = 0
-    const controller = createBrowserFocusController(() => {
-      focused += 1
-    })
+  it('没有活动记录（用户自己在面板里点）→ 不通知', () => {
+    const { focused, onFocus } = track()
+    createBrowserFocusController(onFocus).handle(state(null))
+    expect(focused).toHaveLength(0)
+  })
+
+  it('活动记录过期后被清空、再出现新的 → 照样通知', () => {
+    const { focused, onFocus } = track()
+    const controller = createBrowserFocusController(onFocus)
+    controller.handle(state(activity('browser_click')))
     controller.handle(state(null))
-    expect(focused).toBe(0)
-  })
-
-  it('agent 自己那套预览的活动不切面板 —— 它就在自己的区域 6 里', () => {
-    let focused = 0
-    const controller = createBrowserFocusController(() => {
-      focused += 1
-    })
-    controller.handle(state(activity('browser_click'), 'agent:a1'))
-    expect(focused).toBe(0)
-  })
-
-  it('切到项目宿主之后再动 → 照常切', () => {
-    let focused = 0
-    const controller = createBrowserFocusController(() => {
-      focused += 1
-    })
-    controller.handle(state(activity('browser_click'), 'agent:a1'))
-    controller.handle(state(activity('browser_click'), 'project'))
-    expect(focused).toBe(1)
+    controller.handle(state(activity('browser_click')))
+    expect(focused).toHaveLength(2)
   })
 })

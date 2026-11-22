@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import type { RightPanelKind, RightPanelState } from '@contract/index'
-import { PROJECT_BROWSER } from '@contract/browser'
+import type { BrowserHost } from '@contract/browser'
 import { host } from '../host'
-import { activeProjectTab, useStore } from '../store'
+import { activeProjectTab, paneOf, typeDefOf, useStore } from '../store'
 import { IconBrowser, IconChevron, IconCode, IconDoc, IconPanel, IconPanelCollapse } from './icons'
 import { FileTree } from './FileTree'
 import { DocsList } from './DocsList'
@@ -13,6 +13,7 @@ import { FilePreview } from './FilePreview'
 import { GitDiffView } from './GitDiffView'
 import { PaneResizer } from './PaneResizer'
 import { useOverlay } from './useOverlay'
+import { browserHostFor } from './browserHost'
 import { changeCount } from './gitFormat'
 
 /**
@@ -155,10 +156,11 @@ function DocsPanel() {
 /**
  * 浏览器功能区：工具栏、页面标签行和网页本身都在右栏里。
  *
- * 这一单只接项目级宿主；产品 agent 的预览下一单才搬进来。
+ * 看哪个宿主由左列决定（`browserHostFor`）；`key` 让切 agent 时整个面板重建，
+ * 不把上一个宿主的标签短暂地留在屏幕上。
  */
-function BrowserPanel() {
-  return <BrowserPane host={PROJECT_BROWSER} />
+function BrowserPanel({ host }: { host: BrowserHost }) {
+  return <BrowserPane key={host} host={host} />
 }
 
 /** 空态：右栏展开着但还没选功能区。空态不是收起 */
@@ -298,7 +300,11 @@ export function RightPanel({
   const activeFileId = snapshot.activeFileId
   const change = useStore((s) => s.git.selected)
   const docsSelected = useStore((s) => s.docs.selected)
-  const projectBrowser = useStore((s) => s.browserStates[PROJECT_BROWSER])
+  const agentTypes = useStore((s) => s.agentTypes)
+  const pane = useStore((s) => paneOf(s.snapshot))
+  const activeAgent = snapshot.agents.find((item) => item.id === snapshot.activeAgentId) ?? null
+  const browserHost = browserHostFor(pane, activeAgent, typeDefOf(agentTypes, activeAgent?.type))
+  const browserState = useStore((s) => s.browserStates[browserHost])
   const cwd = activeProjectTab(snapshot)?.cwd ?? ''
 
   const kind = panel.kind
@@ -316,7 +322,7 @@ export function RightPanel({
   } else if (kind === 'docs') {
     title = docsSelected ? (docsSelected.entry.relPath.split('/').pop() ?? '文档') : '文档'
   } else if (kind === 'browser') {
-    const tab = projectBrowser?.tabs.find((item) => item.id === projectBrowser.activeTabId)
+    const tab = browserState?.tabs.find((item) => item.id === browserState.activeTabId)
     title = tab?.title || '浏览器'
   }
 
@@ -358,7 +364,7 @@ export function RightPanel({
         ) : kind === 'docs' ? (
           <DocsPanel />
         ) : kind === 'browser' ? (
-          <BrowserPanel />
+          <BrowserPanel host={browserHost} />
         ) : (
           <EmptyPanel />
         )}

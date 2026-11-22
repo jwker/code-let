@@ -132,6 +132,7 @@ test.describe.serial('原型标注', () => {
               cwd: projectDir,
               title: projectDir.split('/').pop(),
               pane: 'agent',
+              rightPanel: { open: true, kind: 'browser' },
               activeAgentId: 'agent-a'
             }
           ],
@@ -507,7 +508,8 @@ test.describe.serial('原型标注', () => {
     expect(projectState.enabled).toBe(false)
     expect(projectState.state.blocks).toEqual([])
 
-    await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '浏览器', exact: true }).click()
+    // 左列换成基础 agent —— 右栏的浏览器跟着换成项目级宿主
+    await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '基础 1' }).click()
     await expect(page.getByRole('button', { name: '标注' })).toHaveCount(0)
   })
 
@@ -703,7 +705,7 @@ test.describe.serial('原型标注', () => {
   })
 
   test('一轮里改坏了号，就在对话里给一条提示', async () => {
-    // 提示是发在对话里的 —— 先把区域 5 切回产品 agent 的对话
+    // 提示是发在对话里的 —— 先把左列切回产品 agent 的对话
     await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '产品 1' }).click()
     await expect(page.getByRole('button', { name: /原型/ })).toBeVisible({ timeout: 10_000 })
 

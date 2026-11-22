@@ -147,6 +147,7 @@ test.describe.serial('原型预览的恢复', () => {
               cwd: projectDir,
               title: projectDir.split('/').pop(),
               pane: 'agent',
+              rightPanel: { open: true, kind: 'browser' },
               activeAgentId: 'agent-p1'
             }
           ],
