@@ -1,22 +1,25 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import type { RightPanelKind, RightPanelState } from '@contract/index'
+import { PROJECT_BROWSER } from '@contract/browser'
 import { host } from '../host'
 import { activeProjectTab, useStore } from '../store'
 import { IconBrowser, IconChevron, IconCode, IconDoc, IconPanel, IconPanelCollapse } from './icons'
 import { FileTree } from './FileTree'
 import { DocsList } from './DocsList'
+import { BrowserPane } from './BrowserPane'
 import { DocView } from './DocView'
 import { GitChanges } from './GitChanges'
 import { FilePreview } from './FilePreview'
 import { GitDiffView } from './GitDiffView'
 import { PaneResizer } from './PaneResizer'
+import { useOverlay } from './useOverlay'
 import { changeCount } from './gitFormat'
 
 /**
  * 右栏（票 02）。
  *
  * 从窗口顶边贯到底边，同一时刻只放一个功能区。顶栏右侧是功能切换器：
- * 图标和文字都是当前功能区，点开换别的。浏览器功能区在票 05 接上。
+ * 图标和文字都是当前功能区，点开换别的。
  *
  * 收起后整条不渲染 —— 左列吃满窗口。
  */
@@ -27,13 +30,8 @@ const KIND_META: Record<RightPanelKind, { label: string; icon: () => ReactElemen
   browser: { label: '浏览器', icon: IconBrowser }
 }
 
-/**
- * 切换器里能选的功能区。
- *
- * 浏览器要等票 05 把页面、标签行接上才出现在这里 —— 先摆一个点进去只有
- * 「还没接上」的项，比看不到它更糟。
- */
-const SWITCHABLE: RightPanelKind[] = ['code', 'docs']
+/** 切换器里的三项，顺序跟原型一致：浏览器、代码、文档 */
+const SWITCHABLE: RightPanelKind[] = ['browser', 'code', 'docs']
 
 /** 代码功能区的两个视图：文件 / 改动。改动那个带未提交数量 */
 function CodeTabs() {
@@ -154,18 +152,13 @@ function DocsPanel() {
   )
 }
 
-/** 还没接上的功能区（这一版只剩浏览器）—— 下一单换成真内容 */
-function PendingPanel({ kind }: { kind: 'browser' }) {
-  const Icon = KIND_META[kind].icon
-  return (
-    <div className="rp-empty">
-      <div className="rp-empty-icon">
-        <Icon />
-      </div>
-      <h3>{KIND_META[kind].label}功能区还没接上</h3>
-      <p>这一版右栏先接上代码和文档。下一单接上{KIND_META[kind].label}。</p>
-    </div>
-  )
+/**
+ * 浏览器功能区：工具栏、页面标签行和网页本身都在右栏里。
+ *
+ * 这一单只接项目级宿主；产品 agent 的预览下一单才搬进来。
+ */
+function BrowserPanel() {
+  return <BrowserPane host={PROJECT_BROWSER} />
 }
 
 /** 空态：右栏展开着但还没选功能区。空态不是收起 */
@@ -179,7 +172,7 @@ function EmptyPanel() {
       <h3>右侧栏是空的</h3>
       <p>浏览器、代码、文档都放在这一栏。挑一样打开。</p>
       <div className="rp-pick">
-        <button type="button" disabled title="下一单接上">
+        <button type="button" onClick={() => openRightPanel('browser')}>
           <IconBrowser />
           浏览器
         </button>
@@ -207,6 +200,12 @@ function FunctionSwitcher({ current }: { current: RightPanelKind }) {
   const [open, setOpen] = useState(false)
   const meta = KIND_META[current]
   const Icon = meta.icon
+
+  /*
+   * 下拉展开时会盖到右栏的页面上，而网页是原生视图、永远画在 DOM 之上 ——
+   * 开着的时候把它收起来，菜单才看得到；关掉立刻露回去。
+   */
+  useOverlay(open)
 
   useEffect(() => {
     if (!open) return
@@ -299,6 +298,7 @@ export function RightPanel({
   const activeFileId = snapshot.activeFileId
   const change = useStore((s) => s.git.selected)
   const docsSelected = useStore((s) => s.docs.selected)
+  const projectBrowser = useStore((s) => s.browserStates[PROJECT_BROWSER])
   const cwd = activeProjectTab(snapshot)?.cwd ?? ''
 
   const kind = panel.kind
@@ -315,8 +315,9 @@ export function RightPanel({
     title = change?.path ?? file?.relPath ?? (cwd ? cwd.split('/').pop()! : '代码')
   } else if (kind === 'docs') {
     title = docsSelected ? (docsSelected.entry.relPath.split('/').pop() ?? '文档') : '文档'
-  } else if (kind) {
-    title = meta!.label
+  } else if (kind === 'browser') {
+    const tab = projectBrowser?.tabs.find((item) => item.id === projectBrowser.activeTabId)
+    title = tab?.title || '浏览器'
   }
 
   return (
@@ -357,7 +358,7 @@ export function RightPanel({
         ) : kind === 'docs' ? (
           <DocsPanel />
         ) : kind === 'browser' ? (
-          <PendingPanel kind="browser" />
+          <BrowserPanel />
         ) : (
           <EmptyPanel />
         )}

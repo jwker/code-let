@@ -188,6 +188,11 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
     setListOpen(false)
   }, [browserHost])
 
+  // 右栏顶栏要写「在看哪一页」—— 状态推给 store 一份
+  useEffect(() => {
+    useStore.getState().setBrowserState(browserHost, state)
+  }, [browserHost, state])
+
   useEffect(() => {
     if (!addressFocused) setAddress(displayUrl(active))
   }, [active?.id, active?.url, addressFocused])

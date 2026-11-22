@@ -3,6 +3,7 @@ import type {
   AgentTypeDef,
   AnnotationState,
   BlockCitation,
+  BrowserState,
   ConversationMode,
   DocEntry,
   DocGroup,
@@ -271,6 +272,13 @@ interface RendererStore {
   /** 文档区：分组清单、当前选中的一篇、它的内容 */
   docs: DocsViewState
   /**
+   * 各宿主浏览器当前的可见状态。
+   *
+   * 浏览器面板自己拿着运行时状态；这里留一份给右栏顶栏写「在看哪一页」，
+   * 切换功能区时不用去问面板。
+   */
+  browserStates: Record<string, BrowserState>
+  /**
    * 会盖住原生浏览器视图的浮层数（气泡、菜单、对话框）。
    *
    * 浏览器页面是原生 view，画在 DOM 之上；这类浮层开着时要把原生视图收起来，
@@ -349,6 +357,8 @@ interface RendererStore {
   treeEntries: Record<string, FileEntry[]>
   /** 某个目录为什么没读成 —— 越界的符号链接会写在这里 */
   treeErrors: Record<string, string>
+  /** 浏览器面板推来的一份状态（按宿主） */
+  setBrowserState: (host: string, state: BrowserState) => void
 
   setSnapshot: (snapshot: HostSnapshot) => void
   /** 拉一次类型定义清单 */
@@ -465,6 +475,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   codeMode: 'files',
   git: EMPTY_GIT,
   docs: EMPTY_DOCS,
+  browserStates: {},
   browserOverlayCount: 0,
   browserSpan: null,
   settingsCategory: 'agents',
@@ -537,6 +548,9 @@ export const useStore = create<RendererStore>((set, get) => ({
   },
 
   setCodeMode: (mode) => set({ codeMode: mode }),
+
+  setBrowserState: (browserHost, state) =>
+    set((current) => ({ browserStates: { ...current.browserStates, [browserHost]: state } })),
 
   setAnnotation: (state) => {
     set((current) => ({

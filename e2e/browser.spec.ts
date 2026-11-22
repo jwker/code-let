@@ -91,8 +91,30 @@ test.describe.serial('浏览器面板', () => {
     }
   })
 
+  /** 把右栏开到浏览器功能区。第一次走空态按钮，之后切换器换过去。 */
+  async function openProjectBrowser(): Promise<void> {
+    const panel = page.locator('.right-panel')
+    if ((await panel.count()) === 0) {
+      await page.getByRole('button', { name: '右栏', exact: true }).click()
+    }
+    if ((await page.getByLabel('浏览器地址').count()) > 0) return
+    if ((await panel.getByRole('button', { name: '浏览器', exact: true }).count()) > 0) {
+      await panel.getByRole('button', { name: '浏览器', exact: true }).click()
+      return
+    }
+    await panel.getByRole('button', { name: /切换功能区/ }).click()
+    await panel.getByRole('menuitemradio', { name: /浏览器/ }).click()
+  }
+
   test('打开本地页面、显示标签标题并拦截外网地址', async () => {
-    await page.getByRole('button', { name: '浏览器', exact: true }).click()
+    await openProjectBrowser()
+    const panel = page.locator('.right-panel')
+    // 工具栏与页面标签行都在浏览器功能区内部
+    await expect(panel.getByRole('button', { name: '新建浏览器标签' })).toBeVisible()
+    await expect(panel.getByLabel('浏览器地址')).toBeVisible()
+    // 项目级宿主没有标注开关
+    await expect(panel.getByRole('button', { name: '标注' })).toHaveCount(0)
+
     const addressBar = page.getByLabel('浏览器地址')
     await addressBar.fill(`http://127.0.0.1:${port}/`)
     await addressBar.press('Enter')
@@ -114,7 +136,7 @@ test.describe.serial('浏览器面板', () => {
   })
 
   test('agent 工具能读页面、点击、输入、等待和截图', async () => {
-    await page.getByRole('button', { name: '浏览器', exact: true }).click()
+    await openProjectBrowser()
     const addressBar = page.getByLabel('浏览器地址')
     await addressBar.fill(`http://127.0.0.1:${port}/`)
     await addressBar.press('Enter')
@@ -160,6 +182,68 @@ test.describe.serial('浏览器面板', () => {
     expect(shot.ok).toBe(true)
     expect(shot.mimeType).toBe('image/jpeg')
     expect((shot.data ?? '').length).toBeGreaterThan(1000)
+  })
+
+  test('浏览器页面只在右栏里：收起看不到，拖宽跟着变', async () => {
+    const bounds = (): Promise<{
+      x: number
+      y: number
+      width: number
+      height: number
+      visible: boolean
+      windowWidth: number
+    } | null> =>
+      app!.evaluate(async ({ BrowserWindow }, target) => {
+        for (const win of BrowserWindow.getAllWindows()) {
+          for (const child of win.contentView.children) {
+            const view = child as unknown as {
+              webContents?: { getURL: () => string }
+              getBounds: () => { x: number; y: number; width: number; height: number }
+              getVisible: () => boolean
+            }
+            if (!view.webContents?.getURL().startsWith(target)) continue
+            const [windowWidth] = win.getContentSize()
+            return { ...view.getBounds(), visible: view.getVisible(), windowWidth }
+          }
+        }
+        return null
+      }, `http://127.0.0.1:${port}/`)
+
+    await expect.poll(async () => (await bounds())?.visible).toBe(true)
+    const before = await bounds()
+    expect(before).toBeTruthy()
+    // 原生视图整块落在右栏：不碰到左边界，也不出窗口
+    expect(before!.x).toBeGreaterThan(0)
+    expect(before!.x + before!.width).toBeLessThanOrEqual(before!.windowWidth)
+
+    // 右栏拖宽 32px，原生视图跟着变宽
+    const grip = page.getByRole('separator', { name: '调整右栏宽度' })
+    await grip.focus()
+    await page.keyboard.press('Shift+ArrowLeft')
+    await expect.poll(async () => (await bounds())?.width).toBeGreaterThan(before!.width)
+
+    // 切换器下拉盖在页面上：开着时原生视图收起，关掉再露出来
+    await page.getByRole('button', { name: /切换功能区/ }).click()
+    await expect.poll(async () => (await bounds())?.visible).toBe(false)
+    await page.keyboard.press('Escape')
+    await expect.poll(async () => (await bounds())?.visible).toBe(true)
+
+    // 切到代码功能区 → 原生视图收起，不留在右栏底下；切回浏览器 → 又露出来
+    await page.getByRole('button', { name: /切换功能区/ }).click()
+    await page.getByRole('menuitemradio', { name: /代码/ }).click()
+    await expect(page.getByRole('tab', { name: /改动/ })).toBeVisible()
+    await expect.poll(async () => (await bounds())?.visible).toBe(false)
+    await page.getByRole('button', { name: /切换功能区/ }).click()
+    await page.getByRole('menuitemradio', { name: /浏览器/ }).click()
+    await expect.poll(async () => (await bounds())?.visible).toBe(true)
+
+    // 收起右栏 → 原生视图收起来；展开 → 又露出来
+    await page.getByRole('button', { name: '收起右栏' }).click()
+    await expect(page.locator('.right-panel')).toHaveCount(0)
+    await expect.poll(async () => (await bounds())?.visible).toBe(false)
+    await page.getByRole('button', { name: '右栏', exact: true }).click()
+    await expect(page.getByLabel('浏览器地址')).toBeVisible()
+    await expect.poll(async () => (await bounds())?.visible).toBe(true)
   })
 
   test('可以新建和关闭标签', async () => {
