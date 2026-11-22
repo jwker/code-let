@@ -1928,8 +1928,9 @@ body.is-pane-resizing * {
  * 窄下来时给内容让出一条槽，避免圆点压在文字上。
  */
 @container (max-width: 820px) {
-  .conv-has-nav .conv-stream,
-  .conv-has-nav .conv-terminal > div {
+  .conv-has-entry .conv-stream,
+  .conv-has-entry .conv-terminal > div,
+  .conv-has-entry .conv-html {
     width: min(var(--content-max), calc(100% - 68px));
     margin-left: 52px;
     margin-right: auto;
@@ -1937,8 +1938,9 @@ body.is-pane-resizing * {
 }
 
 @container (max-width: 560px) {
-  .conv-has-nav .conv-stream,
-  .conv-has-nav .conv-terminal > div {
+  .conv-has-entry .conv-stream,
+  .conv-has-entry .conv-terminal > div,
+  .conv-has-entry .conv-html {
     width: calc(100% - 68px);
     margin-left: 52px;
   }
@@ -2806,18 +2808,24 @@ ol.md-list {
 /* ============================================================
    会话树：轨上的入口 + 弹窗（GLOSSARY.md「对话结构」）
    ============================================================ */
-/* 会话树入口：长在对话左侧圆点轨的顶部 */
+/*
+ * 会话树入口：常驻对话区左上角，钉在滚动容器的外面一层。
+ * 滚动时不动，顶部的扩展错误提示条出现时跟着对话区一起下移。
+ */
+.conv-tree-corner {
+  position: absolute;
+  /* 高于遮罩：弹窗打开时按钮要留在上面（变实心、可再点一次关上） */
+  z-index: 62;
+  top: 12px;
+  left: 12px;
+}
 .conv-tree-entry {
   position: relative;
-  z-index: 2;
-  flex: none;
   display: flex;
   align-items: center;
-  padding: 2px 0 6px;
   pointer-events: auto;
 }
-/* 只剩一轮又没有别的支线时，轨上的入口先藏着 —— 但别卸载：条数是它拉树之后才知道的 */
-.conv-nav-entry.is-hidden,
+/* 圆点列表仍然只在超过一轮 / 还有别的支线时出现 */
 .conv-nav-list.is-hidden {
   visibility: hidden;
 }
@@ -2875,19 +2883,25 @@ ol.md-list {
 }
 
 /* —— 弹窗 —— */
-.conv-tree-layer {
+/* 遮罩只压左列；点击关闭 */
+.conv-tree-backdrop {
   position: fixed;
   top: 0;
   bottom: 0;
   left: 0;
   width: var(--left-w);
   z-index: 60;
-  /* 弹窗挂在圆点轨里，而轨本身 pointer-events: none —— 这里要收回来 */
-  pointer-events: auto;
+  background: rgba(0, 0, 0, 0.25);
+}
+/* 面板挂在入口按钮下方：相对 .conv-tree-entry 定位，滚动时跟着按钮 */
+.conv-tree-pop {
+  position: absolute;
+  z-index: 61;
+  top: calc(100% + 8px);
+  left: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
   gap: 10px;
 }
 
@@ -2908,7 +2922,7 @@ ol.md-list {
   position: relative;
   z-index: 1;
   width: 640px;
-  max-width: calc(var(--left-w) - 48px);
+  max-width: min(640px, calc(var(--left-w) - 48px));
   max-height: min(70vh, 620px);
   display: flex;
   flex-direction: column;

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObjec
 import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { navTurnSummary, userTurnsOf } from './conversationTurns'
-import { ConversationTreeEntry } from './ConversationTreeEntry'
 
 /**
  * 对话区左侧的圆点导航（PLAN.md D36）。
@@ -174,10 +173,6 @@ export function ConversationNav({
         if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHovered(null)
       }}
     >
-      <div className={`conv-nav-entry${show ? '' : ' is-hidden'}`}>
-        <ConversationTreeEntry />
-      </div>
-
       {show && overflowing && (
         <span
           className={`conv-nav-end conv-nav-end-top${edges.top ? ' is-end' : ''}`}

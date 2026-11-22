@@ -10,7 +10,8 @@ import { SessionManager } from '@earendil-works/pi-coding-agent'
  * 会话树（.scratch/conversation-tree/spec.md）。
  *
  * 会话文件里手写一个分叉：两轮共用前缀，第二轮下面多挂一个问法。
- * 验的是整条链：轨上的树形按钮与角标 → 弹窗里的树 → 切支线 → 回到这一轮 → 另开会话。
+ * 验的是整条链：对话区左上角的树入口与角标 → 弹窗里的树 → 切支线 → 回到这一轮 → 另开会话。
+ * 另备两条只读会话：一条只有一轮、一条很长（验「零/一轮也有入口」「滚动不跟走」）。
  * 全程不需要真模型。
  */
 
@@ -19,6 +20,8 @@ let projectDir = ''
 let userDataDir = ''
 let agentDir = ''
 let sessionFile = ''
+let oneTurnFile = ''
+let longFile = ''
 let app: ElectronApplication | null = null
 let page: Page
 
@@ -76,6 +79,26 @@ test.describe.serial('会话树的读、切与另开', () => {
 
       sessionFile = manager.getSessionFile() ?? ''
       if (!sessionFile) throw new Error('会话文件没有创建出来')
+
+      // 只有一轮：验证入口跟轮次数无关
+      const one = SessionManager.create(projectDir)
+      one.appendMessage({ role: 'user', content: [{ type: 'text', text: '只有一轮的提问' }], timestamp: Date.now() } as never)
+      one.appendMessage(assistantMessage('只有一轮的回答') as never)
+      oneTurnFile = one.getSessionFile() ?? ''
+      if (!oneTurnFile) throw new Error('一轮会话文件没有创建出来')
+
+      // 很长：滚动之后入口不该跟着走
+      const long = SessionManager.create(projectDir)
+      for (let index = 1; index <= 12; index += 1) {
+        long.appendMessage({
+          role: 'user',
+          content: [{ type: 'text', text: `长会话第 ${index} 轮提问：这一行用来把对话撑高` }],
+          timestamp: Date.now() + index
+        } as never)
+        long.appendMessage(assistantMessage(`长会话第 ${index} 轮回答：也让内容再长一点。`) as never)
+      }
+      longFile = long.getSessionFile() ?? ''
+      if (!longFile) throw new Error('长会话文件没有创建出来')
     } finally {
       if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR
       else process.env.PI_CODING_AGENT_DIR = previousAgentDir
@@ -100,6 +123,32 @@ test.describe.serial('会话树的读、切与另开', () => {
               lastActiveAt: now,
               archivedAt: null,
               turns: 2,
+              previewUrl: null
+            },
+            {
+              id: 'agent-one',
+              name: '一轮对话',
+              type: 'general',
+              instance: 1,
+              cwd: projectDir,
+              sessionPath: oneTurnFile,
+              createdAt: now + 1,
+              lastActiveAt: now + 1,
+              archivedAt: null,
+              turns: 1,
+              previewUrl: null
+            },
+            {
+              id: 'agent-long',
+              name: '长会话',
+              type: 'general',
+              instance: 1,
+              cwd: projectDir,
+              sessionPath: longFile,
+              createdAt: now + 2,
+              lastActiveAt: now + 2,
+              archivedAt: null,
+              turns: 12,
               previewUrl: null
             }
           ]
@@ -166,7 +215,7 @@ test.describe.serial('会话树的读、切与另开', () => {
     await expect(page.getByRole('dialog', { name: '对话结构' })).toBeVisible()
   }
 
-  test('轨上的按钮带角标，弹窗里一条主干 + 一条别的支线', async () => {
+  test('对话区左上角的入口带角标，弹窗里一条主干 + 一条别的支线', async () => {
     await expect(
       page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '会话树' })
     ).toBeVisible({ timeout: 10_000 })
@@ -239,5 +288,82 @@ test.describe.serial('会话树的读、切与另开', () => {
 
     // 原标签的内容流没动
     await expect.poll(async () => (await entries()).length).toBe(2)
+  })
+
+  test('只有一轮时入口仍在，点开能看到那一轮', async () => {
+    const rail = page.getByRole('navigation', { name: '项目导航' })
+    await rail.getByRole('button', { name: '一轮对话' }).click()
+
+    const button = page.getByRole('button', { name: /^对话结构/ })
+    await expect(button).toBeVisible()
+    await expect(button).toHaveAttribute('aria-label', '对话结构')
+
+    await openTree()
+    await expect(page.locator('.conv-tree-row')).toHaveCount(1)
+    await expect(page.locator('.conv-tree-row').first()).toContainText('只有一轮的提问')
+    await page.getByRole('button', { name: '关闭', exact: true }).click()
+
+    await rail.getByRole('button', { name: '会话树' }).click()
+  })
+
+  test('零轮会话也有入口，点开是现有空态', async () => {
+    const rail = page.getByRole('navigation', { name: '项目导航' })
+    await rail.getByRole('button', { name: '新建 agent' }).click()
+    const dialog = page.getByRole('dialog', { name: '新建 agent' })
+    await dialog.getByRole('textbox').fill('零轮对话')
+    await dialog.getByRole('textbox').press('Enter')
+    await expect(page.getByRole('button', { name: '零轮对话', exact: true })).toBeVisible()
+
+    const button = page.getByRole('button', { name: /^对话结构/ })
+    await expect(button).toBeVisible()
+    await button.click()
+    await expect(page.getByText('这个对话还没有说过话')).toBeVisible()
+    await page.getByRole('button', { name: '关闭', exact: true }).click()
+
+    await rail.getByRole('button', { name: '会话树' }).click()
+  })
+
+  test('HTML 排版下入口仍在，也能点开', async () => {
+    await page.getByRole('button', { name: '更多' }).click()
+    await page.getByRole('menuitem', { name: '模式切换' }).click()
+    await page.getByRole('menuitemradio', { name: 'HTML' }).click()
+
+    // HTML 排版没有圆点轨，但入口还在
+    await expect(page.locator('.conv-nav')).toHaveCount(0)
+    const button = page.getByRole('button', { name: /^对话结构/ })
+    await expect(button).toBeVisible()
+    await button.click()
+    await expect(page.getByRole('dialog', { name: '对话结构' })).toBeVisible()
+    await page.getByRole('button', { name: '关闭', exact: true }).click()
+
+    await page.getByRole('button', { name: '更多' }).click()
+    await page.getByRole('menuitem', { name: '模式切换' }).click()
+    await page.getByRole('menuitemradio', { name: '普通' }).click()
+  })
+
+  test('滚动到会话中段，入口不跟着滚走', async () => {
+    await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '长会话' }).click()
+    const button = page.getByRole('button', { name: /^对话结构/ })
+    await expect(button).toBeVisible()
+    const before = await button.boundingBox()
+
+    const scrolled = await page.locator('.conv-normal').evaluate((element) => {
+      element.scrollTop = Math.round(element.scrollHeight / 2)
+      return element.scrollTop
+    })
+    expect(scrolled).toBeGreaterThan(0)
+    await expect(button).toBeVisible()
+    const after = await button.boundingBox()
+    expect(Math.round(after!.y)).toBe(Math.round(before!.y))
+
+    await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '会话树' }).click()
+  })
+
+  test('切到项目设置后入口消失', async () => {
+    const rail = page.getByRole('navigation', { name: '项目导航' })
+    await rail.getByRole('button', { name: '项目设置' }).click()
+    await expect(page.getByRole('button', { name: /^对话结构/ })).toHaveCount(0)
+    await rail.getByRole('button', { name: '会话树' }).click()
+    await expect(page.getByRole('button', { name: /^对话结构/ })).toBeVisible()
   })
 })

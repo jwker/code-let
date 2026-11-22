@@ -14,6 +14,7 @@ import { host } from '../host'
 import { useIndicator } from '../shell/useIndicator'
 import { IconArrowUp, IconPaperclip, IconStop } from '../shell/icons'
 import { ConversationNav } from './ConversationNav'
+import { ConversationTreeEntry } from './ConversationTreeEntry'
 import { userTurnsOf } from './conversationTurns'
 import { NormalStream } from './NormalStream'
 import { ScrollJump } from './ScrollJump'
@@ -426,13 +427,10 @@ export function ConversationArea() {
     session.sessionId
   )
   /*
-   * 左侧那一列要不要占位：不止一轮，或者还有别的支线。
-   * 后者跟圆点轨的显示条件一致 —— 两处用同一个数，才不会出现「轨出来了、正文没让位」。
+   * 会话树入口常驻对话区左上角：有 agent 就有它，跟轮次和排版无关。
+   * 正文为它让出左侧一条槽（够宽时它落在内容列外的留白里，不影响正文宽度）。
    */
-  const otherBranches = useStore((s) =>
-    s.snapshot.activeAgentId ? (s.treeBranches[s.snapshot.activeAgentId] ?? 0) : 0
-  )
-  const hasNav = mode !== 'html' && (userTurnsOf(items).length >= 2 || otherBranches > 0)
+  const hasEntry = Boolean(activeAgentId)
 
   function showNotice(kind: ComposerNotice['kind'], text: string, timeout = 0): void {
     if (noticeTimer.current !== null) {
@@ -891,7 +889,12 @@ export function ConversationArea() {
         内容往上滚时，文字离卡片上沿始终还有这一段距离。
         滚动容器自己给的 padding 做不到（跟着内容一起滚走）。
       */}
-      <div className={`relative min-h-0 flex-1 pt-3 ${hasNav ? 'conv-has-nav' : ''}`}>
+      <div className={`relative min-h-0 flex-1 pt-3 ${hasEntry ? 'conv-has-entry' : ''}`}>
+        {hasEntry && (
+          <div className="conv-tree-corner">
+            <ConversationTreeEntry />
+          </div>
+        )}
         <ConversationNav items={items} mode={mode} scrollRef={scrollRef} />
         {mode === 'normal' &&
           (items.length > 0 ? (

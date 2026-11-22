@@ -174,22 +174,24 @@ export function ConversationTree({
   const gutter = gutterWidth(layout.laneCount)
 
   return (
-    <div className="conv-tree-layer">
-      <div className="absolute inset-0 bg-black/25" onClick={onClose} />
-      {notice && (
-        <div className="conv-tree-notice" role="alert">
-          {notice}
-        </div>
-      )}
-      <div
-        ref={panelRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-label="对话结构"
-        className="conv-tree-panel"
-        onKeyDown={onKeyDown}
-      >
+    <>
+      {/* 遮罩只压左列；面板挂在入口按钮下方，跟着按钮走 */}
+      <div className="conv-tree-backdrop left-scope" onClick={onClose} />
+      <div className="conv-tree-pop">
+        {notice && (
+          <div className="conv-tree-notice" role="alert">
+            {notice}
+          </div>
+        )}
+        <div
+          ref={panelRef}
+          tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+          aria-label="对话结构"
+          className="conv-tree-panel"
+          onKeyDown={onKeyDown}
+        >
         <div className="conv-tree-head">
           <div className="conv-tree-title">对话结构</div>
           <div className="conv-tree-sub">
@@ -313,7 +315,8 @@ export function ConversationTree({
           }}
         />
       )}
-    </div>
+      </div>
+    </>
   )
 }
 
