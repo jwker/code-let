@@ -508,6 +508,16 @@ export function registerIpc(
   ipcMain.handle(IPC.temporaryClose, () => state.closeTemporaryChat())
   ipcMain.handle(IPC.temporaryPrompt, async (_event, payload: unknown) => {
     const { id, text, uploads } = temporaryPromptSchema.parse(payload)
+    /*
+     * 跟普通发送同一套测试钩子：E2E 要断言「临时对话的发送路径也走通了」，
+     * 但真模型在测试里不可用。CODELET_ECHO_PROMPT 只记账、不调模型。
+     */
+    if (process.env.CODELET_USER_DATA) {
+      ;(
+        globalThis as unknown as { __codeletLastPrompt?: { agentId: string; text: string } }
+      ).__codeletLastPrompt = { agentId: id, text }
+      if (process.env.CODELET_ECHO_PROMPT) return
+    }
     await state.promptTemporary(id, text, uploads)
   })
   ipcMain.handle(IPC.temporaryAbort, async (_event, payload: unknown) => {

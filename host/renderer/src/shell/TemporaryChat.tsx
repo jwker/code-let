@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ModelOption, StreamItem } from '@contract/index'
 import { host } from '../host'
 import { useStore } from '../store'
@@ -10,6 +10,14 @@ import {
   formatTokenEstimate,
   type ComposerAttachment
 } from '../conversation/composerCommands'
+import { userTurnsOf } from '../conversation/conversationTurns'
+import {
+  composeJustEnded,
+  historyKeyOf,
+  initialHistoryState,
+  stepHistory,
+  type HistoryState
+} from '../conversation/inputHistory'
 import { ModelPicker } from './ModelPicker'
 import { leftColumnBounds } from './overlay'
 import { IconArrowUp, IconPaperclip, IconSession, IconStop } from './icons'
@@ -46,6 +54,10 @@ export function TemporaryChat() {
   const streaming = useStore((s) => (temp ? (s.streaming[temp.id] ?? false) : false))
 
   const [draft, setDraft] = useState('')
+  /** 输入历史的翻页状态 —— 跟普通输入框共用同一份纯逻辑，历史来自这条临时会话 */
+  const [historyState, setHistoryState] = useState<HistoryState>(initialHistoryState)
+  const draftRef = useRef(draft)
+  draftRef.current = draft
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -55,6 +67,14 @@ export function TemporaryChat() {
   const [models, setModels] = useState<ModelOption[]>([])
   const [bounds, setBounds] = useState(temporaryBounds)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  /** 回填之后要把光标落到结尾；按 draft 更新的 layout effect 负责消费 */
+  const caretAfterRefill = useRef<number | null>(null)
+  const composing = useRef(false)
+  const composeEndedAt = useRef(0)
+  const historyTexts = useMemo(
+    () => userTurnsOf(items).map((turn) => turn.text).filter(Boolean),
+    [items]
+  )
   const { setRef, scrollToBottom } = useAutoScroll(items, streaming, temp?.id ?? null)
 
   // 浮层跟着输入框上沿走：输入框变高、主区变窄时都重算
@@ -74,15 +94,24 @@ export function TemporaryChat() {
     }
   }, [temp?.id])
 
-  // 新临时会话：清空窗口内的草稿和附件（最小化恢复不走这里）
+  // 新临时会话：清空窗口内的草稿、附件和历史指针（最小化恢复不走这里）
   useEffect(() => {
     setDraft('')
     setAttachments([])
+    setHistoryState(initialHistoryState())
     setError(null)
     setConfirmClose(false)
     setModelPicker(null)
     setClosing(false)
   }, [temp?.id])
+
+  // 回填换了文本之后把光标落到结尾 —— 跟普通输入框同一个做法
+  useLayoutEffect(() => {
+    const caret = caretAfterRefill.current
+    if (caret === null) return
+    caretAfterRefill.current = null
+    textareaRef.current?.setSelectionRange(caret, caret)
+  }, [draft])
 
   // 渲染进程重载/最小化恢复时，内容流可能不在 store 里；从内存会话读一次
   useEffect(() => {
@@ -213,8 +242,11 @@ export function TemporaryChat() {
         text,
         previousAttachments.flatMap((item) => (item.uploadId ? [item.uploadId] : []))
       )
+      // 发送成功：历史指针回到最新
+      setHistoryState(stepHistory([], initialHistoryState(), { type: 'reset', text: '' }))
     } catch (caught) {
       setDraft((current) => (current === '' ? text : current))
+      setHistoryState((current) => stepHistory([], current, { type: 'reset', text }))
       setAttachments((current) => (current.length === 0 ? previousAttachments : current))
       setError(caught instanceof Error ? caught.message : String(caught))
     }
@@ -237,8 +269,49 @@ export function TemporaryChat() {
   }
 
   function onComposerKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {
+    const composingNow =
+      composing.current || event.nativeEvent.isComposing || composeJustEnded(composeEndedAt.current)
+    if (composingNow) return
+
+    // 方向键回填输入历史；菜单在这个窗口里不存在，所以归属链只剩输入法 / 修饰键 / 光标边界
+    const target = event.currentTarget
+    const caretStart = target.selectionStart ?? 0
+    const caretEnd = target.selectionEnd ?? 0
+    const intent = historyKeyOf({
+      key: event.key,
+      composing: false,
+      menuOpen: false,
+      shiftKey: event.shiftKey,
+      ctrlKey: event.ctrlKey,
+      metaKey: event.metaKey,
+      altKey: event.altKey,
+      selectionCollapsed: caretStart === caretEnd,
+      newlineBeforeCaret: draft.slice(0, caretStart).includes('\n'),
+      newlineAfterCaret: draft.slice(caretEnd).includes('\n')
+    })
+    if (intent) {
+      const result = stepHistory(historyTexts, historyState, { type: intent })
+      // 没翻动：交给 textarea 自己移动光标
+      if (result.text === draft && result.pointer === historyState.pointer) return
+      event.preventDefault()
+      setHistoryState({ pointer: result.pointer, draft: result.draft })
+      if (result.text === draft) {
+        // 指针动了但文本一样（草稿恰好等于那一条）：只落光标
+        target.setSelectionRange(result.text.length, result.text.length)
+      } else {
+        setDraft(result.text)
+        caretAfterRefill.current = result.text.length
+      }
+      return
+    }
+
+    // Esc：只复位历史指针，不清输入框；关闭确认 / 模型选择由窗口级 Esc 处理
+    if (event.key === 'Escape') {
+      setHistoryState((current) => stepHistory([], current, { type: 'reset', text: draftRef.current }))
+      return
+    }
+
     if (event.key !== 'Enter' || event.shiftKey) return
-    if (event.nativeEvent.isComposing) return
     event.preventDefault()
     void send()
   }
@@ -335,8 +408,20 @@ export function TemporaryChat() {
             <textarea
               ref={textareaRef}
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => {
+                setDraft(event.target.value)
+                setHistoryState((current) =>
+                  stepHistory(historyTexts, current, { type: 'edit', text: event.target.value })
+                )
+              }}
               onKeyDown={onComposerKeyDown}
+              onCompositionStart={() => {
+                composing.current = true
+              }}
+              onCompositionEnd={() => {
+                composing.current = false
+                composeEndedAt.current = Date.now()
+              }}
               rows={2}
               placeholder="问点什么…"
               className="min-h-[42px] w-full resize-none border-0 bg-transparent text-[12.5px] leading-6 text-fg-1 outline-none placeholder:text-fg-3"

@@ -31,7 +31,9 @@ test.describe.serial('临时对话', () => {
       env: {
         ...process.env,
         CODELET_USER_DATA: userDataDir,
-        PI_CODING_AGENT_DIR: agentDir
+        PI_CODING_AGENT_DIR: agentDir,
+        // 发送只记账、不调模型 —— 用来验临时对话的输入历史
+        CODELET_ECHO_PROMPT: '1'
       },
       timeout: 30_000
     })
@@ -114,5 +116,83 @@ test.describe.serial('临时对话', () => {
     await expect(dialog).toBeVisible({ timeout: 15_000 })
     await expect(dialog.getByPlaceholder('问点什么…')).toHaveValue('')
     await expect(dialog.locator('.conv-stream')).toHaveCount(0)
+  })
+
+  /** 把一条用户消息送进临时会话的内容流（echo 不写会话文件） */
+  async function pushTemporaryMessage(tempId: string, text: string): Promise<void> {
+    const seenBefore = await page.getByText(text, { exact: true }).count()
+    await app!.evaluate(
+      async (_electron, args) => {
+        const push = (
+          globalThis as unknown as {
+            __codeletSessionEvent: (event: {
+              type: string
+              data: unknown
+              agentId: string
+            }) => void
+          }
+        ).__codeletSessionEvent
+        push({
+          type: 'message_start',
+          agentId: args.tempId,
+          data: { message: { role: 'user', content: [{ type: 'text', text: args.text }] } }
+        })
+      },
+      { tempId, text }
+    )
+    await expect(page.getByText(text, { exact: true })).toHaveCount(seenBefore + 1)
+  }
+
+  test('临时对话里发一句，按上箭头能回填', async () => {
+    const dialog = page.getByRole('dialog', { name: '临时对话' })
+    const input = dialog.getByPlaceholder('问点什么…')
+
+    // 先给 agent 那边放一句，证明临时对话翻不到它的历史
+    const agentId = await page.evaluate(async () => {
+      const snapshot = await (
+        window as unknown as {
+          codelet: { getSnapshot: () => Promise<{ activeAgentId: string | null }> }
+        }
+      ).codelet.getSnapshot()
+      if (!snapshot.activeAgentId) throw new Error('没有活动 agent')
+      return snapshot.activeAgentId
+    })
+    await pushTemporaryMessage(agentId, 'agent 那边的话')
+
+    await input.fill('临时第一句')
+    await input.press('Enter')
+    await expect(input).toHaveValue('')
+
+    const tempId = await page.evaluate(async () => {
+      const snapshot = await (
+        window as unknown as {
+          codelet: { getSnapshot: () => Promise<{ temporaryChat: { id: string } | null }> }
+        }
+      ).codelet.getSnapshot()
+      if (!snapshot.temporaryChat) throw new Error('临时对话不见了')
+      return snapshot.temporaryChat.id
+    })
+    await pushTemporaryMessage(tempId, '临时第一句')
+
+    await input.press('ArrowUp')
+    await expect(input).toHaveValue('临时第一句')
+    // 再往上还是这条（临时会话里只有一句），不会翻出 agent 那边的消息
+    await input.press('ArrowUp')
+    await expect(input).toHaveValue('临时第一句')
+    await input.press('ArrowDown')
+    await expect(input).toHaveValue('')
+
+    // 彻底关闭再打开：新会话历史为空，按上箭头不会翻出上一段
+    await dialog.getByRole('button', { name: '关闭临时对话' }).click()
+    await page.getByRole('alertdialog', { name: '彻底关闭临时对话' }).getByRole('button', { name: '彻底关闭' }).click()
+    await expect(dialog).toHaveCount(0)
+
+    const composer = page.locator('textarea').first()
+    await composer.fill('/ask')
+    await page.getByRole('option').filter({ hasText: '/ask' }).first().click()
+    await expect(dialog).toBeVisible({ timeout: 15_000 })
+    const fresh = dialog.getByPlaceholder('问点什么…')
+    await fresh.press('ArrowUp')
+    await expect(fresh).toHaveValue('')
   })
 })
