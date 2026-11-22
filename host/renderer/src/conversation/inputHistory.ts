@@ -107,3 +107,11 @@ export function historyKeyOf(input: HistoryKeyInput): 'up' | 'down' | null {
   if (input.key === 'ArrowDown') return input.newlineAfterCaret ? null : 'down'
   return null
 }
+
+/** 输入法组词刚结束的那一小段时间 —— 有些输入法在 compositionend 之后才发 keydown */
+export const COMPOSE_END_WINDOW_MS = 80
+
+/** 组词结束得够近吗？够近就当还在组词，方向键 / 回车都不接管 */
+export function composeJustEnded(endedAt: number, now = Date.now()): boolean {
+  return now - endedAt < COMPOSE_END_WINDOW_MS
+}

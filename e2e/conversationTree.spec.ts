@@ -171,7 +171,8 @@ test.describe.serial('会话树的读、切与另开', () => {
       page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '会话树' })
     ).toBeVisible({ timeout: 10_000 })
     const button = page.getByRole('button', { name: /^对话结构/ })
-    await expect(button).toContainText('1')
+    // 树是懒加载的（拉一次 getAgentTree），跑全量时可能比默认 5s 慢
+    await expect(button).toContainText('1', { timeout: 10_000 })
 
     await openTree()
     const rows = page.locator('.conv-tree-row')

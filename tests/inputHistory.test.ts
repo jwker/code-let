@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COMPOSE_END_WINDOW_MS,
+  composeJustEnded,
   historyKeyOf,
   initialHistoryState,
   stepHistory,
@@ -181,6 +183,14 @@ describe('按键归属', () => {
     expect(historyKeyOf({ ...base, key: 'ArrowDown', newlineAfterCaret: true })).toBeNull()
   })
 
+  it('三行以上、光标在中间行：上下箭头都只是移动光标', () => {
+    // 中间行：光标前有换行、后面也有换行
+    const middle = { ...base, newlineBeforeCaret: true, newlineAfterCaret: true }
+    expect(historyKeyOf(middle)).toBeNull()
+    expect(historyKeyOf({ ...middle, key: 'ArrowDown' })).toBeNull()
+  })
+
+
   it('有选中文本时让 textarea 处理', () => {
     expect(historyKeyOf({ ...base, selectionCollapsed: false })).toBeNull()
   })
@@ -188,5 +198,12 @@ describe('按键归属', () => {
   it('别的按键不归历史', () => {
     expect(historyKeyOf({ ...base, key: 'Enter' })).toBeNull()
     expect(historyKeyOf({ ...base, key: 'ArrowLeft' })).toBeNull()
+  })
+
+  it('组词刚结束的极短窗口内仍算组词中', () => {
+    const ended = 1_000
+    expect(composeJustEnded(ended, ended)).toBe(true)
+    expect(composeJustEnded(ended, ended + COMPOSE_END_WINDOW_MS - 1)).toBe(true)
+    expect(composeJustEnded(ended, ended + COMPOSE_END_WINDOW_MS)).toBe(false)
   })
 })

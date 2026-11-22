@@ -42,6 +42,7 @@ import {
 } from './composerCommands'
 import { useAutoScroll } from './useAutoScroll'
 import {
+  composeJustEnded,
   historyKeyOf,
   initialHistoryState,
   stepHistory,
@@ -1249,7 +1250,7 @@ export function ConversationArea() {
                 const composingNow = () =>
                   composing.current ||
                   event.nativeEvent.isComposing ||
-                  Date.now() - composeEndedAt.current < 80
+                  composeJustEnded(composeEndedAt.current)
 
                 if (composingNow()) return
 

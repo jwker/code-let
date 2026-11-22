@@ -65,12 +65,8 @@ test.describe.serial('输入历史', () => {
     })
   }
 
-  /** 发一句：走真实的发送路径（echo 不调模型），再把用户消息送进内容流 */
-  async function send(text: string): Promise<void> {
-    await composer().fill(text)
-    await composer().press('Enter')
-    await expect(composer()).toHaveValue('')
-
+  /** 把一条用户消息送进内容流 —— 等价于真实会话里已经落盘的那条 */
+  async function pushUserMessage(text: string): Promise<void> {
     const seenBefore = await page.getByText(text, { exact: true }).count()
     const agentId = await activeAgentId()
     await app!.evaluate(
@@ -96,6 +92,14 @@ test.describe.serial('输入历史', () => {
     )
     // 内容流里多出一条这条用户消息 = 它进了输入历史（重复文本要用条数判断）
     await expect(page.getByText(text, { exact: true })).toHaveCount(seenBefore + 1)
+  }
+
+  /** 发一句：走真实的发送路径（echo 不调模型），再把用户消息送进内容流 */
+  async function send(text: string): Promise<void> {
+    await composer().fill(text)
+    await composer().press('Enter')
+    await expect(composer()).toHaveValue('')
+    await pushUserMessage(text)
   }
 
   test('上箭头回填、翻到尽头停住、下箭头回到草稿', async () => {
@@ -179,5 +183,42 @@ test.describe.serial('输入历史', () => {
     // 两条「继续」都走过了，才轮到上一条不同的
     await composer().press('ArrowUp')
     await expect(composer()).toHaveValue('第二句')
+  })
+
+  test('失焦再点回来、切排版模式都不复位', async () => {
+    // 上一条用例结束时停在「第二句」（历史里的第 2 条）
+    await expect(composer()).toHaveValue('第二句')
+
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+    await composer().click()
+    await composer().press('ArrowUp')
+    // 没有复位：从原来那条继续往上，而不是从最新一条开始
+    await expect(composer()).toHaveValue('第一句')
+
+    // 切到终端排版再切回来：指针还停在「第一句」上
+    await page.getByRole('button', { name: '更多' }).click()
+    await page.getByRole('menuitem', { name: '模式切换' }).click()
+    await page.getByRole('menuitemradio', { name: '终端' }).click()
+    await expect(composer()).toHaveValue('第一句')
+    await composer().press('ArrowDown')
+    await expect(composer()).toHaveValue('第二句')
+
+    await page.getByRole('button', { name: '更多' }).click()
+    await page.getByRole('menuitem', { name: '模式切换' }).click()
+    await page.getByRole('menuitemradio', { name: '普通' }).click()
+  })
+
+  test('回填以斜杠开头的旧消息，命令面板不会自己弹出来', async () => {
+    // 先把指针复位，保证下一箭头上的是最新一条
+    await composer().press('Escape')
+    await pushUserMessage('/review')
+
+    await composer().press('ArrowUp')
+    await expect(composer()).toHaveValue('/review')
+    // 回填引起的那一次菜单刷新要跳过；多等一会儿确认不是延迟弹出
+    await page.waitForTimeout(300)
+    await expect(page.getByRole('listbox', { name: '命令' })).toHaveCount(0)
+
+    await composer().press('Escape')
   })
 })
