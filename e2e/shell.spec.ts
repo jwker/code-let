@@ -65,6 +65,11 @@ test.describe.serial('新外壳：左列 / 右栏 / 项目标签', () => {
       ...over
     })
 
+    // 文档功能区要有一篇能读的文档 —— 项目根的 AGENTS.md
+    writeFileSync(
+      join(projectDir, 'AGENTS.md'),
+      '# 项目说明\n\n这是文档正文，只读。\n'
+    )
     writeFileSync(
       join(userDataDir, 'projects.json'),
       JSON.stringify({ projects: [projectDir, otherProjectDir] }, null, 2)
@@ -169,7 +174,7 @@ test.describe.serial('新外壳：左列 / 右栏 / 项目标签', () => {
     await expect(rail.getByRole('button', { name: 'AI 文档', exact: true })).toHaveCount(0)
   })
 
-  test('右栏：空态开代码功能区，收起再展开还是代码', async () => {
+  test('右栏空态：文档与代码都能开；切换器换项后收起再展开保留', async () => {
     // 一开始右栏收着，左列吃满窗口
     await expect(page.locator('.right-panel')).toHaveCount(0)
 
@@ -179,12 +184,26 @@ test.describe.serial('新外壳：左列 / 右栏 / 项目标签', () => {
     await expect(panel.getByRole('button', { name: '浏览器', exact: true })).toBeVisible()
     await expect(panel.getByRole('button', { name: '文档', exact: true })).toBeVisible()
 
-    await panel.getByRole('button', { name: '代码', exact: true }).click()
-    // 代码功能区：左文件树、右内容
-    await expect(panel.getByRole('tab', { name: /文件/ })).toBeVisible()
-    await expect(panel.getByRole('tab', { name: /改动/ })).toBeVisible()
+    // 空态的「文档」进入文档功能区：左树、右只读正文
+    await panel.getByRole('button', { name: '文档', exact: true }).click()
+    await panel.getByRole('button', { name: /AGENTS\.md/ }).click()
+    await expect(panel.getByText('这是文档正文，只读。')).toBeVisible()
+    await expect(panel.getByText('只读', { exact: true })).toBeVisible()
+    // 顶栏左边写的是在看什么
+    await expect(panel.locator('.rp-title-name')).toHaveText('AGENTS.md')
 
-    // 收起再打开 —— 还是代码，不用重选
+    // 切换器：当前项打勾，选「代码」立刻切
+    await panel.getByRole('button', { name: /切换功能区/ }).click()
+    const menu = panel.getByRole('menu', { name: '切换功能区' })
+    await expect(menu.getByRole('menuitemradio', { name: /文档/ })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    )
+    await menu.getByRole('menuitemradio', { name: /代码/ }).click()
+    await expect(panel.getByRole('tab', { name: /改动/ })).toBeVisible()
+    await expect(panel.getByRole('button', { name: /切换功能区，当前是代码/ })).toBeVisible()
+
+    // 收起再打开 —— 还是换过的那一项，不用重选
     await panel.getByRole('button', { name: '收起右栏' }).click()
     await expect(page.locator('.right-panel')).toHaveCount(0)
     await page.getByRole('button', { name: '右栏', exact: true }).click()

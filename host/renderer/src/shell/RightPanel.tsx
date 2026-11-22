@@ -1,9 +1,11 @@
-import { useEffect, type ReactElement } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import type { RightPanelKind, RightPanelState } from '@contract/index'
 import { host } from '../host'
 import { activeProjectTab, useStore } from '../store'
 import { IconBrowser, IconChevron, IconCode, IconDoc, IconPanel, IconPanelCollapse } from './icons'
 import { FileTree } from './FileTree'
+import { DocsList } from './DocsList'
+import { DocView } from './DocView'
 import { GitChanges } from './GitChanges'
 import { FilePreview } from './FilePreview'
 import { GitDiffView } from './GitDiffView'
@@ -13,8 +15,8 @@ import { changeCount } from './gitFormat'
 /**
  * 右栏（票 02）。
  *
- * 从窗口顶边贯到底边，同一时刻只放一个功能区。这一版只有代码功能区接上；
- * 浏览器和文档的按钮先在空态里占位，下一单接上（票 04 / 05）。
+ * 从窗口顶边贯到底边，同一时刻只放一个功能区。顶栏右侧是功能切换器：
+ * 图标和文字都是当前功能区，点开换别的。浏览器功能区在票 05 接上。
  *
  * 收起后整条不渲染 —— 左列吃满窗口。
  */
@@ -24,6 +26,14 @@ const KIND_META: Record<RightPanelKind, { label: string; icon: () => ReactElemen
   docs: { label: '文档', icon: IconDoc },
   browser: { label: '浏览器', icon: IconBrowser }
 }
+
+/**
+ * 切换器里能选的功能区。
+ *
+ * 浏览器要等票 05 把页面、标签行接上才出现在这里 —— 先摆一个点进去只有
+ * 「还没接上」的项，比看不到它更糟。
+ */
+const SWITCHABLE: RightPanelKind[] = ['code', 'docs']
 
 /** 代码功能区的两个视图：文件 / 改动。改动那个带未提交数量 */
 function CodeTabs() {
@@ -100,14 +110,14 @@ function CodePanel() {
   if (!cwd) return <div className="rp-empty-note">先打开一个项目</div>
 
   return (
-    <div className="code-split">
-      <div className="code-tree">
+    <div className="panel-split">
+      <div className="panel-tree">
         <CodeTabs />
-        <div className="code-tree-body">
+        <div className="panel-tree-body">
           {mode === 'changes' ? <GitChanges cwd={cwd} /> : <FileTree cwd={cwd} />}
         </div>
       </div>
-      <div className="code-body">
+      <div className="panel-body">
         {change ? (
           <GitDiffView />
         ) : (
@@ -123,8 +133,29 @@ function CodePanel() {
   )
 }
 
-/** 还没接上的功能区（文档 / 浏览器）—— 下一单换成真内容 */
-function PendingPanel({ kind }: { kind: 'docs' | 'browser' }) {
+/** 文档功能区：左边文档树，右边只读正文 */
+function DocsPanel() {
+  const snapshot = useStore((s) => s.snapshot)
+  const cwd = activeProjectTab(snapshot)?.cwd ?? ''
+
+  if (!cwd) return <div className="rp-empty-note">先打开一个项目</div>
+
+  return (
+    <div className="panel-split">
+      <div className="panel-tree">
+        <div className="panel-tree-body">
+          <DocsList cwd={cwd} />
+        </div>
+      </div>
+      <div className="panel-body">
+        <DocView cwd={cwd} />
+      </div>
+    </div>
+  )
+}
+
+/** 还没接上的功能区（这一版只剩浏览器）—— 下一单换成真内容 */
+function PendingPanel({ kind }: { kind: 'browser' }) {
   const Icon = KIND_META[kind].icon
   return (
     <div className="rp-empty">
@@ -132,7 +163,7 @@ function PendingPanel({ kind }: { kind: 'docs' | 'browser' }) {
         <Icon />
       </div>
       <h3>{KIND_META[kind].label}功能区还没接上</h3>
-      <p>这一版右栏先只开代码。下一单接上{KIND_META[kind].label}。</p>
+      <p>这一版右栏先接上代码和文档。下一单接上{KIND_META[kind].label}。</p>
     </div>
   )
 }
@@ -156,11 +187,83 @@ function EmptyPanel() {
           <IconCode />
           代码
         </button>
-        <button type="button" disabled title="下一单接上">
+        <button type="button" onClick={() => openRightPanel('docs')}>
           <IconDoc />
           文档
         </button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * 功能切换器：图标和文字都是当前功能区，点开下拉换别的。
+ *
+ * 走跟空态三个按钮同一个动作（`openRightPanel`）—— 展开右栏、写入 kind、
+ * 顶栏标识跟着快照一起换。不碰任何 agent。
+ */
+function FunctionSwitcher({ current }: { current: RightPanelKind }) {
+  const openRightPanel = useStore((s) => s.openRightPanel)
+  const [open, setOpen] = useState(false)
+  const meta = KIND_META[current]
+  const Icon = meta.icon
+
+  useEffect(() => {
+    if (!open) return
+    function onKeyDown(event: KeyboardEvent): void {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  return (
+    <div className="rp-func-wrap">
+      <button
+        type="button"
+        className="rp-func"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`切换功能区，当前是${meta.label}`}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Icon />
+        <span>{meta.label}</span>
+        <span className="rp-func-chev">
+          <IconChevron />
+        </span>
+      </button>
+
+      {open && (
+        <>
+          {/* 点外面关掉。不可见，不压右栏内容 */}
+          <div className="fixed inset-0 z-[55]" onClick={() => setOpen(false)} />
+          <div role="menu" aria-label="切换功能区" className="rp-func-menu">
+            {SWITCHABLE.map((key) => {
+              const item = KIND_META[key]
+              const ItemIcon = item.icon
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={key === current}
+                  onClick={() => {
+                    setOpen(false)
+                    if (key !== current) openRightPanel(key)
+                  }}
+                >
+                  <ItemIcon />
+                  <span>{item.label}</span>
+                  <span className="rp-func-check" aria-hidden="true">
+                    ✓
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -195,6 +298,7 @@ export function RightPanel({
   const toggleRightPanel = useStore((s) => s.toggleRightPanel)
   const activeFileId = snapshot.activeFileId
   const change = useStore((s) => s.git.selected)
+  const docsSelected = useStore((s) => s.docs.selected)
   const cwd = activeProjectTab(snapshot)?.cwd ?? ''
 
   const kind = panel.kind
@@ -202,13 +306,15 @@ export function RightPanel({
   const Icon = meta?.icon ?? null
 
   /*
-   * 顶栏左边写在看什么：代码功能区写当前文件名（没开文件就写项目名）。
-   * 文档 / 浏览器在各自的单里接上真标题。
+   * 顶栏左边写在看什么：代码写当前文件名（没开文件就写项目名），
+   * 文档写选中的那一篇 —— 切换功能区后这里跟着换。
    */
   let title = ''
   if (kind === 'code') {
     const file = snapshot.files.find((item) => item.id === activeFileId)
     title = change?.path ?? file?.relPath ?? (cwd ? cwd.split('/').pop()! : '代码')
+  } else if (kind === 'docs') {
+    title = docsSelected ? (docsSelected.entry.relPath.split('/').pop() ?? '文档') : '文档'
   } else if (kind) {
     title = meta!.label
   }
@@ -232,26 +338,7 @@ export function RightPanel({
           <span className="rp-title-name">{title}</span>
         </div>
         <div className="rp-head-actions">
-          {Icon && meta ? (
-            /*
-             * 功能切换器的位置先占住。下拉在票 04 接上 ——
-             * 现在显示的是「当前是哪个功能区」，点不开。
-             */
-            <button
-              type="button"
-              className="rp-func"
-              aria-haspopup="menu"
-              aria-expanded={false}
-              disabled
-              title="切换功能区（下一单接上）"
-            >
-              <Icon />
-              <span>{meta.label}</span>
-              <span className="rp-func-chev">
-                <IconChevron />
-              </span>
-            </button>
-          ) : null}
+          {kind && meta ? <FunctionSwitcher current={kind} /> : null}
           <button
             type="button"
             className="rp-close"
@@ -267,8 +354,10 @@ export function RightPanel({
       <div className="rp-body">
         {kind === 'code' ? (
           <CodePanel />
-        ) : kind ? (
-          <PendingPanel kind={kind} />
+        ) : kind === 'docs' ? (
+          <DocsPanel />
+        ) : kind === 'browser' ? (
+          <PendingPanel kind="browser" />
         ) : (
           <EmptyPanel />
         )}
