@@ -16,12 +16,12 @@ import {
 } from '@contract/index'
 import { agentIdOfHost } from '@contract/browser'
 import {
-  BrowserPools,
+  BrowserTabs,
   PROJECT_BROWSER,
   agentBrowserHost,
   isAgentBrowserHost,
   type BrowserHost
-} from './browserPools'
+} from './browserTabs'
 import { ANNOTATION_SCRIPT } from './annotationScript'
 import { PrototypeWatch } from './prototypeWatch'
 import { checkAnchors, readAnchors, type AnchorBreak, type FileAnchor } from './anchorCheck'
@@ -271,12 +271,12 @@ export interface BrowserManagerOptions {
 
 export class BrowserManager {
   /**
-   * 按宿主分开的标签池（PLAN.md D57）。
+   * 全部宿主共用的一张标签表（ADR-0005）。
    *
-   * `project` 是窄轨里那个入口，`agent:<id>` 是某个 agent 自己的预览。
-   * 分开是为了让 agent 的工具碰不到用户正在看的那一页。
+   * `project` 是右栏里的公共浏览器，`agent:<id>` 是某个 agent 自己的预览。
+   * 隔离靠「查标签必须带宿主」：agent 的工具碰不到用户正在看的那一页。
    */
-  private readonly pools = new BrowserPools<Tab>()
+  private readonly browserTabs = new BrowserTabs<Tab>()
   /** 现在显示的是哪个宿主的浏览器（同一时刻只有一个 WebContentsView 挂在窗口上） */
   private visibleHost: BrowserHost | null = null
   private bounds: BrowserBounds = { x: 0, y: 0, width: 0, height: 0 }
@@ -352,7 +352,7 @@ export class BrowserManager {
     if (!isAgentBrowserHost(host)) return this.annotationState(host)
     const record = this.annotationRecord(host)
     record.enabled = enabled
-    const tab = this.pools.active(host)
+    const tab = this.browserTabs.active(host)
     if (tab) {
       await this.runAnnotation(tab, `setMode(${enabled ? 'true' : 'false'})`)
       // 顺手重建一次块登记 —— 页面里新加的块也能马上被点到
@@ -373,7 +373,7 @@ export class BrowserManager {
     const record = this.annotationRecord(host)
     record.badges = [...new Set(keys.filter((key) => key.length > 0))].slice(0, 500)
     record.numbers = numbers
-    const tab = this.pools.active(host)
+    const tab = this.browserTabs.active(host)
     if (tab) await this.pushBadges(tab, record)
   }
 
@@ -385,7 +385,7 @@ export class BrowserManager {
   async focusAnnotation(host: BrowserHost, key: string): Promise<void> {
     if (!isAgentBrowserHost(host)) return
     const record = this.annotationRecord(host)
-    const tab = this.pools.active(host)
+    const tab = this.browserTabs.active(host)
     if (!tab) return
     // 临时号转正之后按块号找；还没转正就还是 T1（页面按选择器找）
     const resolved = resolveBlockKey(key, record.temps, record.blocks)
@@ -471,7 +471,7 @@ export class BrowserManager {
   async noteTurnEnd(agentId: string): Promise<TurnEndResult> {
     const host = agentBrowserHost(agentId)
     const path = this.previewPath(host)
-    const tab = this.pools.active(host)
+    const tab = this.browserTabs.active(host)
     const changed = await this.watch.end(agentId, path)
     const record = this.annotationRecord(host)
     const before = record.anchors.before
@@ -509,7 +509,7 @@ export class BrowserManager {
 
   /** 当前预览标签对应的本地文件（绝对路径）；没有就是 null */
   private previewPath(host: BrowserHost): string | null {
-    const tab = this.pools.active(host)
+    const tab = this.browserTabs.active(host)
     if (!tab) return null
     return prototypePathOf(tab.view.webContents.getURL() || tab.url)
   }
@@ -562,9 +562,9 @@ export class BrowserManager {
 
   /** 页面点了一块：块信息以主进程的登记为准，页面报的只当回去的线索 */
   private readonly onPageMessage = (event: IpcMainEvent, message: unknown): void => {
-    const found = this.pools
+    const found = this.browserTabs
       .allTabs()
-      .find(({ tab }) => tab.view.webContents.id === event.sender.id)
+      .find((tab) => tab.view.webContents.id === event.sender.id)
     if (!found) return
     const payload = message as { type?: unknown; block?: unknown }
     if (!payload) return
@@ -611,8 +611,8 @@ export class BrowserManager {
   state(host: BrowserHost): BrowserState {
     return {
       host,
-      tabs: this.pools.list(host).map((tab) => this.publicTab(tab)),
-      activeTabId: this.pools.activeTabId(host),
+      tabs: this.browserTabs.list(host).map((tab) => this.publicTab(tab)),
+      activeTabId: this.browserTabs.activeTabId(host),
       agent: this.activity.get(host)?.value ?? null
     }
   }
@@ -653,7 +653,7 @@ export class BrowserManager {
 
   async create(host: BrowserHost, url = 'about:blank'): Promise<BrowserState> {
     const tab = this.createTab(host)
-    this.pools.add(host, tab)
+    this.browserTabs.add(tab)
     this.applyVisibility()
     await this.load(tab, url)
     this.emit(host)
@@ -661,7 +661,7 @@ export class BrowserManager {
   }
 
   close(host: BrowserHost, tabId: string): Promise<BrowserState> {
-    const removed = this.pools.remove(host, tabId)
+    const removed = this.browserTabs.remove(host, tabId)
     if (!removed) return Promise.resolve(this.state(host))
     this.detach(removed.tab)
     if (this.visibleHost === host) this.applyVisibility()
@@ -670,9 +670,9 @@ export class BrowserManager {
   }
 
   activate(host: BrowserHost, tabId: string): Promise<BrowserState> {
-    if (this.pools.setActive(host, tabId)) {
+    if (this.browserTabs.setActive(host, tabId)) {
       // 多标签时「上次预览」跟着用户最后切到的那一个走
-      const tab = this.pools.find(host, tabId)
+      const tab = this.browserTabs.find(host, tabId)
       if (tab) this.rememberPreview(tab)
       this.applyVisibility()
       this.emit(host)
@@ -690,7 +690,7 @@ export class BrowserManager {
     if (!isAgentBrowserHost(host)) return null
     if (this.previewRestored.has(host)) return null
     this.previewRestored.add(host)
-    if (this.pools.list(host).length > 0) return null
+    if (this.browserTabs.list(host).length > 0) return null
     const usable = restorablePreviewUrl(url)
     if (!usable) return null
     await this.create(host, usable)
@@ -713,7 +713,7 @@ export class BrowserManager {
   }
 
   async navigate(host: BrowserHost, tabId: string, input: string): Promise<BrowserState> {
-    const tab = this.pools.find(host, tabId)
+    const tab = this.browserTabs.find(host, tabId)
     if (!tab) return this.state(host)
     const normalized = normalizeBrowserUrl(input)
     if (normalized.error) {
@@ -736,19 +736,19 @@ export class BrowserManager {
   }
 
   back(host: BrowserHost, tabId: string): Promise<BrowserState> {
-    const tab = this.pools.find(host, tabId)
+    const tab = this.browserTabs.find(host, tabId)
     if (tab?.view.webContents.canGoBack()) tab.view.webContents.goBack()
     return Promise.resolve(this.state(host))
   }
 
   forward(host: BrowserHost, tabId: string): Promise<BrowserState> {
-    const tab = this.pools.find(host, tabId)
+    const tab = this.browserTabs.find(host, tabId)
     if (tab?.view.webContents.canGoForward()) tab.view.webContents.goForward()
     return Promise.resolve(this.state(host))
   }
 
   reload(host: BrowserHost, tabId: string): Promise<BrowserState> {
-    const tab = this.pools.find(host, tabId)
+    const tab = this.browserTabs.find(host, tabId)
     tab?.view.webContents.reload()
     return Promise.resolve(this.state(host))
   }
@@ -783,8 +783,8 @@ export class BrowserManager {
     ipcMain.removeListener(BROWSER_ANNOTATION_CHANNEL, this.onPageMessage)
     this.annotations.clear()
     this.watch.clear()
-    for (const { tab } of this.pools.allTabs()) this.detach(tab)
-    this.pools.clear()
+    for (const tab of this.browserTabs.allTabs()) this.detach(tab)
+    this.browserTabs.clear()
     this.visibleHost = null
     for (const entry of this.activity.values()) {
       if (entry.timer) clearTimeout(entry.timer)
@@ -804,11 +804,9 @@ export class BrowserManager {
     host: BrowserHost = PROJECT_BROWSER
   ): Promise<unknown> {
     const requested = typeof args.tabId === 'string' ? args.tabId : ''
-    const tab =
-      this.pools.find(host, requested) ??
-      this.pools.active(host) ??
-      this.pools.list(host)[0] ??
-      null
+    const tab = requested
+      ? this.browserTabs.find(host, requested)
+      : (this.browserTabs.active(host) ?? this.browserTabs.list(host)[0] ?? null)
     const url = typeof args.url === 'string' ? args.url : ''
 
     if (tool === 'tabs') {
@@ -823,6 +821,11 @@ export class BrowserManager {
       this.noteAgent(host, 'browser_blocks', '读取原型块清单')
       return this.blockList(host)
     }
+    /*
+     * 显式指定了标签就必须是**这个宿主自己的**。拿别的宿主的 id 要失败，
+     * 不能退回自己的活动标签 —— 那等于「点错了人、结果改了自己」，比报错更糟。
+     */
+    if (requested && !tab) throw new Error(`标签不属于这个宿主：${requested}`)
     if (!tab) throw new Error('没有打开的浏览器标签')
 
     if (tool === 'activate') {
@@ -954,7 +957,7 @@ export class BrowserManager {
 
   /** 截当前页面；缩到模型能看的大小 */
   private async screenshot(host: BrowserHost, tabId: string): Promise<unknown> {
-    const tab = this.pools.find(host, tabId)
+    const tab = this.browserTabs.find(host, tabId)
     if (!tab) throw new Error('没有打开的浏览器标签')
     try {
       const image = await tab.view.webContents.capturePage()
@@ -994,7 +997,7 @@ export class BrowserManager {
   }
 
   private async snapshot(host: BrowserHost, tabId: string, offset: number, limit: number): Promise<unknown> {
-    const tab = this.pools.find(host, tabId)
+    const tab = this.browserTabs.find(host, tabId)
     if (!tab) throw new Error('没有打开的浏览器标签')
     const raw = await tab.view.webContents.executeJavaScript(
       `(() => {
@@ -1185,7 +1188,7 @@ export class BrowserManager {
   }
 
   private applyBounds(): void {
-    for (const { tab } of this.pools.allTabs()) tab.view.setBounds(this.bounds)
+    for (const tab of this.browserTabs.allTabs()) tab.view.setBounds(this.bounds)
   }
 
   /**
@@ -1195,8 +1198,8 @@ export class BrowserManager {
    * 两个宿主的页面不会同时显示。
    */
   private applyVisibility(): void {
-    const visibleTab = this.visibleHost ? this.pools.active(this.visibleHost) : null
-    for (const { tab } of this.pools.allTabs()) {
+    const visibleTab = this.visibleHost ? this.browserTabs.active(this.visibleHost) : null
+    for (const tab of this.browserTabs.allTabs()) {
       tab.view.setBounds(this.bounds)
       tab.view.setVisible(tab === visibleTab)
     }

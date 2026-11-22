@@ -246,6 +246,44 @@ test.describe.serial('浏览器面板', () => {
     await expect.poll(async () => (await bounds())?.visible).toBe(true)
   })
 
+  test('工具入口按宿主过滤：拿别的宿主的标签必须失败', async () => {
+    const result = await app!.evaluate(async () => {
+      const manager = (
+        globalThis as unknown as {
+          __codeletBrowser: {
+            tool: (name: string, args: Record<string, unknown>, host: string) => Promise<unknown>
+            getState: (host: string) => Promise<{ tabs: Array<{ id: string }> }>
+          }
+        }
+      ).__codeletBrowser
+      const projectBefore = (await manager.getState('project')).tabs
+      const projectTabId = projectBefore[0]?.id
+      if (!projectTabId) return { message: '没有项目标签', projectBefore: 0, projectAfter: 0, ghostBefore: 0, ghostAfter: 0 }
+
+      // 另一个宿主自己也有一条标签 —— 失败不能是「它本来就没标签」
+      await manager.tool('open', { url: 'about:blank' }, 'agent:ghost')
+      const ghostBefore = (await manager.getState('agent:ghost')).tabs.length
+      let message = ''
+      try {
+        await manager.tool('close', { tabId: projectTabId }, 'agent:ghost')
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error)
+      }
+      return {
+        message,
+        projectBefore: projectBefore.length,
+        projectAfter: (await manager.getState('project')).tabs.length,
+        ghostBefore,
+        ghostAfter: (await manager.getState('agent:ghost')).tabs.length
+      }
+    })
+
+    expect(result.message).toContain('标签不属于这个宿主')
+    // 别人的标签没被关，自己的也没被误关
+    expect(result.projectAfter).toBe(result.projectBefore)
+    expect(result.ghostAfter).toBe(result.ghostBefore)
+  })
+
   test('可以新建和关闭标签', async () => {
     const plus = page.getByRole('button', { name: '新建浏览器标签' })
     await plus.click()
