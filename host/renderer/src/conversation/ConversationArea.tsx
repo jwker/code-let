@@ -41,6 +41,12 @@ import {
   type ComposerAttachment
 } from './composerCommands'
 import { useAutoScroll } from './useAutoScroll'
+import {
+  historyKeyOf,
+  initialHistoryState,
+  stepHistory,
+  type HistoryState
+} from './inputHistory'
 
 /** 还没有内容流时的空数组 —— 稳定引用，别每次渲染新建 */
 const EMPTY_ITEMS: StreamItem[] = []
@@ -110,6 +116,13 @@ export function ConversationArea() {
   })
   const [reloading, setReloading] = useState(false)
   const [draft, setDraft] = useState('')
+  /**
+   * 输入历史的翻页状态（GLOSSARY「输入历史」）。历史本身不另存一份 ——
+   * 从已经加载的消息里挑用户说过的话，跟导航点用同一个数据来源。
+   */
+  const [historyState, setHistoryState] = useState<HistoryState>(initialHistoryState)
+  const draftRef = useRef(draft)
+  draftRef.current = draft
 
   /*
    * 「回到这一轮」把提问原文送回输入框。请求走 store 而不是 props：
@@ -121,6 +134,9 @@ export function ConversationArea() {
     if (!composerTextRequest) return
     if (composerTextRequest.agentId !== activeAgentId) return
     setDraft(composerTextRequest.text)
+    setHistoryState((current) =>
+      stepHistory([], current, { type: 'reset', text: composerTextRequest.text })
+    )
     consumeComposerText()
   }, [activeAgentId, composerTextRequest, consumeComposerText])
 
@@ -136,6 +152,18 @@ export function ConversationArea() {
    */
   const composing = useRef(false)
   const composeEndedAt = useRef(0)
+
+  /** 当前 agent 这条支线里用户说过的话，按时间序（越早越靠前） */
+  const historyTexts = useMemo(
+    () => userTurnsOf(items).map((turn) => turn.text).filter(Boolean),
+    [items]
+  )
+  const activeProjectTabId = useStore((s) => s.snapshot.activeProjectTabId)
+
+  // 切 agent / 切项目标签：指针复位到最新（不复位输入框里正在写的内容）
+  useEffect(() => {
+    setHistoryState((current) => stepHistory([], current, { type: 'reset', text: draftRef.current }))
+  }, [activeAgentId, activeProjectTabId])
 
   const [menu, setMenu] = useState<ComposerMenuState | null>(null)
   const [piCommands, setPiCommands] = useState<CommandOption[]>([])
@@ -825,9 +853,12 @@ export function ConversationArea() {
         !isSlash && projectPaths.length > 0 ? projectPaths : undefined,
         !isSlash && uploadIds.length > 0 ? uploadIds : undefined
       )
+      // 发送成功：指针回到最新，紧接着按上箭头看到的就是刚发出去那条
+      setHistoryState(stepHistory([], initialHistoryState(), { type: 'reset', text: '' }))
     } catch (error) {
       // 发送失败（附件读不了、没有模型等）—— 用户还没开始写新内容就把草稿和附件放回去
       setDraft((current) => (current === '' ? previousDraft : current))
+      setHistoryState((current) => stepHistory([], current, { type: 'reset', text: previousDraft }))
       if (!isSlash) {
         setAttachments((current) => {
           const next = current.length === 0 ? previousAttachments : current
@@ -1178,6 +1209,9 @@ export function ConversationArea() {
               onChange={(event) => {
                 const value = event.target.value
                 setDraft(value)
+                setHistoryState((current) =>
+                  stepHistory(historyTexts, current, { type: 'edit', text: value })
+                )
                 syncAttachmentsWithDraft(value)
                 refreshMenu(value, event.target.selectionStart ?? value.length)
               }}
@@ -1252,8 +1286,51 @@ export function ConversationArea() {
                   }
                 }
 
-                // Esc：中止这一轮。只在有东西在跑的时候有意义
+                /*
+                 * 方向键回填输入历史。
+                 *
+                 * 到这一步，输入法与下拉菜单已经让过了；余下的优先级是
+                 * 「带修饰键 → 光标不在边界 → 回填」，判断在纯函数里。
+                 */
+                const target = event.currentTarget
+                const caretStart = target.selectionStart ?? 0
+                const caretEnd = target.selectionEnd ?? 0
+                const intent = historyKeyOf({
+                  key: event.key,
+                  composing: false,
+                  menuOpen: false,
+                  shiftKey: event.shiftKey,
+                  ctrlKey: event.ctrlKey,
+                  metaKey: event.metaKey,
+                  altKey: event.altKey,
+                  selectionCollapsed: caretStart === caretEnd,
+                  newlineBeforeCaret: draft.slice(0, caretStart).includes('\n'),
+                  newlineAfterCaret: draft.slice(caretEnd).includes('\n')
+                })
+                if (intent) {
+                  const result = stepHistory(historyTexts, historyState, { type: intent })
+                  // 没翻动（历史为空、已经在尽头、已经在最底下）：交给 textarea，不碰文本和光标
+                  if (result.text === draft && result.pointer === historyState.pointer) return
+                  event.preventDefault()
+                  setHistoryState({ pointer: result.pointer, draft: result.draft })
+                  // 回填可能以 `/` 开头：别让这次 setDraft 触发候选菜单
+                  suppressRefreshUntil.current = Date.now() + 80
+                  if (result.text === draft) {
+                    // 指针动了但文本一样（草稿恰好等于最新一条）：只把光标落到结尾
+                    target.setSelectionRange(result.text.length, result.text.length)
+                  } else {
+                    setDraft(result.text)
+                    // 光标落在文本结尾 —— 跟插入命令 / 提及走同一个按 draft 定位的 effect
+                    caretAfterInsert.current = result.text.length
+                  }
+                  return
+                }
+
+                // Esc：中止这一轮；同时把历史指针复位到最新（只复位指针，不改文本）
                 if (event.key === 'Escape') {
+                  setHistoryState((current) =>
+                    stepHistory([], current, { type: 'reset', text: draftRef.current })
+                  )
                   if (!streaming) return
                   event.preventDefault()
                   stop()
