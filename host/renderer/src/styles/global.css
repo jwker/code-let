@@ -97,7 +97,7 @@
 }
 
 /* ---------------------------------------------------------------------------
- * 应用骨架：标题栏 · 卡片区（窄轨 + 可选区域 5 + 区域 6）· 状态栏
+ * 应用骨架：标题栏 · 卡片区（窄轨 + 左列）· 状态栏，右栏在左列的兄弟位置
  * 位置写死（PLAN.md D5；左右两栏在 D51 / D63 先后退场）。
  * ------------------------------------------------------------------------- */
 
@@ -758,8 +758,7 @@
 }
 
 /* 旧类名：搬进右栏的组件内部还在用（见 ADR-0005），不再产生新的 */
-.zone5-empty,
-.zone6-empty {
+.panel-empty {
   margin: auto;
   padding: 24px;
   text-align: center;
@@ -768,8 +767,8 @@
   color: var(--fg-3);
 }
 
-/* 代码区的两个 tab（区域 5 顶部） */
-.zone5-seg {
+/* 代码功能区的两个视图：文件 / 改动 */
+.panel-seg {
   display: flex;
   gap: 2px;
   flex: none;
@@ -778,7 +777,7 @@
   border-radius: var(--r-xs);
   background: var(--sunken);
 }
-.zone5-seg-item {
+.panel-seg-item {
   flex: 1;
   display: flex;
   align-items: center;
@@ -789,18 +788,18 @@
   font-size: 11.5px;
   color: var(--fg-3);
 }
-.zone5-seg-item.is-active {
+.panel-seg-item.is-active {
   background: var(--surface);
   color: var(--fg-1);
   font-weight: 500;
   box-shadow: var(--sh-sm);
 }
-.zone5-seg-badge {
+.panel-seg-badge {
   font-family: var(--font-code);
   font-size: 11px;
   color: var(--fg-3);
 }
-.zone5-retry {
+.panel-retry {
   margin-top: 8px;
   height: 24px;
   padding: 0 10px;
@@ -810,7 +809,7 @@
   color: var(--fg-2);
 }
 
-/* 改动列表（区域 5） */
+/* 改动列表（代码功能区的左列） */
 .git-changes {
   display: flex;
   flex-direction: column;
@@ -935,7 +934,7 @@
   color: var(--warn);
 }
 
-/* diff（区域 6） */
+/* diff（代码功能区的右列） */
 .git-diff {
   display: flex;
   flex-direction: column;
@@ -1040,7 +1039,7 @@
   padding-right: 16px;
 }
 
-/* 文档区（区域 5）：分组列表 */
+/* 文档功能区的树列：分组列表 */
 .docs-list {
   display: flex;
   flex-direction: column;
@@ -1109,7 +1108,7 @@
   color: var(--fg-3);
 }
 
-/* 项目设置（区域 5 分类 / 区域 6 内容） */
+/* 项目设置（占满左列：分类 + 内容） */
 .settings-list {
   display: flex;
   flex-direction: column;
@@ -1241,7 +1240,7 @@
   flex: none;
 }
 
-/* 文档预览（区域 6） */
+/* 文档功能区的正文 */
 .doc-view {
   display: flex;
   flex-direction: column;
@@ -1312,19 +1311,12 @@
   white-space: pre-wrap;
 }
 
-/* 文件预览（区域 6）：标签栏 + 内容 */
+/* 代码功能区的正文：标签栏 + 内容 */
 .file-preview {
   display: flex;
   flex-direction: column;
   min-height: 0;
   flex: 1;
-}
-
-/* 右栏拖动条：压在左边缘，拖拽中整条线跟着高亮 */
-.shell-grip-right {
-  top: 0;
-  bottom: 0;
-  left: 0;
 }
 
 /* 拖拽中不要 180ms 过渡，否则宽度跟不上鼠标 */
@@ -1604,12 +1596,13 @@
 }
 
 /* ---------------------------------------------------------------------------
- * 栏宽拖拽条：压在栏与栏之间那条 1px 细线上，自身不占布局
+ * 右栏宽度的拖拽条：压在右栏左缘那条 1px 细线上，自身不占布局
  * ------------------------------------------------------------------------- */
 .shell-grip {
   position: absolute;
-  top: var(--titlebar-h);
-  bottom: var(--statusbar-h);
+  top: 0;
+  bottom: 0;
+  left: 0;
   /*
    * 命中区 6px，压在分隔线上、两边各占 3px。
    * 不能再宽：两侧都是 8px 滚动条，滑块只有中间 4px，再宽就把滑块抓走了。
@@ -2448,7 +2441,7 @@ ol.md-list {
  * 文件树的根。
  *
  * `flex: 1` + `min-height: 0` + `overflow-y: auto` 三件套缺一不可：
- * 父级（`.zone5-body`）是 `overflow: hidden` 的 flex 列，不给这一层自己滚，
+ * 父级（`.panel-tree-body`）是 `overflow: hidden` 的 flex 列，不给这一层自己滚，
  * 多出来的目录就被裁掉，下面永远看不全。
  */
 .file-tree {

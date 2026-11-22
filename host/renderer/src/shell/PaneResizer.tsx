@@ -1,11 +1,6 @@
 import { useRef } from 'react'
 
 interface PaneResizerProps {
-  /**
-   * 拖的是哪条缝：左边那张卡的右缘（`zone5`，已不用）或者右栏的左缘（`right`）。
-   * 两边的方向相反 —— 右栏往左拖才变宽。
-   */
-  variant: 'zone5' | 'right'
   label: string
   /** 当前宽度（px）。拖拽过程中的实时值不走 React，见 onDrag */
   width: number
@@ -30,7 +25,6 @@ const STEP_LARGE = 32
  * 逐帧 setState 会让整棵树（含内容流里的 markdown）每帧重渲染。
  */
 export function PaneResizer({
-  variant,
   label,
   width,
   min,
@@ -79,9 +73,9 @@ export function PaneResizer({
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>): void {
     const state = drag.current
     if (!state) return
-    // 区域 5 在左边越往右越宽；右栏在右边，反过来
+    // 右栏在右边：往左拖才变宽
     const delta = event.clientX - state.startX
-    const raw = variant === 'right' ? state.startWidth - delta : state.startWidth + delta
+    const raw = state.startWidth - delta
     const next = Math.min(Math.max(Math.round(raw), min), state.max)
     if (next === state.current) return
     state.current = next
@@ -94,13 +88,11 @@ export function PaneResizer({
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
-    // 区域 5 在左边：→ 变宽，← 变窄；右栏在右边，反过来
-    const back = event.key === 'ArrowLeft'
-    const forward = event.key === 'ArrowRight'
-    if (!back && !forward) return
+    // 右栏在右边：← 变宽，→ 变窄
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
     event.preventDefault()
-    const direction = variant === 'right' ? -1 : 1
-    const step = (back ? -1 : 1) * (event.shiftKey ? STEP_LARGE : STEP) * direction
+    const widen = event.key === 'ArrowLeft'
+    const step = (widen ? 1 : -1) * (event.shiftKey ? STEP_LARGE : STEP)
     const next = Math.min(Math.max(width + step, min), limit())
     if (next !== width) onCommit(next)
   }
@@ -115,7 +107,7 @@ export function PaneResizer({
       aria-valuenow={width}
       tabIndex={0}
       title={`${label}（双击复位）`}
-      className={`shell-grip shell-grip-${variant}`}
+      className="shell-grip"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

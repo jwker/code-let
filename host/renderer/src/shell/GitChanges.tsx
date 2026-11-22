@@ -4,9 +4,9 @@ import { useStore } from '../store'
 import { splitPath, statusTone } from './gitFormat'
 
 /**
- * 区域 5 的「改动」tab（PLAN.md D52 / R37）。
+ * 代码功能区「改动」视图的列表（R37）。
  *
- * 只列改了什么，diff 在区域 6 看 —— 这是它和原来右侧面板的 Git 视图的区别：
+ * 只列改了什么，diff 在右列看 —— 这是它和原来右侧面板的 Git 视图的区别：
  * 那边列表和详情挤在一列里，一个 300px 宽的 diff 没法读。
  *
  * **只读**：不做 stage / commit / discard。
@@ -45,19 +45,19 @@ export function GitChanges({ cwd }: { cwd: string }) {
   const { status, loading, error, selected } = git
 
   if (!cwd) {
-    return <div className="zone5-empty">先打开一个项目</div>
+    return <div className="panel-empty">先打开一个项目</div>
   }
   if (loading && !status) {
-    return <div className="zone5-empty">正在读取 Git 状态…</div>
+    return <div className="panel-empty">正在读取 Git 状态…</div>
   }
   if (error && !loading) {
     return (
-      <div className="zone5-empty">
+      <div className="panel-empty">
         Git 读取失败
         <br />
         {error}
         <br />
-        <button type="button" className="zone5-retry" onClick={() => void loadGitStatus(cwd)}>
+        <button type="button" className="panel-retry" onClick={() => void loadGitStatus(cwd)}>
           重试
         </button>
       </div>
@@ -65,7 +65,7 @@ export function GitChanges({ cwd }: { cwd: string }) {
   }
   if (status && !status.repo) {
     return (
-      <div className="zone5-empty">
+      <div className="panel-empty">
         当前目录不是 Git 仓库。
         <br />
         这里只显示仓库状态，不会初始化仓库。
@@ -74,7 +74,7 @@ export function GitChanges({ cwd }: { cwd: string }) {
   }
   if (status?.repo && status.clean) {
     return (
-      <div className="zone5-empty">
+      <div className="panel-empty">
         工作区没有改动
         {status.branch ? (
           <>

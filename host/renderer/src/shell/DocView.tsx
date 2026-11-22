@@ -3,7 +3,7 @@ import { useStore } from '../store'
 import { host } from '../host'
 
 /**
- * 区域 6 的文档预览（PLAN.md D52 / R38）。
+ * 文档功能区的正文（R38）。
  *
  * `.md` 走现有的 Markdown 渲染；其它格式（设计稿的 `.html` 等）不在文档区渲染 ——
  * 说清楚并给一个「用文件预览打开」的出口，比在这里塞半个 HTML 渲染器好。
@@ -21,7 +21,7 @@ export function DocView({ cwd }: { cwd: string }) {
   const selected = docs.selected
 
   if (!selected) {
-    return <div className="zone6-empty">从文档树里选一份文档</div>
+    return <div className="panel-empty">从文档树里选一份文档</div>
   }
 
   const { entry } = selected
@@ -56,15 +56,15 @@ export function DocView({ cwd }: { cwd: string }) {
       </div>
 
       <div className="doc-view-body">
-        {docs.contentLoading && <div className="zone6-empty">正在读取…</div>}
+        {docs.contentLoading && <div className="panel-empty">正在读取…</div>}
 
         {!docs.contentLoading && docs.contentError && (
-          <div className="zone6-empty">
+          <div className="panel-empty">
             {docs.contentError}
             <br />
             <button
               type="button"
-              className="zone5-retry"
+              className="panel-retry"
               onClick={() => void host.openFile(cwd, entry.relPath)}
             >
               用文件预览打开

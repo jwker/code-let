@@ -10,7 +10,7 @@ import { PromptDialog } from './PromptDialog'
 /**
  * 项目设置（PLAN.md D52）。
  *
- * 区域 5 是分类，区域 6 是内容。这里的项分两种来源：
+ * 左边是分类，右边是内容。这里的项分两种来源：
  * - **应用级**：归档天数、打开控制台窗口 —— 所有项目共用，跟 Git 那种项目级的东西不一样；
  * - **项目级 / 本项目的 agent**：项目路径、移除项目、归档列表。
  *
@@ -37,7 +37,7 @@ export const SETTINGS_PANES: CategoryEntry[] = [
   { id: 'project', title: '项目' }
 ]
 
-/** 区域 5：分类列表 */
+/** 分类列表 */
 export function SettingsList() {
   const category = useStore((s) => s.settingsCategory)
   const setCategory = useStore((s) => s.setSettingsCategory)
@@ -77,7 +77,7 @@ export function SettingsList() {
   )
 }
 
-/** 区域 6：内容 */
+/** 选中分类的内容 */
 export function SettingsBody() {
   const category = useStore((s) => s.settingsCategory)
   const agents = useStore((s) => s.snapshot.agents)
@@ -103,7 +103,7 @@ function ArchiveList({ agents }: { agents: ReturnType<typeof useStore.getState>[
 
   if (archived.length === 0) {
     return (
-      <div className="zone6-empty">
+      <div className="panel-empty">
         这个项目里没有归档的 agent。
         <br />
         窄轨头像右键 → 归档，那个 agent 会出现在这里 —— 会话文件不动，随时能恢复。
@@ -258,12 +258,12 @@ function ConversationList({ cwd }: { cwd: string }) {
     consumeRenameRequest()
   }, [renameRequest, conversations, consumeRenameRequest])
 
-  if (!cwd) return <div className="zone6-empty">没有打开的项目</div>
+  if (!cwd) return <div className="panel-empty">没有打开的项目</div>
   if (items.length === 0) {
     return (
       <div className="settings-body">
         <NewAgentRow cwd={cwd} />
-        <div className="zone6-empty">
+        <div className="panel-empty">
           这个项目里还没有会话。
           <br />
           在终端里用裸 pi 聊出来的会话也会出现在这里（标着「未导入」）。
@@ -383,7 +383,7 @@ function ProjectPanel({ cwd, title }: { cwd: string; title: string }) {
     setPrototypeDir(project?.prototypeDir ?? '')
   }, [project?.prototypeDir, cwd])
 
-  if (!cwd) return <div className="zone6-empty">没有打开的项目</div>
+  if (!cwd) return <div className="panel-empty">没有打开的项目</div>
 
   async function savePrototypeDir(): Promise<void> {
     setSaving(true)

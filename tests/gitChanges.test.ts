@@ -3,7 +3,7 @@ import type { GitStatus } from '@contract/index'
 import { changeCount, countPatchLines, scopeLabel, splitPath, statusTone } from '../host/renderer/src/shell/gitFormat'
 
 /**
- * 区域 5 的「改动」tab 用的两个纯函数（PLAN.md D52 / R37）。
+ * 代码功能区「改动」视图用的两个纯函数（R37）。
  *
  * 只测「算得对不对」：组列表和 diff 的渲染要真 git 仓库，走端到端。
  */

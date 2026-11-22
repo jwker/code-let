@@ -3,9 +3,9 @@ import { FileViewer } from './FileViewer'
 import { fileMark } from './fileDisplay'
 
 /**
- * 文件预览 —— 区域 6 的内容（PLAN.md D52）。
+ * 代码功能区的正文：文件标签栏 + 内容。
  *
- * 从 `FileBrowser` 里拆出来的：树留在区域 5，标签栏 + 内容在这里。
+ * 树在功能区的左列（`FileTree`），这份组件管右边的标签栏与内容。
  * 仍然是**只吃 props、不读 store**（D20）—— 以后要挂到独立窗口，那边给同样的 props 就行。
  */
 export function FilePreview({

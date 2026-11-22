@@ -21,7 +21,7 @@ export function splitPath(path: string): { dir: string; name: string } {
   return index < 0 ? { dir: '', name: path } : { dir: path.slice(0, index + 1), name: path.slice(index + 1) }
 }
 
-/** 改动总数 —— 区域 5 的 tab 上要显示它 */
+/** 改动总数 —— 「改动」tab 上要显示它 */
 export function changeCount(status: GitStatus | null): number {
   if (!status?.repo) return 0
   return status.staged.length + status.unstaged.length + status.untracked.length + status.conflicts.length

@@ -767,7 +767,7 @@ export class BrowserManager {
   /**
    * 显示 / 隐藏某个宿主的浏览器。
    *
-   * 同一时刻只有一个宿主的 WebContentsView 挂在窗口上 —— 区域 6 只有一个格子。
+   * 同一时刻只有一个宿主的 WebContentsView 挂在窗口上 —— 右栏只有一个页面格子。
    * 传 `visible: true` 就把可见宿主切过去，原来那个自动隐藏。
    */
   setVisible(host: BrowserHost, visible: boolean): Promise<void> {
@@ -1194,7 +1194,7 @@ export class BrowserManager {
   /**
    * 决定哪个 view 挂在窗口上。
    *
-   * 只有「可见宿主的活动标签」是可见的，其余全部隐藏 —— 区域 6 只有一个格子，
+   * 只有「可见宿主的活动标签」是可见的，其余全部隐藏 —— 右栏只有一个页面格子，
    * 两个宿主的页面不会同时显示。
    */
   private applyVisibility(): void {

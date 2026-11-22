@@ -3,7 +3,7 @@ import type { DocEntry } from '@contract/index'
 import { useStore } from '../store'
 
 /**
- * 区域 5 的文档区（PLAN.md D52 / R38）。
+ * 文档功能区的树列（R38）。
  *
  * 组不写死：宿主扫 `.ai/` 下的每个目录当一组，外加项目根的 `AGENTS.md`。
  * 这样以后新开一个 `.ai/artifacts` 不用改代码就会出现在这里。
@@ -33,16 +33,16 @@ export function DocsList({ cwd }: { cwd: string }) {
     void loadDocs(cwd)
   }, [cwd, loadDocs])
 
-  if (!cwd) return <div className="zone5-empty">先打开一个项目</div>
-  if (docs.loading && docs.groups.length === 0) return <div className="zone5-empty">正在读文档清单…</div>
+  if (!cwd) return <div className="panel-empty">先打开一个项目</div>
+  if (docs.loading && docs.groups.length === 0) return <div className="panel-empty">正在读文档清单…</div>
   if (docs.error) {
     return (
-      <div className="zone5-empty">
+      <div className="panel-empty">
         读不到文档清单
         <br />
         {docs.error}
         <br />
-        <button type="button" className="zone5-retry" onClick={() => void loadDocs(cwd)}>
+        <button type="button" className="panel-retry" onClick={() => void loadDocs(cwd)}>
           重试
         </button>
       </div>
@@ -50,7 +50,7 @@ export function DocsList({ cwd }: { cwd: string }) {
   }
   if (docs.groups.length === 0) {
     return (
-      <div className="zone5-empty">
+      <div className="panel-empty">
         这个项目还没有 AI 文档。
         <br />
         建一个 `AGENTS.md`，或者把计划和设计放进 `.ai/`，它们会出现在这里。

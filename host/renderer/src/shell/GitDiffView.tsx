@@ -3,9 +3,9 @@ import { useStore } from '../store'
 import { countPatchLines, scopeLabel, statusTone } from './gitFormat'
 
 /**
- * 区域 6 的 diff（PLAN.md D52 / R37）。
+ * 代码功能区右列的 diff（R37）。
  *
- * 列表在区域 5，这里只负责把选中的那一份 patch 画出来 —— 所以它有整列宽度可读，
+ * 列表在左列，这里只负责把选中的那一份 patch 画出来 —— 所以它有整列宽度可读，
  * 不像原来挤在 300px 的右栏里。
  */
 
@@ -54,8 +54,8 @@ export function GitDiffView() {
       </div>
 
       <div className="git-diff-body">
-        {git.diffLoading && <div className="zone6-empty">正在读取 diff…</div>}
-        {!git.diffLoading && git.diffError && <div className="zone6-empty">{git.diffError}</div>}
+        {git.diffLoading && <div className="panel-empty">正在读取 diff…</div>}
+        {!git.diffLoading && git.diffError && <div className="panel-empty">{git.diffError}</div>}
         {!git.diffLoading && git.diff && <Patch diff={git.diff} />}
       </div>
     </div>
@@ -63,10 +63,10 @@ export function GitDiffView() {
 }
 
 function Patch({ diff }: { diff: GitDiff }) {
-  if (diff.error) return <div className="zone6-empty">{diff.error}</div>
+  if (diff.error) return <div className="panel-empty">{diff.error}</div>
   if (diff.binary) {
     return (
-      <div className="zone6-empty">
+      <div className="panel-empty">
         二进制文件。这里不渲染内容 —— 要看得用外部工具打开。
       </div>
     )

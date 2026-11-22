@@ -97,7 +97,7 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
    * 这个面板是某个 agent 的预览，而不是窄轨里那个公共浏览器。
    *
    * 两者的空态不一样：公共浏览器空着就是空着，agent 的预览空着要说明
-   * 「这里在等什么」—— 产品 agent 的区域 6 一开始就是一块白板（D52）。
+   * 「这里在等什么」—— 产品 agent 的预览一开始就是一块白板。
    */
   const isAgentHost = isAgentBrowserHost(browserHost)
   /** 预览宿主的 id —— 标注状态、引用都按它记 */
@@ -494,7 +494,7 @@ export function BrowserPane({ host: browserHost }: { host: BrowserHost }) {
           </div>
         )}
         {/*
-          产品 agent 的区域 6：没有可恢复的地址时，列出项目的原型目录；
+          产品 agent 的预览：没有可恢复的地址时，列出项目的原型目录；
           目录空着或不存在，就说清楚是哪一种 —— 不再统一说成「还没做出原型」。
         */}
         {blankPreview && !active?.error && !creating && (

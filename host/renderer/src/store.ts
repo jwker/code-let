@@ -110,7 +110,7 @@ const RIGHT_PANEL_WIDTH_KEY = 'codelet:right-panel-width'
 /** 代码区的两个 tab */
 export type CodeMode = 'files' | 'changes'
 
-/** Git 改动在渲染层的样子：区域 5 用列表、区域 6 用 diff */
+/** Git 改动在渲染层的样子：左列用列表、右列用 diff */
 export interface GitViewState {
   status: GitStatus | null
   loading: boolean

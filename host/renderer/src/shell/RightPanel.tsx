@@ -47,7 +47,7 @@ function CodeTabs() {
   ]
 
   return (
-    <div className="zone5-seg" role="tablist" aria-label="代码视图">
+    <div className="panel-seg" role="tablist" aria-label="代码视图">
       {tabs.map((tab) => (
         <button
           key={tab.key}
@@ -55,10 +55,10 @@ function CodeTabs() {
           role="tab"
           aria-selected={mode === tab.key}
           onClick={() => setMode(tab.key)}
-          className={['zone5-seg-item', mode === tab.key ? 'is-active' : ''].join(' ')}
+          className={['panel-seg-item', mode === tab.key ? 'is-active' : ''].join(' ')}
         >
           {tab.label}
-          {tab.badge ? <span className="zone5-seg-badge">{tab.badge}</span> : null}
+          {tab.badge ? <span className="panel-seg-badge">{tab.badge}</span> : null}
         </button>
       ))}
     </div>
@@ -329,7 +329,6 @@ export function RightPanel({
   return (
     <aside className="right-panel" aria-label="右侧栏">
       <PaneResizer
-        variant="right"
         label="调整右栏宽度"
         width={width}
         min={minWidth}
