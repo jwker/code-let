@@ -204,4 +204,16 @@ describe('过程里的调用失败次数', () => {
     const summary = summarizeProcess([say('先读一下'), fail(), fail()])
     expect(summary.callFailures).toBe(2)
   })
+
+  it('中止的轮次不把错误算成失败', () => {
+    const aborted: StreamItem = {
+      kind: 'message',
+      role: 'assistant',
+      text: '',
+      errorMessage: 'timeout',
+      aborted: true
+    }
+    expect(summarizeTurn([aborted, say('最终答案')])?.callFailures).toBe(0)
+    expect(summarizeProcess([aborted])?.callFailures).toBe(0)
+  })
 })

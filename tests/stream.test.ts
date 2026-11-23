@@ -632,7 +632,8 @@ describe('模型请求失败', () => {
       kind: 'message',
       role: 'assistant',
       text: '',
-      errorMessage: '402 insufficient quota: balance is 0'
+      errorMessage: '402 insufficient quota: balance is 0',
+      stopReason: 'error'
     })
   })
 
@@ -651,7 +652,8 @@ describe('模型请求失败', () => {
     expect(items[0]).toMatchObject({
       kind: 'message',
       text: '说到一半',
-      errorMessage: '429 rate limit exceeded'
+      errorMessage: '429 rate limit exceeded',
+      stopReason: 'error'
     })
   })
 
@@ -668,6 +670,11 @@ describe('模型请求失败', () => {
       }
     ])
     expect(items).toHaveLength(1)
-    expect(items[0]).toMatchObject({ kind: 'message', role: 'assistant', text: '' })
+    expect(items[0]).toMatchObject({
+      kind: 'message',
+      role: 'assistant',
+      text: '',
+      stopReason: 'error'
+    })
   })
 })

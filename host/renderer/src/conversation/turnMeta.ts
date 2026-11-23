@@ -73,13 +73,15 @@ export function summarizeProcess(body: readonly StreamItem[]): TurnSummary {
       segments += 1
     }
   }
+  const aborted = body.some((item) => item.kind === 'message' && item.aborted === true)
   return {
     answer: '',
     answerIndex: body.length,
     toolCalls,
     segments,
-    callFailures,
-    aborted: body.some((item) => item.kind === 'message' && item.aborted === true)
+    // 中止的轮次不把错误当失败展示：计数也归零，过程摘要里不提
+    callFailures: aborted ? 0 : callFailures,
+    aborted
   }
 }
 
@@ -136,8 +138,10 @@ export function summarizeTurn(body: readonly StreamItem[]): TurnSummary | undefi
     answerIndex,
     toolCalls,
     segments,
-    // 整轮扫一遍：答案位置之后也可能挂着失败（虽然少见）
-    callFailures: body.filter((item) => isCallFailure(item)).length,
+    // 整轮扫一遍：答案位置之后也可能挂着失败（虽然少见）；中止的轮次不计
+    callFailures: body.some((item) => item.kind === 'message' && item.aborted === true)
+      ? 0
+      : body.filter((item) => isCallFailure(item)).length,
     // 整轮扫一遍：一条助手消息可能被拆成「正文 + 工具 + 正文」几项，
     // 中止标记挂在第一项上，答案项不一定带得着
     aborted: body.some((item) => item.kind === 'message' && item.aborted === true)

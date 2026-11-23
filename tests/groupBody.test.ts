@@ -133,4 +133,9 @@ describe('调用失败的渲染行', () => {
     const rows = groupBody([fail('a'), say('成功了一次'), fail('b')], new Set())
     expect(rows.filter((row) => row.kind === 'failures')).toHaveLength(2)
   })
+
+  it('中止的轮次可以把失败整段藏掉，但内容顺序不变', () => {
+    const rows = groupBody([say('过程'), fail('timeout'), say('答案')], new Set(), true)
+    expect(rows.map((row) => row.kind)).toEqual(['message', 'message'])
+  })
 })

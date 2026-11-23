@@ -14,11 +14,12 @@ import {
  */
 
 const say = (text: string): StreamItem => ({ kind: 'message', role: 'assistant', text })
-const fail = (error: string): StreamItem => ({
+const fail = (error: string, stopReason?: string): StreamItem => ({
   kind: 'message',
   role: 'assistant',
   text: '',
-  errorMessage: error
+  errorMessage: error,
+  ...(stopReason ? { stopReason } : {})
 })
 const tool = (id: string, status: 'ok' | 'error' | 'running' = 'ok'): StreamItem => ({
   kind: 'tool',
@@ -102,12 +103,13 @@ describe('这一轮有没有救回来', () => {
     expect(summarizeCallFailures([]).failed).toBe(false)
   })
 
-  it('中止优先：有中止标记就不算失败（01 先按已有字段收集事实）', () => {
+  it('中止优先：有中止标记就不算失败', () => {
     const aborted: StreamItem = {
       kind: 'message',
       role: 'assistant',
       text: '',
       errorMessage: 'timeout',
+      stopReason: 'error',
       aborted: true
     }
     const summary = summarizeCallFailures([aborted])
@@ -161,5 +163,49 @@ describe('历史与实时两条来源分组一致', () => {
     expect(summarizeCallFailures(history)).toEqual(summarizeCallFailures(live))
     expect(summarizeCallFailures(history).runs[0].count).toBe(1)
     expect(summarizeCallFailures(history).failed).toBe(false)
+  })
+})
+
+
+describe('按 stopReason 判定，而不是猜', () => {
+  const stopped = (text: string, stopReason: string): StreamItem => ({
+    kind: 'message',
+    role: 'assistant',
+    text,
+    stopReason
+  })
+
+  it('最后一条助手消息 stopReason=error → 轮次失败', () => {
+    expect(summarizeCallFailures([say('先读一下'), fail('401', 'error')]).failed).toBe(true)
+  })
+
+  it('最后一条助手消息 stopReason=stop → 前面失败过也算自愈', () => {
+    const recovered = stopped('最终答案', 'stop')
+    expect(summarizeCallFailures([fail('timeout', 'error'), recovered]).failed).toBe(false)
+  })
+
+  it('stopReason=error 但之后还有成功的工具调用 → 自愈', () => {
+    expect(
+      summarizeCallFailures([fail('timeout', 'error'), tool('t1', 'ok')]).failed
+    ).toBe(false)
+  })
+
+  it('error 结束但没有 errorMessage 也算轮次失败（红框有兜底文案）', () => {
+    const bareError: StreamItem = {
+      kind: 'message',
+      role: 'assistant',
+      text: '',
+      stopReason: 'error'
+    }
+    const summary = summarizeCallFailures([bareError])
+    expect(summary.failed).toBe(true)
+    expect(summary.runs).toEqual([])
+  })
+
+  it('stopReason=toolUse / length 不算失败', () => {
+    const toolUse = stopped('', 'toolUse')
+    const length = stopped('说到一半', 'length')
+    expect(summarizeCallFailures([toolUse]).failed).toBe(false)
+    expect(summarizeCallFailures([fail('timeout'), length]).failed).toBe(false)
   })
 })

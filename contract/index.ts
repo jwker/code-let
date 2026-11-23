@@ -870,6 +870,14 @@ export type StreamItem =
        * 不能只留一个空回复让用户猜。
        */
       errorMessage?: string
+      /**
+       * 这条助手消息是怎么结束的（Pi 的 StopReason，原样保留）。
+       *
+       * `'error'` 表示这次模型调用失败；`'aborted'` 表示用户中止。
+       * 界面靠它区分「调用失败但后面自愈」和「这一轮真的失败」，
+       * **不拿「错误之后有没有内容」去猜**。
+       */
+      stopReason?: string
     }
   | {
       kind: 'tool'

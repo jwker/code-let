@@ -157,6 +157,11 @@ function TurnRow({
     })
   }
   const failureErrors = failures.runs.flatMap((run) => run.errors)
+  /*
+   * 灰字只属于「已继续」的轮次：中止的轮次不显示，轮次失败在结束后升级成红框
+   * 也不再显示灰字。流式过程中先按灰字显示，等这一轮收尾再决定升不升级。
+   */
+  const hideCallFailures = failures.aborted || (!streaming && failures.failed)
 
   // 流式过程中：最后一段后面没有工具的助手正文可以边流边显示；
   // 它如果只是下一轮工具前的叙述，后续工具出现后会重新并回过程。
@@ -183,6 +188,7 @@ function TurnRow({
             streaming
             openFailures={openFailures}
             onToggleFailure={toggleFailure}
+            hideFailures={hideCallFailures}
           />
         )}
         {customBefore.length > 0 && (
@@ -228,6 +234,7 @@ function TurnRow({
             streaming={streaming}
             openFailures={openFailures}
             onToggleFailure={toggleFailure}
+            hideFailures={hideCallFailures}
           />
         )}
         {customItems.length > 0 && (
@@ -264,6 +271,7 @@ function TurnRow({
           streaming={streaming}
           openFailures={openFailures}
           onToggleFailure={toggleFailure}
+          hideFailures={hideCallFailures}
         />
       )}
 
@@ -276,27 +284,34 @@ function TurnRow({
       )}
 
       <div className="min-w-0">
-        {answerItem.kind === 'message' && (
-          <div className="text-[14.5px] leading-[1.9] text-fg-1">
-            <Markdown text={answerItem.text} variant="normal" />
-          </div>
-        )}
+        {/* 轮次失败时，红框占据原本答案的位置 */}
+        {!streaming && failures.failed ? (
+          <TurnError errors={failureErrors} />
+        ) : (
+          <>
+            {answerItem.kind === 'message' && (
+              <div className="text-[14.5px] leading-[1.9] text-fg-1">
+                <Markdown text={answerItem.text} variant="normal" />
+              </div>
+            )}
 
-        {restItems.length > 0 && (
-          <Body
-            items={restItems}
+            {restItems.length > 0 && (
+              <Body
+                items={restItems}
             outputs={outputs}
             isExpanded={isExpanded}
             onToggle={onToggle}
             toolIds={toolIds}
-            variant="process"
-            openFailures={openFailures}
-            onToggleFailure={toggleFailure}
-          />
+                variant="process"
+                openFailures={openFailures}
+                onToggleFailure={toggleFailure}
+                hideFailures={hideCallFailures}
+              />
+            )}
+          </>
         )}
 
         <ReplyMeta summary={summary} streaming={streaming} startedAt={turnStartedAt} />
-        {!streaming && failures.failed && <TurnError errors={failureErrors} />}
       </div>
     </div>
   )
@@ -413,7 +428,8 @@ function ProcessBlock({
   toolIds,
   streaming,
   openFailures,
-  onToggleFailure
+  onToggleFailure,
+  hideFailures
 }: {
   summary: TurnSummary
   items: StreamItem[]
@@ -424,6 +440,7 @@ function ProcessBlock({
   streaming: boolean
   openFailures: ReadonlySet<number>
   onToggleFailure: (start: number) => void
+  hideFailures: boolean
 }) {
   const [open, setOpen] = useState(false)
 
@@ -469,6 +486,7 @@ function ProcessBlock({
             variant="process"
             openFailures={openFailures}
             onToggleFailure={onToggleFailure}
+            hideFailures={hideFailures}
           />
         </div>
       )}
@@ -502,7 +520,8 @@ function Body({
   toolIds,
   variant,
   openFailures,
-  onToggleFailure
+  onToggleFailure,
+  hideFailures
 }: {
   items: StreamItem[]
   outputs: Map<string, string>
@@ -512,9 +531,10 @@ function Body({
   variant: 'process' | 'answer'
   openFailures: ReadonlySet<number>
   onToggleFailure: (start: number) => void
+  hideFailures: boolean
 }) {
   const rows: ReactNode[] = []
-  const groups = groupBody(items, toolIds)
+  const groups = groupBody(items, toolIds, hideFailures)
 
   for (const [i, row] of groups.entries()) {
     if (row.kind === 'custom') {

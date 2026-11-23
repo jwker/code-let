@@ -264,6 +264,7 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
     if (message.role === 'assistant') {
       const blocks = Array.isArray(message.content) ? (message.content as RawBlock[]) : []
       const stats = statsOf(message)
+      const stopReason = typeof message.stopReason === 'string' ? message.stopReason : undefined
       const aborted = message.stopReason === 'aborted'
       const errorMessage =
         typeof message.errorMessage === 'string' && message.errorMessage.trim()
@@ -302,7 +303,8 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
               ...item,
               ...(stats ? { stats } : {}),
               ...(aborted ? { aborted } : {}),
-              ...(errorMessage ? { errorMessage } : {})
+              ...(errorMessage ? { errorMessage } : {}),
+              ...(stopReason ? { stopReason } : {})
             }
             marked = true
             break
@@ -315,7 +317,8 @@ export function entriesToItems(entries: readonly unknown[]): StreamItem[] {
             role: 'assistant',
             text: '',
             ...(stats ? { stats } : {}),
-            ...(errorMessage ? { errorMessage } : {})
+            ...(errorMessage ? { errorMessage } : {}),
+            ...(stopReason ? { stopReason } : {})
           })
         }
       }
@@ -576,6 +579,7 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
         const calls = toolCallsOf(message)
         const stats = statsOf(message)
         // 中止和失败都挂在这条消息的正文项上；失败还要保留 provider 原始错误
+        const stopReason = typeof message.stopReason === 'string' ? message.stopReason : undefined
         const aborted = message.stopReason === 'aborted'
         const errorMessage =
           typeof message.errorMessage === 'string' && message.errorMessage.trim()
@@ -584,7 +588,8 @@ export function applyEvent(items: StreamItem[], event: { type: string; data: unk
         const marks = {
           ...(stats ? { stats } : {}),
           ...(aborted ? { aborted } : {}),
-          ...(errorMessage ? { errorMessage } : {})
+          ...(errorMessage ? { errorMessage } : {}),
+          ...(stopReason ? { stopReason } : {})
         }
         // 工具调用在这里落地成独立的 tool 项 —— 跟历史那条路同一个来源（R3）
         const toolItems: StreamItem[] = calls.map((call) =>

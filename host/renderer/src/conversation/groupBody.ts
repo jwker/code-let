@@ -30,7 +30,8 @@ export type BodyRow =
 
 export function groupBody(
   items: readonly StreamItem[],
-  ownedToolIds: ReadonlySet<string>
+  ownedToolIds: ReadonlySet<string>,
+  hideFailures = false
 ): BodyRow[] {
   const rows: BodyRow[] = []
   let index = 0
@@ -40,6 +41,10 @@ export function groupBody(
 
     // 连续的调用失败合成一行，留在它发生的位置（工具调用之间）
     if (isCallFailure(item)) {
+      if (hideFailures) {
+        index += 1
+        continue
+      }
       const start = index
       const errors: string[] = []
       let count = 0

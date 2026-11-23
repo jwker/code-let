@@ -49,15 +49,16 @@ function isSuccessContent(item: StreamItem): boolean {
 export function summarizeCallFailures(body: readonly StreamItem[]): CallFailureSummary {
   const runs: FailureRun[] = []
   let current: FailureRun | null = null
-  let lastFailureIndex = -1
   let aborted = false
+  let lastAssistantIndex = -1
 
   for (let index = 0; index < body.length; index += 1) {
     const item = body[index]
     if (item.kind === 'message' && item.aborted === true) aborted = true
 
+    if (item.kind === 'message' && item.role === 'assistant') lastAssistantIndex = index
+
     if (isCallFailure(item)) {
-      lastFailureIndex = index
       if (!current) {
         current = { start: index, count: 0, errors: [] }
         runs.push(current)
@@ -71,18 +72,27 @@ export function summarizeCallFailures(body: readonly StreamItem[]): CallFailureS
     current = null
   }
 
-  let failed = false
-  if (!aborted && lastFailureIndex >= 0) {
-    const healed = body
-      .slice(lastFailureIndex + 1)
-      .some((item) => isSuccessContent(item))
-    failed = !healed
-  }
+  /*
+   * 轮次失败用事实判定：**最后一条助手消息的结束方式**。
+   *
+   * `stopReason === 'error'` 说明最后一次模型调用失败了；中止优先，直接不算失败。
+   * 之后若还有成功内容（助手正文 / 成功的工具调用），说明这一轮救回来了。
+   * 没有 stopReason 的老条目退回「最后一条助手项带错误」的事实。
+   */
+  const lastAssistant = lastAssistantIndex >= 0 ? body[lastAssistantIndex] : null
+  const lastStopReason =
+    lastAssistant && lastAssistant.kind === 'message' ? lastAssistant.stopReason : undefined
+  const failedByFact =
+    lastStopReason === 'error' ||
+    (lastAssistant !== null && !lastStopReason && isCallFailure(lastAssistant))
+  const healed =
+    lastAssistantIndex >= 0 &&
+    body.slice(lastAssistantIndex + 1).some((item) => isSuccessContent(item))
 
   return {
     runs,
     count: runs.reduce((sum, run) => sum + run.count, 0),
-    failed,
+    failed: !aborted && failedByFact && !healed,
     aborted
   }
 }
