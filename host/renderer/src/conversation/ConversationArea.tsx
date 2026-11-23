@@ -892,7 +892,9 @@ export function ConversationArea() {
       <div className={`relative min-h-0 flex-1 pt-3 ${hasEntry ? 'conv-has-entry' : ''}`}>
         {hasEntry && (
           <div className="conv-tree-corner">
-            <ConversationTreeEntry />
+            {/* key 跟着 agent 走：切 agent / 切项目标签时整个入口重建，
+                不把上一个会话的树和角标数字带过来 */}
+            <ConversationTreeEntry key={activeAgentId ?? ''} />
           </div>
         )}
         <ConversationNav items={items} mode={mode} scrollRef={scrollRef} />

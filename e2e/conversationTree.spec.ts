@@ -241,6 +241,26 @@ test.describe.serial('会话树的读、切与另开', () => {
     await expect(page.getByRole('dialog', { name: '对话结构' })).toHaveCount(0)
   })
 
+  test('只有一轮时入口仍在，点开能看到那一轮', async () => {
+    const rail = page.getByRole('navigation', { name: '项目导航' })
+    await rail.getByRole('button', { name: '一轮对话' }).click()
+
+    const button = page.getByRole('button', { name: /^对话结构/ })
+    await expect(button).toBeVisible()
+    await expect(button).toHaveAttribute('aria-label', '对话结构')
+    // 上一个 agent 有别的支线，切过来之后角标不能跟着串过来
+    await expect(page.locator('.conv-tree-entry-badge')).toHaveCount(0)
+
+    await openTree()
+    await expect(page.locator('.conv-tree-row')).toHaveCount(1)
+    await expect(page.locator('.conv-tree-row').first()).toContainText('只有一轮的提问')
+    await page.getByRole('button', { name: '关闭', exact: true }).click()
+
+    await rail.getByRole('button', { name: '会话树' }).click()
+    // 切回来还是原来那条支线，角标恢复
+    await expect(page.locator('.conv-tree-entry-badge')).toHaveText('1')
+  })
+
   test('切到别的支线：内容流换成那条，弹窗关闭', async () => {
     await openTree()
     await page.locator('.conv-tree-row').nth(1).click()
@@ -288,22 +308,6 @@ test.describe.serial('会话树的读、切与另开', () => {
 
     // 原标签的内容流没动
     await expect.poll(async () => (await entries()).length).toBe(2)
-  })
-
-  test('只有一轮时入口仍在，点开能看到那一轮', async () => {
-    const rail = page.getByRole('navigation', { name: '项目导航' })
-    await rail.getByRole('button', { name: '一轮对话' }).click()
-
-    const button = page.getByRole('button', { name: /^对话结构/ })
-    await expect(button).toBeVisible()
-    await expect(button).toHaveAttribute('aria-label', '对话结构')
-
-    await openTree()
-    await expect(page.locator('.conv-tree-row')).toHaveCount(1)
-    await expect(page.locator('.conv-tree-row').first()).toContainText('只有一轮的提问')
-    await page.getByRole('button', { name: '关闭', exact: true }).click()
-
-    await rail.getByRole('button', { name: '会话树' }).click()
   })
 
   test('零轮会话也有入口，点开是现有空态', async () => {

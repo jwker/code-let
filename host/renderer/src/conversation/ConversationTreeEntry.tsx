@@ -44,10 +44,16 @@ export function ConversationTreeEntry() {
     [tree]
   )
 
-  // 条数写进 store：圆点轨的显示条件、正文的左槽都要用
+  /*
+   * 条数写进 store：圆点轨的显示条件要用。
+   *
+   * **只有树真的加载回来才写** —— 切 agent 的那一瞬 tree 还是空的（或者旧的），
+   * 拿它去写会把上一个会话的条数记到新 agent 头上，角标就串了。
+   */
   useEffect(() => {
-    if (agentId) setTreeBranches(agentId, otherBranches)
-  }, [agentId, otherBranches, setTreeBranches])
+    if (!agentId || !tree) return
+    setTreeBranches(agentId, otherBranches)
+  }, [agentId, tree, otherBranches, setTreeBranches])
 
   if (!agentId) return null
 
