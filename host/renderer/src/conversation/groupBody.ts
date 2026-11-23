@@ -1,4 +1,5 @@
 import type { StreamItem } from '@contract/index'
+import { isCallFailure } from './callErrors'
 
 /**
  * 把一段内容流切成渲染行（纯函数，好测）。
@@ -24,6 +25,8 @@ export type BodyRow =
   | { kind: 'output'; text: string }
   /** 扩展自定义消息 */
   | { kind: 'custom'; item: CustomItem }
+  /** 一段连续的模型调用失败（合并成一行，带次数） */
+  | { kind: 'failures'; start: number; count: number; errors: string[] }
 
 export function groupBody(
   items: readonly StreamItem[],
@@ -34,6 +37,23 @@ export function groupBody(
 
   while (index < items.length) {
     const item = items[index]
+
+    // 连续的调用失败合成一行，留在它发生的位置（工具调用之间）
+    if (isCallFailure(item)) {
+      const start = index
+      const errors: string[] = []
+      let count = 0
+      while (index < items.length && isCallFailure(items[index])) {
+        const failure = items[index]
+        if (isCallFailure(failure) && !errors.includes(failure.errorMessage)) {
+          errors.push(failure.errorMessage)
+        }
+        count += 1
+        index += 1
+      }
+      rows.push({ kind: 'failures', start, count, errors })
+      continue
+    }
 
     // 没有正文打头的工具串 —— 一定要画出来，否则这些步数在界面上不存在
     if (item.kind === 'tool') {

@@ -1,4 +1,5 @@
 import type { ReplyStats, StreamItem } from '@contract/index'
+import { isCallFailure } from './callErrors'
 
 /**
  * 一轮对话的结构（过程 / 最终答案 / 计量）。
@@ -17,6 +18,8 @@ export interface TurnSummary {
   toolCalls: number
   /** 过程里有多少段叙述（有正文的助手消息）—— 展开后大概会看到多少块文字 */
   segments: number
+  /** 这一轮里模型调用失败的次数 —— 过程折叠时也要能看出来 */
+  callFailures: number
   /** 过程耗时：最后一次过程请求说完 − 第一次请求发出 */
   processDurationMs?: number
   /** 整轮聚合的计量（老会话可能没有 usage，那就没有这一项） */
@@ -56,9 +59,14 @@ export function findLiveAnswerIndex(body: readonly StreamItem[]): number {
 export function summarizeProcess(body: readonly StreamItem[]): TurnSummary {
   let toolCalls = 0
   let segments = 0
+  let callFailures = 0
   for (const item of body) {
     if (item.kind === 'tool') {
       toolCalls += 1
+      continue
+    }
+    if (isCallFailure(item)) {
+      callFailures += 1
       continue
     }
     if (item.kind === 'message' && item.role === 'assistant' && item.text.trim().length > 0) {
@@ -70,6 +78,7 @@ export function summarizeProcess(body: readonly StreamItem[]): TurnSummary {
     answerIndex: body.length,
     toolCalls,
     segments,
+    callFailures,
     aborted: body.some((item) => item.kind === 'message' && item.aborted === true)
   }
 }
@@ -127,6 +136,8 @@ export function summarizeTurn(body: readonly StreamItem[]): TurnSummary | undefi
     answerIndex,
     toolCalls,
     segments,
+    // 整轮扫一遍：答案位置之后也可能挂着失败（虽然少见）
+    callFailures: body.filter((item) => isCallFailure(item)).length,
     // 整轮扫一遍：一条助手消息可能被拆成「正文 + 工具 + 正文」几项，
     // 中止标记挂在第一项上，答案项不一定带得着
     aborted: body.some((item) => item.kind === 'message' && item.aborted === true)

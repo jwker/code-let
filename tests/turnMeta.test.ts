@@ -90,6 +90,7 @@ describe('还没有最终答案时的过程统计', () => {
     ])
     expect(summary.toolCalls).toBe(2)
     expect(summary.segments).toBe(2)
+    expect(summary.callFailures).toBe(0)
     expect(summary.answer).toBe('')
     expect(summary.answerIndex).toBe(4)
   })
@@ -180,5 +181,27 @@ describe('整轮的计量', () => {
     const summary = summarizeTurn([say('过程'), say('最终答案')])
     expect(summary?.answer).toBe('最终答案')
     expect(summary?.stats).toBeUndefined()
+  })
+})
+
+
+describe('过程里的调用失败次数', () => {
+  const fail = (error = 'timeout'): StreamItem => ({
+    kind: 'message',
+    role: 'assistant',
+    text: '',
+    errorMessage: error
+  })
+
+  it('折叠摘要要能数出这一轮失败了几次', () => {
+    const summary = summarizeTurn([say('先读一下'), fail(), fail(), say('最终答案')])
+    expect(summary?.callFailures).toBe(2)
+    // 失败不影响认答案
+    expect(summary?.answer).toBe('最终答案')
+  })
+
+  it('还没有最终答案时，流式摘要也数失败', () => {
+    const summary = summarizeProcess([say('先读一下'), fail(), fail()])
+    expect(summary.callFailures).toBe(2)
   })
 })

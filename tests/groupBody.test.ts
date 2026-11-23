@@ -25,7 +25,9 @@ const result = (id: string, text = 'ok'): StreamItem => ({
 /** 把行还原成它们包含的工具 id —— 用来断言「一个都没丢」 */
 function toolIdsOf(rows: ReturnType<typeof groupBody>): string[] {
   return rows.flatMap((row) =>
-    row.kind === 'output' || row.kind === 'custom' ? [] : row.tools.map((tool) => tool.callId)
+    row.kind === 'output' || row.kind === 'custom' || row.kind === 'failures'
+      ? []
+      : row.tools.map((tool) => tool.callId)
   )
 }
 
@@ -101,5 +103,34 @@ describe('扩展消息', () => {
     )
     expect(rows.map((row) => row.kind)).toEqual(['message', 'custom'])
     expect(toolIdsOf(rows)).toEqual(['t1'])
+  })
+})
+
+
+describe('调用失败的渲染行', () => {
+  const fail = (error: string): StreamItem => ({
+    kind: 'message',
+    role: 'assistant',
+    text: '',
+    errorMessage: error
+  })
+
+  it('失败留在它发生的位置，跟工具行排在同一条流水上', () => {
+    const rows = groupBody(
+      [say('先读一下'), tool('t1'), fail('timeout'), say('再试一次')],
+      new Set()
+    )
+    expect(rows.map((row) => row.kind)).toEqual(['message', 'failures', 'message'])
+  })
+
+  it('连续的失败合成一行并带次数与去重后的原始错误', () => {
+    const rows = groupBody([fail('timeout'), fail('timeout'), fail('429')], new Set())
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({ kind: 'failures', start: 0, count: 3, errors: ['timeout', '429'] })
+  })
+
+  it('中间夹了成功内容就另起一行', () => {
+    const rows = groupBody([fail('a'), say('成功了一次'), fail('b')], new Set())
+    expect(rows.filter((row) => row.kind === 'failures')).toHaveLength(2)
   })
 })

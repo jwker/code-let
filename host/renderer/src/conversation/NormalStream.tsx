@@ -3,6 +3,7 @@ import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { AnsiText } from './AnsiText'
 import { groupBody } from './groupBody'
+import { summarizeCallFailures, type FailureRun } from './callErrors'
 import { Markdown } from './Markdown'
 import { ReplyMeta } from './ReplyMeta'
 import { findLiveAnswerIndex, summarizeProcess, summarizeTurn, type TurnSummary } from './turnMeta'
@@ -30,11 +31,6 @@ import { IconCaret } from '../shell/icons'
 type MessageItem = Extract<StreamItem, { kind: 'message' }>
 type ToolItem = Extract<StreamItem, { kind: 'tool' }>
 type CustomItem = Extract<StreamItem, { kind: 'custom' }>
-type ErrorItem = MessageItem & { errorMessage: string }
-
-function isErrorItem(item: StreamItem): item is ErrorItem {
-  return item.kind === 'message' && typeof item.errorMessage === 'string' && item.errorMessage.trim().length > 0
-}
 
 /** provider 的原始错误太长时，标题要能一眼看出是哪类问题 */
 function errorTitle(message: string): string {
@@ -145,11 +141,22 @@ function TurnRow({
   streaming: boolean
 }) {
   const summary = useMemo(() => summarizeTurn(turn.body), [turn.body])
+  const failures = useMemo(() => summarizeCallFailures(turn.body), [turn.body])
   const turnStartedAt = useRef(Date.now()).current
-  const errors = useMemo(
-    () => [...new Set(turn.body.filter(isErrorItem).map((item) => item.errorMessage))],
-    [turn.body]
-  )
+  /*
+   * 失败行的展开状态挂在整轮上，而不是过程块里：过程收起再展开时
+   * 子组件会卸载，状态放下面就会丢。默认全部收起。
+   */
+  const [openFailures, setOpenFailures] = useState<ReadonlySet<number>>(() => new Set())
+  function toggleFailure(start: number): void {
+    setOpenFailures((current) => {
+      const next = new Set(current)
+      if (next.has(start)) next.delete(start)
+      else next.add(start)
+      return next
+    })
+  }
+  const failureErrors = failures.runs.flatMap((run) => run.errors)
 
   // 流式过程中：最后一段后面没有工具的助手正文可以边流边显示；
   // 它如果只是下一轮工具前的叙述，后续工具出现后会重新并回过程。
@@ -159,7 +166,7 @@ function TurnRow({
     const answerItem = liveAnswerIndex >= 0 ? turn.body[liveAnswerIndex] : null
     const afterAnswer = liveAnswerIndex >= 0 ? turn.body.slice(liveAnswerIndex + 1) : []
     const processSummary = summarizeProcess(processBody)
-    const processItems = processBody.filter((item) => item.kind !== 'custom' && !isErrorItem(item))
+    const processItems = processBody.filter((item) => item.kind !== 'custom')
     const customBefore = processBody.filter((item): item is CustomItem => item.kind === 'custom')
     const customAfter = afterAnswer.filter((item): item is CustomItem => item.kind === 'custom')
     return (
@@ -174,6 +181,8 @@ function TurnRow({
             onToggle={onToggle}
             toolIds={toolIds}
             streaming
+            openFailures={openFailures}
+            onToggleFailure={toggleFailure}
           />
         )}
         {customBefore.length > 0 && (
@@ -196,7 +205,6 @@ function TurnRow({
           </div>
         )}
         <ReplyMeta summary={processSummary} streaming startedAt={turnStartedAt} />
-        {errors.length > 0 && <TurnError errors={errors} />}
       </div>
     )
   }
@@ -204,7 +212,7 @@ function TurnRow({
   // 认不出答案（这一轮没有助手正文）—— 原样铺开，不做主次分层
   if (!summary) {
     const processSummary = summarizeProcess(turn.body)
-    const processItems = turn.body.filter((item) => item.kind !== 'custom' && !isErrorItem(item))
+    const processItems = turn.body.filter((item) => item.kind !== 'custom')
     const customItems = turn.body.filter((item): item is CustomItem => item.kind === 'custom')
     return (
       <div className="flex flex-col gap-2">
@@ -218,6 +226,8 @@ function TurnRow({
             onToggle={onToggle}
             toolIds={toolIds}
             streaming={streaming}
+            openFailures={openFailures}
+            onToggleFailure={toggleFailure}
           />
         )}
         {customItems.length > 0 && (
@@ -227,17 +237,17 @@ function TurnRow({
             ))}
           </div>
         )}
-        {errors.length > 0 && <TurnError errors={errors} />}
+        {!streaming && failures.failed && <TurnError errors={failureErrors} />}
       </div>
     )
   }
 
   const beforeAnswer = turn.body.slice(0, summary.answerIndex)
   // 扩展消息不放进「过程」折叠块 —— 过程一收起来它们就看不见了
-  const processItems = beforeAnswer.filter((item) => item.kind !== 'custom' && !isErrorItem(item))
+  const processItems = beforeAnswer.filter((item) => item.kind !== 'custom')
   const customBefore = beforeAnswer.filter((item): item is CustomItem => item.kind === 'custom')
   const answerItem = turn.body[summary.answerIndex]
-  const restItems = turn.body.slice(summary.answerIndex + 1).filter((item) => !isErrorItem(item))
+  const restItems = turn.body.slice(summary.answerIndex + 1)
 
   return (
     <div className="flex flex-col gap-2">
@@ -252,6 +262,8 @@ function TurnRow({
           onToggle={onToggle}
           toolIds={toolIds}
           streaming={streaming}
+          openFailures={openFailures}
+          onToggleFailure={toggleFailure}
         />
       )}
 
@@ -278,12 +290,58 @@ function TurnRow({
             onToggle={onToggle}
             toolIds={toolIds}
             variant="process"
+            openFailures={openFailures}
+            onToggleFailure={toggleFailure}
           />
         )}
 
         <ReplyMeta summary={summary} streaming={streaming} startedAt={turnStartedAt} />
-        {errors.length > 0 && <TurnError errors={errors} />}
+        {!streaming && failures.failed && <TurnError errors={failureErrors} />}
       </div>
+    </div>
+  )
+}
+
+/**
+ * 自愈的调用失败：过程里的一行灰字，默认收起。
+ *
+ * 不是 alert —— 只有轮次最终失败的红框才打断朗读。相邻的调用失败已经由
+ * `groupBody` 合成一段，这里只负责画次数与可展开的原始错误。
+ */
+function CallFailureLine({
+  run,
+  open,
+  onToggle
+}: {
+  run: FailureRun
+  open: boolean
+  onToggle: () => void
+}) {
+  const label = run.count > 1 ? `${run.count} 次调用失败，已继续` : '调用失败，已继续'
+  return (
+    <div className="mb-3 last:mb-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+        className="flex w-fit max-w-full items-center gap-1.5 rounded-md px-1.5 text-left text-[11px] text-fg-3 transition-colors hover:bg-sunken hover:text-fg-2"
+      >
+        <span aria-hidden="true">✗</span>
+        <span>{label}</span>
+        <span className="flex-none opacity-70">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div className="mt-1 flex flex-col gap-1 rounded-md border border-hairline bg-sunken px-2.5 py-1.5">
+          {run.errors.map((message, index) => (
+            <div
+              key={index}
+              className="whitespace-pre-wrap break-words font-mono text-[10px] leading-5 text-fg-3"
+            >
+              {message}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -353,7 +411,9 @@ function ProcessBlock({
   isExpanded,
   onToggle,
   toolIds,
-  streaming
+  streaming,
+  openFailures,
+  onToggleFailure
 }: {
   summary: TurnSummary
   items: StreamItem[]
@@ -362,6 +422,8 @@ function ProcessBlock({
   onToggle: (callId: string, expanded: boolean) => void
   toolIds: Set<string>
   streaming: boolean
+  openFailures: ReadonlySet<number>
+  onToggleFailure: (start: number) => void
 }) {
   const [open, setOpen] = useState(false)
 
@@ -405,6 +467,8 @@ function ProcessBlock({
             onToggle={onToggle}
             toolIds={toolIds}
             variant="process"
+            openFailures={openFailures}
+            onToggleFailure={onToggleFailure}
           />
         </div>
       )}
@@ -417,6 +481,7 @@ function describe(summary: TurnSummary): string {
   const parts: string[] = []
   if (summary.toolCalls > 0) parts.push(`${summary.toolCalls} 次工具`)
   if (summary.segments > 0) parts.push(`${summary.segments} 段`)
+  if (summary.callFailures > 0) parts.push(`${summary.callFailures} 次调用失败`)
   if (summary.processDurationMs !== undefined) {
     parts.push(formatDuration(summary.processDurationMs))
   }
@@ -435,7 +500,9 @@ function Body({
   isExpanded,
   onToggle,
   toolIds,
-  variant
+  variant,
+  openFailures,
+  onToggleFailure
 }: {
   items: StreamItem[]
   outputs: Map<string, string>
@@ -443,6 +510,8 @@ function Body({
   onToggle: (callId: string, expanded: boolean) => void
   toolIds: Set<string>
   variant: 'process' | 'answer'
+  openFailures: ReadonlySet<number>
+  onToggleFailure: (start: number) => void
 }) {
   const rows: ReactNode[] = []
   const groups = groupBody(items, toolIds)
@@ -455,6 +524,18 @@ function Body({
 
     if (row.kind === 'output') {
       rows.push(<ToolOutput key={`out-${i}`} text={row.text} />)
+      continue
+    }
+
+    if (row.kind === 'failures') {
+      rows.push(
+        <CallFailureLine
+          key={`failures-${i}`}
+          run={row}
+          open={openFailures.has(row.start)}
+          onToggle={() => onToggleFailure(row.start)}
+        />
+      )
       continue
     }
 
