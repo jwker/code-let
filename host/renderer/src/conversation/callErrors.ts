@@ -96,3 +96,52 @@ export function summarizeCallFailures(body: readonly StreamItem[]): CallFailureS
     aborted
   }
 }
+
+
+/** provider 的原始错误太长时，标题要能一眼看出是哪类问题 */
+export function errorTitle(message: string): string {
+  const text = message.toLowerCase()
+  if (/quota|insufficient|balance|credit|余额|额度|usage limit|exceeded.*limit/.test(text)) {
+    return '模型额度不足'
+  }
+  if (/rate limit|too many requests|429/.test(text)) return '请求过于频繁'
+  if (/401|403|unauthorized|forbidden|api key|authentication/.test(text)) return '模型鉴权失败'
+  if (/timeout|timed out|econn|network|socket/.test(text)) return '模型连接失败'
+  return '模型请求失败'
+}
+
+/** 一轮的失败概况 —— 终端排版按轮切分时用；runs 的 start 是全局下标 */
+export interface CallTurnFailures {
+  /** 这一轮从 items 的哪一项开始（含） */
+  start: number
+  /** 到哪一项结束（不含） */
+  end: number
+  /** 这一轮最后没救回来 */
+  failed: boolean
+  /** 用户中止 */
+  aborted: boolean
+  /** 连续的失败段 */
+  runs: FailureRun[]
+}
+
+/** 按用户消息把内容流切成轮，并算出每轮的失败概况 */
+export function callFailureTurns(items: readonly StreamItem[]): CallTurnFailures[] {
+  if (items.length === 0) return []
+  const starts = [0]
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index]
+    if (index > 0 && item.kind === 'message' && item.role === 'user') starts.push(index)
+  }
+
+  return starts.map((start, ordinal) => {
+    const end = starts[ordinal + 1] ?? items.length
+    const summary = summarizeCallFailures(items.slice(start, end))
+    return {
+      start,
+      end,
+      failed: summary.failed,
+      aborted: summary.aborted,
+      runs: summary.runs.map((run) => ({ ...run, start: run.start + start }))
+    }
+  })
+}

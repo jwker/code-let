@@ -3,7 +3,7 @@ import type { StreamItem } from '@contract/index'
 import { useStore } from '../store'
 import { AnsiText } from './AnsiText'
 import { groupBody } from './groupBody'
-import { summarizeCallFailures, type FailureRun } from './callErrors'
+import { errorTitle, summarizeCallFailures, type FailureRun } from './callErrors'
 import { Markdown } from './Markdown'
 import { ReplyMeta } from './ReplyMeta'
 import { findLiveAnswerIndex, summarizeProcess, summarizeTurn, type TurnSummary } from './turnMeta'
@@ -31,18 +31,6 @@ import { IconCaret } from '../shell/icons'
 type MessageItem = Extract<StreamItem, { kind: 'message' }>
 type ToolItem = Extract<StreamItem, { kind: 'tool' }>
 type CustomItem = Extract<StreamItem, { kind: 'custom' }>
-
-/** provider 的原始错误太长时，标题要能一眼看出是哪类问题 */
-function errorTitle(message: string): string {
-  const text = message.toLowerCase()
-  if (/quota|insufficient|balance|credit|余额|额度|usage limit|exceeded.*limit/.test(text)) {
-    return '模型额度不足'
-  }
-  if (/rate limit|too many requests|429/.test(text)) return '请求过于频繁'
-  if (/401|403|unauthorized|forbidden|api key|authentication/.test(text)) return '模型鉴权失败'
-  if (/timeout|timed out|econn|network|socket/.test(text)) return '模型连接失败'
-  return '模型请求失败'
-}
 
 const TOOL_LOOK: Record<ToolItem['status'], { icon: string; color: string }> = {
   running: { icon: '◐', color: 'var(--fg-3)' },

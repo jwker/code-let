@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { StreamItem } from '@contract/index'
 import { applyEvent, entriesToItems } from '@contract/stream'
 import {
+  callFailureTurns,
+  errorTitle,
   isCallFailure,
   summarizeCallFailures
 } from '../host/renderer/src/conversation/callErrors'
@@ -207,5 +209,49 @@ describe('按 stopReason 判定，而不是猜', () => {
     const length = stopped('说到一半', 'length')
     expect(summarizeCallFailures([toolUse]).failed).toBe(false)
     expect(summarizeCallFailures([fail('timeout'), length]).failed).toBe(false)
+  })
+})
+
+
+describe('按轮切分给终端排版用', () => {
+  it('两轮：中途失败后成功 vs 只有失败', () => {
+    const items: StreamItem[] = [
+      { kind: 'message', role: 'user', text: '第一问' },
+      fail('timeout', 'error'),
+      { kind: 'message', role: 'assistant', text: '好了', stopReason: 'stop' },
+      { kind: 'message', role: 'user', text: '第二问' },
+      fail('401', 'error')
+    ]
+    const turns = callFailureTurns(items)
+    expect(turns).toHaveLength(2)
+    expect(turns[0]).toMatchObject({ start: 0, end: 3, failed: false, aborted: false })
+    expect(turns[0].runs.map((run) => run.count)).toEqual([1])
+    expect(turns[1]).toMatchObject({ start: 3, end: 5, failed: true })
+    // 失败段的下标是全局的，终端按它决定在哪一行画
+    expect(turns[1].runs[0].start).toBe(4)
+  })
+
+  it('中止的轮次在终端也不出灰字、不出红字', () => {
+    const items: StreamItem[] = [
+      { kind: 'message', role: 'user', text: '问' },
+      { kind: 'message', role: 'assistant', text: '', errorMessage: 'x', aborted: true }
+    ]
+    expect(callFailureTurns(items)[0]).toMatchObject({ failed: false, aborted: true })
+  })
+
+  it('开头没有用户消息的错误也会归到一轮里', () => {
+    const items = [fail('timeout', 'error')]
+    const turns = callFailureTurns(items)
+    expect(turns).toHaveLength(1)
+    expect(turns[0]).toMatchObject({ start: 0, end: 1, failed: true })
+  })
+})
+
+describe('失败类型标题', () => {
+  it('鉴权 / 连接 / 额度 / 其它', () => {
+    expect(errorTitle('401 Unauthorized')).toBe('模型鉴权失败')
+    expect(errorTitle('ECONNRESET')).toBe('模型连接失败')
+    expect(errorTitle('402 insufficient quota')).toBe('模型额度不足')
+    expect(errorTitle('something went wrong')).toBe('模型请求失败')
   })
 })
