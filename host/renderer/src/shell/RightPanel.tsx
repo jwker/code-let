@@ -3,7 +3,15 @@ import type { RightPanelKind, RightPanelState } from '@contract/index'
 import type { BrowserHost } from '@contract/browser'
 import { host } from '../host'
 import { activeProjectTab, paneOf, typeDefOf, useStore } from '../store'
-import { IconBrowser, IconChevron, IconCode, IconDoc, IconPanel, IconPanelCollapse } from './icons'
+import {
+  IconBrowser,
+  IconChevron,
+  IconCode,
+  IconDoc,
+  IconPanel,
+  IconPanelCollapse,
+  IconRefresh
+} from './icons'
 import { FileTree } from './FileTree'
 import { DocsList } from './DocsList'
 import { BrowserPane } from './BrowserPane'
@@ -13,6 +21,7 @@ import { FilePreview } from './FilePreview'
 import { GitDiffView } from './GitDiffView'
 import { PaneResizer } from './PaneResizer'
 import { useOverlay } from './useOverlay'
+import { useIndicator } from './useIndicator'
 import { browserHostFor } from './browserHost'
 import { changeCount } from './gitFormat'
 
@@ -297,6 +306,10 @@ export function RightPanel({
 }: RightPanelProps) {
   const snapshot = useStore((s) => s.snapshot)
   const toggleRightPanel = useStore((s) => s.toggleRightPanel)
+  const panelRefreshing = useStore((s) => s.panelRefreshing)
+  const refreshPanel = useStore((s) => s.refreshPanel)
+  // 沿用状态栏的「延迟出现 / 最短停留」规则：几十毫秒的刷新不闪
+  const spinning = useIndicator(panelRefreshing)
   const activeFileId = snapshot.activeFileId
   const change = useStore((s) => s.git.selected)
   const docsSelected = useStore((s) => s.docs.selected)
@@ -344,6 +357,18 @@ export function RightPanel({
           <span className="rp-title-name">{title}</span>
         </div>
         <div className="rp-head-actions">
+          {(kind === 'code' || kind === 'docs') && (
+            <button
+              type="button"
+              className="rp-refresh"
+              aria-label="刷新"
+              title={panelRefreshing ? '正在重新读取…' : '重新从磁盘读取'}
+              disabled={panelRefreshing}
+              onClick={() => void refreshPanel(kind)}
+            >
+              {spinning ? <span className="rp-refresh-spin" aria-hidden="true" /> : <IconRefresh />}
+            </button>
+          )}
           {kind && meta ? <FunctionSwitcher current={kind} /> : null}
           <button
             type="button"

@@ -149,6 +149,13 @@ describe('读文件', () => {
     expect(content.kind).toBe('unsupported')
     rmSync(root, { recursive: true, force: true })
   })
+
+  it('文件已经不在了：返回能直接显示的原因，而不是抛错', async () => {
+    const root = setup()
+    const content = await readFileContent(root, 'gone.txt')
+    expect(content).toEqual({ kind: 'unsupported', reason: '这个文件已经不在了' })
+    rmSync(root, { recursive: true, force: true })
+  })
 })
 
 describe('formatSize', () => {

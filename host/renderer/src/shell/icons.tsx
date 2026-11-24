@@ -117,6 +117,16 @@ export const IconPanel = () => (
   </Icon>
 )
 
+/** 刷新：一个闭环箭头，表示「重新从磁盘读一遍」 */
+export const IconRefresh = () => (
+  <Icon>
+    <path d="M3 12a9 9 0 0 1 15.5-6.4L21 8" />
+    <path d="M21 3v5h-5" />
+    <path d="M21 12a9 9 0 0 1-15.5 6.4L3 16" />
+    <path d="M3 21v-5h5" />
+  </Icon>
+)
+
 /** 收起右栏：向右的尖角，指向右栏所在的一侧 */
 export const IconPanelCollapse = () => (
   <Icon>

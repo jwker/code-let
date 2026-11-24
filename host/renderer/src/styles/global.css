@@ -605,6 +605,34 @@
 .rp-func-menu button[aria-checked='true'] .rp-func-check {
   opacity: 1;
 }
+.rp-refresh {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  display: grid;
+  place-items: center;
+  color: var(--fg-2);
+}
+.rp-refresh:hover:not(:disabled) {
+  background: var(--sunken);
+  color: var(--fg-1);
+}
+.rp-refresh:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.rp-refresh svg {
+  width: 15px;
+  height: 15px;
+}
+.rp-refresh-spin {
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid var(--hairline-strong);
+  border-top-color: var(--fg-1);
+  border-radius: 50%;
+  animation: refresh-spin 700ms linear infinite;
+}
 .rp-close {
   width: 28px;
   height: 28px;

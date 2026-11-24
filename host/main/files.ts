@@ -473,7 +473,16 @@ export async function readFileContentAbsolute(path: string): Promise<FileContent
 }
 
 async function readFileAt(full: string): Promise<FileContent> {
-  const info = await stat(full)
+  let info
+  try {
+    info = await stat(full)
+  } catch (error) {
+    // 文件被外部删掉了：给内容区一句能直接显示的原因，不抛 IPC 错误
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { kind: 'unsupported', reason: '这个文件已经不在了' }
+    }
+    throw error
+  }
 
   if (info.isDirectory()) {
     return { kind: 'unsupported', reason: '这是一个目录' }

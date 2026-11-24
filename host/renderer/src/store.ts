@@ -24,6 +24,7 @@ import type {
 import { blockKey } from '@contract/index'
 import { applyEvent, nextStreaming } from '@contract/stream'
 import { host } from './host'
+import { planPanelRefresh } from './shell/panelRefresh'
 import type { HorizontalSpan } from './shell/overlay'
 
 export type Theme = 'light' | 'dark'
@@ -294,6 +295,8 @@ interface RendererStore {
    * 全局偏好，不按项目标签记（R52：窗口宽度是窗口的事）。
    */
   rightPanelWidth: number | null
+  /** 右栏正在按刷新键重读（代码 / 文档功能区） */
+  panelRefreshing: boolean
   /** 从输入框发起的改名请求 —— 项目设置 → 会话管理看到后打开改名对话框 */
   renameRequest: { path: string; nonce: number } | null
   /** 新建对话请求 —— App 看到后弹出「先起名再建」的对话框 */
@@ -384,6 +387,13 @@ interface RendererStore {
   selectChange: (path: string, scope: GitDiffScope) => Promise<void>
   /** 关掉 diff（回到文件预览） */
   closeChange: () => void
+  /**
+   * 重读当前选中的 diff —— 刷新用。
+   *
+   * 跟 `selectChange` 的区别：不清掉当前 diff，内容区不卸载，
+   * 滚动位置才能保住。
+   */
+  reloadSelectedDiff: () => Promise<void>
   setSettingsCategory: (category: 'agents' | 'conversations' | 'project') => void
   /** 登记 / 撤销一个浮层。`coversBrowser` 为假时不动原生视图 */
   pushOverlay: (coversBrowser?: boolean) => void
@@ -396,6 +406,13 @@ interface RendererStore {
   openDoc: (path: string) => Promise<void>
   /** 右栏宽度（像素；null = 回到窗口一半） */
   setRightPanelWidth: (width: number | null) => void
+  /**
+   * 重新从磁盘读当前功能区的内容。
+   *
+   * 只清当前项目里打开过的缓存：根目录、已展开的各层目录、当前文件正文。
+   * Git 状态和 diff 各自就地失败，不汇总提示。
+   */
+  refreshPanel: (kind: RightPanelKind) => Promise<void>
   /** 选中某一轮，右侧上下文看截至这一轮的最后两次请求 */
   setMode: (mode: ConversationMode) => void
   setTheme: (theme: Theme) => void
@@ -480,6 +497,7 @@ export const useStore = create<RendererStore>((set, get) => ({
   browserSpan: null,
   settingsCategory: 'agents',
   rightPanelWidth: loadRightPanelWidth(),
+  panelRefreshing: false,
   renameRequest: null,
   newConversationRequest: null,
   composerTextRequest: null,
@@ -628,6 +646,27 @@ export const useStore = create<RendererStore>((set, get) => ({
     set({ git: { ...get().git, selected: null, diff: null, diffError: null, diffLoading: false } })
   },
 
+  reloadSelectedDiff: async () => {
+    const selected = get().git.selected
+    const cwd = activeCwd(get().snapshot)
+    if (!selected || !cwd) return
+    const seq = ++diffSeq
+    try {
+      const next = await host.getGitDiff(cwd, selected.path, selected.scope)
+      if (seq !== diffSeq) return
+      set({ git: { ...get().git, diff: next, diffError: next.error, diffLoading: false } })
+    } catch (caught) {
+      if (seq !== diffSeq) return
+      set({
+        git: {
+          ...get().git,
+          diffLoading: false,
+          diffError: caught instanceof Error ? caught.message : String(caught)
+        }
+      })
+    }
+  },
+
   setSettingsCategory: (category) => set({ settingsCategory: category }),
 
   pushOverlay: (coversBrowser = true) =>
@@ -717,6 +756,68 @@ export const useStore = create<RendererStore>((set, get) => ({
   setRightPanelWidth: (width) => {
     saveRightPanelWidth(width)
     set({ rightPanelWidth: width })
+  },
+
+  refreshPanel: async (kind) => {
+    if (kind !== 'code' && kind !== 'docs') return
+    if (get().panelRefreshing) return
+    const cwd = activeCwd(get().snapshot)
+    if (!cwd) return
+    set({ panelRefreshing: true })
+    try {
+      if (kind === 'docs') {
+        await get().loadDocs(cwd)
+        const selected = get().docs.selected
+        if (selected) await get().openDoc(selected.path)
+        return
+      }
+
+      const snapshot = get().snapshot
+      const activeFile = snapshot.files.find((file) => file.id === snapshot.activeFileId) ?? null
+      const plan = planPanelRefresh({
+        cwd,
+        expandedDirs: get().treeExpanded[cwd] ?? [],
+        activeFilePath: activeFile?.path ?? null
+      })
+
+      /*
+       * 根目录无条件重读（新建在根上的文件要出现）；展开的目录按计划清，
+       * 当前文件只清正文。别的项目的键一个都不碰。
+       */
+      const rootKey = `${cwd}\u0001`
+      set((state) => {
+        const treeEntries = { ...state.treeEntries }
+        const treeErrors = { ...state.treeErrors }
+        for (const key of [rootKey, ...plan.treeKeys]) {
+          delete treeEntries[key]
+          delete treeErrors[key]
+        }
+        const fileContents = { ...state.fileContents }
+        for (const path of plan.filePaths) delete fileContents[path]
+        return { treeEntries, treeErrors, fileContents }
+      })
+
+      const dirs = ['', ...plan.treeKeys.map((key) => key.slice(cwd.length + 1))]
+      const selectedChange = get().git.selected
+      await Promise.all([
+        ...dirs.map((dir) => get().loadDir(cwd, dir)),
+        activeFile ? get().loadFile(activeFile.path, activeFile.cwd || cwd) : Promise.resolve(),
+        get().loadGitStatus(cwd)
+      ])
+
+      // 改动还在列表里就重读 diff；不在了 loadGitStatus 已经把 selected 收起来
+      const still = get().git.selected
+      if (
+        still &&
+        selectedChange &&
+        still.path === selectedChange.path &&
+        still.scope === selectedChange.scope
+      ) {
+        await get().reloadSelectedDiff()
+      }
+    } finally {
+      set({ panelRefreshing: false })
+    }
   },
 
   setTempMinimized: (value) => set({ tempMinimized: value }),
