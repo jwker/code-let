@@ -3,31 +3,58 @@ import type { SessionTree } from '@contract/index'
 import { host } from '../host'
 import { useStore } from '../store'
 import { IconBranch } from '../shell/icons'
-import { ConversationTree } from './ConversationTree'
+import { ConversationTree, reasonOf } from './ConversationTree'
 import { layoutTree } from './treeLayout'
 import { treeToRows } from './treeRows'
 
 /**
  * 会话树的入口：一个 26×26 的按钮 + 角标，点开弹窗。
  *
- * 只长在对话左侧圆点轨的顶部 —— 左列现在只有一列对话，不需要第二个位置。
+ * 常驻在对话区左上角，有 agent 就在（零轮、一轮、各种排版都在）。
+ *
+ * **弹窗一定给反馈**：树还没拉回来时显示正在读取，拉失败了显示原因和重试。
+ * 早先只有「树到手」才渲染弹窗，于是拉取一失败（或者还没回来）点按钮就是
+ * 「按钮变实心、什么都没发生」—— 用户以为按钮坏了。
  */
 export function ConversationTreeEntry() {
   const agentId = useStore((s) => s.snapshot.activeAgentId)
   const cwd = useStore((s) => s.snapshot.session.cwd ?? '')
-  const streaming = useStore((s) => (s.snapshot.activeAgentId ? (s.streaming[s.snapshot.activeAgentId] ?? false) : false))
+  const streaming = useStore((s) =>
+    s.snapshot.activeAgentId ? (s.streaming[s.snapshot.activeAgentId] ?? false) : false
+  )
   const requestComposerText = useStore((s) => s.requestComposerText)
   const setTreeBranches = useStore((s) => s.setTreeBranches)
 
   const [tree, setTree] = useState<SessionTree | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
 
+  /*
+   * 读树。失败要记下原因 —— 以前失败是静默的（只 `.then`），
+   * 弹窗就永远打不开，界面上一点线索都没有。
+   *
+   * 已经有树时不显示 loading：一轮结束刷新一次，树不该闪成「正在读取」。
+   */
   const loadTree = useCallback(() => {
     if (!agentId) {
       setTree(null)
+      setError(null)
+      setLoading(false)
       return
     }
-    void host.getAgentTree(agentId).then((next) => setTree(next))
+    setLoading(true)
+    setError(null)
+    void host
+      .getAgentTree(agentId)
+      .then((next) => {
+        setTree(next)
+        setLoading(false)
+      })
+      .catch((caught: unknown) => {
+        setError(reasonOf(caught))
+        setLoading(false)
+      })
   }, [agentId])
 
   /*
@@ -57,6 +84,13 @@ export function ConversationTreeEntry() {
 
   if (!agentId) return null
 
+  function toggle(): void {
+    const next = !open
+    setOpen(next)
+    // 没树又不在读（首次还没回来，或者上一次失败了）—— 打开时补一次
+    if (next && !tree && !loading) loadTree()
+  }
+
   return (
     <div className="conv-tree-entry">
       <button
@@ -65,23 +99,83 @@ export function ConversationTreeEntry() {
         title="对话结构"
         aria-label={otherBranches > 0 ? `对话结构，另有 ${otherBranches} 条支线` : '对话结构'}
         aria-expanded={open}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggle}
       >
         <IconBranch size={15} />
         {otherBranches > 0 && <span className="conv-tree-entry-badge">{otherBranches}</span>}
       </button>
 
-      {open && tree && (
-        <ConversationTree
-          agentId={agentId}
-          cwd={cwd}
-          tree={tree}
-          streaming={streaming}
-          onClose={() => setOpen(false)}
-          onTreeChanged={loadTree}
-          onComposerText={(text) => requestComposerText(agentId, text)}
-        />
-      )}
+      {open &&
+        (tree ? (
+          <ConversationTree
+            agentId={agentId}
+            cwd={cwd}
+            tree={tree}
+            streaming={streaming}
+            onClose={() => setOpen(false)}
+            onTreeChanged={loadTree}
+            onComposerText={(text) => requestComposerText(agentId, text)}
+          />
+        ) : (
+          <TreePending
+            loading={loading}
+            error={error}
+            onRetry={loadTree}
+            onClose={() => setOpen(false)}
+          />
+        ))}
     </div>
+  )
+}
+
+/**
+ * 树还没到手时的弹窗 —— 正在读取，或者读失败了带原因和重试。
+ *
+ * 跟真弹窗共用遮罩、外壳和位置，所以看起来是同一个窗口的两个状态，
+ * 不是「有时候弹、有时候不弹」。
+ */
+function TreePending({
+  loading,
+  error,
+  onRetry,
+  onClose
+}: {
+  loading: boolean
+  error: string | null
+  onRetry: () => void
+  onClose: () => void
+}) {
+  return (
+    <>
+      <div className="conv-tree-backdrop left-scope" onClick={onClose} />
+      <div className="conv-tree-pop">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="对话结构"
+          aria-busy={loading}
+          className="conv-tree-panel"
+        >
+          <div className="conv-tree-head">
+            <div className="conv-tree-title">对话结构</div>
+            <button type="button" className="conv-tree-close" aria-label="关闭" onClick={onClose}>
+              ✕
+            </button>
+          </div>
+          <div className="conv-tree-body">
+            <div className="conv-tree-empty">
+              {loading ? '正在读取会话树…' : `读不到会话树：${error ?? '未知原因'}`}
+            </div>
+          </div>
+          {!loading && error && (
+            <div className="conv-tree-foot">
+              <button type="button" className="conv-tree-btn is-primary" onClick={onRetry}>
+                重试
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   )
 }

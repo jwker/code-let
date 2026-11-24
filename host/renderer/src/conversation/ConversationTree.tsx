@@ -29,7 +29,7 @@ function branchWash(branch: number): string {
 }
 
 /** 主进程抛回来的错误带着 IPC 包装，只留人能看的那句 */
-function reasonOf(error: unknown): string {
+export function reasonOf(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error)
   return raw
     .replace(/^Error invoking remote method '[^']*':\s*/, '')
