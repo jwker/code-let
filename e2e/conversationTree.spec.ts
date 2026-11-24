@@ -22,6 +22,7 @@ let agentDir = ''
 let sessionFile = ''
 let oneTurnFile = ''
 let longFile = ''
+let deepFile = ''
 let app: ElectronApplication | null = null
 let page: Page
 
@@ -99,6 +100,24 @@ test.describe.serial('会话树的读、切与另开', () => {
       }
       longFile = long.getSessionFile() ?? ''
       if (!longFile) throw new Error('长会话文件没有创建出来')
+
+      /*
+       * 很深的会话：1100 条串成一条链。
+       *
+       * 树是嵌套形状，父链多深它就有多深；而 Electron 的 contextBridge 在
+       * 1000 层就拒绝传（recursion depth exceeded）—— 所以主进程给的是扁平
+       * 节点表。这条用例从前会打不开弹窗。
+       */
+      const deep = SessionManager.create(projectDir)
+      for (let index = 1; index <= 1100; index += 1) {
+        deep.appendMessage({
+          role: index % 2 === 1 ? 'user' : 'assistant',
+          content: [{ type: 'text', text: `第 ${index} 条的正文` }],
+          timestamp: Date.now() + index
+        } as never)
+      }
+      deepFile = deep.getSessionFile() ?? ''
+      if (!deepFile) throw new Error('深会话文件没有创建出来')
     } finally {
       if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR
       else process.env.PI_CODING_AGENT_DIR = previousAgentDir
@@ -149,6 +168,19 @@ test.describe.serial('会话树的读、切与另开', () => {
               lastActiveAt: now + 2,
               archivedAt: null,
               turns: 12,
+              previewUrl: null
+            },
+            {
+              id: 'agent-deep',
+              name: '深会话',
+              type: 'general',
+              instance: 1,
+              cwd: projectDir,
+              sessionPath: deepFile,
+              createdAt: now + 3,
+              lastActiveAt: now + 3,
+              archivedAt: null,
+              turns: 550,
               previewUrl: null
             }
           ]
@@ -361,6 +393,19 @@ test.describe.serial('会话树的读、切与另开', () => {
     expect(Math.round(after!.y)).toBe(Math.round(before!.y))
 
     await page.getByRole('navigation', { name: '项目导航' }).getByRole('button', { name: '会话树' }).click()
+  })
+
+  test('很深的会话（1100 条链）也能打开弹窗', async () => {
+    const rail = page.getByRole('navigation', { name: '项目导航' })
+    await rail.getByRole('button', { name: '深会话' }).click()
+    const button = page.getByRole('button', { name: /^对话结构/ })
+    await expect(button).toBeVisible({ timeout: 10_000 })
+
+    // 嵌套形状过不了 contextBridge 的 1000 层，修好之前这里打不开
+    await openTree()
+    await expect(page.locator('.conv-tree-row').first()).toBeVisible()
+    await page.getByRole('button', { name: '关闭', exact: true }).click()
+    await rail.getByRole('button', { name: '会话树' }).click()
   })
 
   test('切到项目设置后入口消失', async () => {

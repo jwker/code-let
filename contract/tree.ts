@@ -38,6 +38,19 @@ export interface SessionTree {
   leafId: string | null
 }
 
+/**
+ * 跨进程传的那一份树 —— **扁平**。
+ *
+ * 嵌套的 `children` 深度等于会话长度：一条四千条的会话就是四千层，
+ * 而 Electron 的 contextBridge 在 1000 层就拒绝传（`recursion depth exceeded`）。
+ * 所以主进程只给一张节点表，渲染进程自己连成树（`nestTree`）。
+ */
+export interface FlatSessionTree {
+  nodes: Array<Omit<SessionTreeNode, 'children'>>
+  /** 当前叶；会话还没说过话时是 null */
+  leafId: string | null
+}
+
 /** 切支线的结果（Pi 的 `navigateTree()`） */
 export interface TreeNavigateResult {
   /** 用户中途取消，或者 Pi 那边没动 */
@@ -133,19 +146,19 @@ export function previewOf(entry: RawEntry): string {
 }
 
 /**
- * 条目数组 → 会话树。
+ * 条目数组 → 扁平节点表（跨进程用的形状）。
  *
- * - 按 `parentId` 连树；父链断掉的条目当根（Pi 的 `getTree()` 也是这么做的）。
+ * - 按 `parentId` 连线；父链断掉的条目当根（Pi 的 `getTree()` 也是这么做的）。
  * - `turn` 只编活动支线上的用户消息：从 `leafId` 沿父链走到根，按根→叶的顺序从 1 起。
  * - 标签由调用方查（`labelOf`）—— 标签是 Pi 的独立条目，最后一次改动才算数，
  *   这条规则在 session manager 里，这里不重复实现。
  */
-export function entriesToTree(
+export function treeFromEntries(
   entries: readonly unknown[],
   leafId: string | null,
   labelOf?: (id: string) => string | undefined
-): SessionTree {
-  const nodes = new Map<string, SessionTreeNode>()
+): FlatSessionTree {
+  const nodes = new Map<string, FlatSessionTree['nodes'][number]>()
   const parentOf = new Map<string, string | null>()
 
   for (const raw of entries) {
@@ -158,17 +171,9 @@ export function entriesToTree(
       kind: nodeKindOf(entry),
       preview: previewOf(entry),
       timestamp: typeof entry.timestamp === 'string' ? entry.timestamp : '',
-      ...(label ? { label } : {}),
-      children: []
+      ...(label ? { label } : {})
     })
     parentOf.set(entry.id, typeof entry.parentId === 'string' ? entry.parentId : null)
-  }
-
-  const roots: SessionTreeNode[] = []
-  for (const node of nodes.values()) {
-    const parent = node.parentId ? nodes.get(node.parentId) : undefined
-    if (parent) parent.children.push(node)
-    else roots.push(node)
   }
 
   // 活动支线上这几条用户消息是第几轮
@@ -182,5 +187,39 @@ export function entriesToTree(
     if (node && node.kind === 'user') node.turn = ++turn
   }
 
-  return { roots, leafId: nodes.has(leafId ?? '') ? leafId : null }
+  return { nodes: [...nodes.values()], leafId: nodes.has(leafId ?? '') ? leafId : null }
+}
+
+/**
+ * 扁平节点表 → 带 children 的树。
+ *
+ * 在渲染进程里做，不走 contextBridge —— 那边有 1000 层嵌套的限制，
+ * 而一条长会话的父链轻松就有几千层。
+ */
+export function nestTree(flat: FlatSessionTree): SessionTree {
+  const nodes = new Map<string, SessionTreeNode>()
+  for (const node of flat.nodes) nodes.set(node.id, { ...node, children: [] })
+
+  const roots: SessionTreeNode[] = []
+  for (const node of nodes.values()) {
+    const parent = node.parentId ? nodes.get(node.parentId) : undefined
+    if (parent) parent.children.push(node)
+    else roots.push(node)
+  }
+
+  return { roots, leafId: flat.leafId }
+}
+
+/**
+ * 条目数组 → 会话树（带 children）。
+ *
+ * 给不需要跨进程的场合用：测试夹具、浏览器预览的假宿主。真机那条路上
+ * 主进程给的是扁平形状（`treeFromEntries`），渲染进程拿到再 `nestTree`。
+ */
+export function entriesToTree(
+  entries: readonly unknown[],
+  leafId: string | null,
+  labelOf?: (id: string) => string | undefined
+): SessionTree {
+  return nestTree(treeFromEntries(entries, leafId, labelOf))
 }

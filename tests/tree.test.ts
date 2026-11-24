@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionTree, SessionTreeNode } from '@contract/index'
-import { entriesToTree, previewOf, TREE_PREVIEW_LIMIT } from '@contract/tree'
+import { entriesToTree, nestTree, previewOf, TREE_PREVIEW_LIMIT, treeFromEntries } from '@contract/tree'
 
 /**
  * 会话树是后面所有树操作的基础数据（.scratch/conversation-tree/spec.md）。
@@ -211,5 +211,49 @@ describe('previewOf', () => {
 
     expect([...preview]).toHaveLength(TREE_PREVIEW_LIMIT)
     expect(preview.endsWith('…')).toBe(true)
+  })
+})
+
+describe('跨进程的那份树是扁平的', () => {
+  /*
+   * Electron 的 contextBridge 不传超过 1000 层的嵌套对象
+   * （`recursion depth exceeded`）。一条几千条的会话，父链就有几千层 ——
+   * 所以主进程只给节点表，渲染进程自己连。这条用例钉住这个约束。
+   */
+  it('一条 3000 条的会话：扁平形状没有嵌套，连成树之后层级回来', () => {
+    const entries: Array<Record<string, unknown>> = []
+    let parentId: string | null = null
+    for (let index = 0; index < 3000; index += 1) {
+      const id = `e${index}`
+      entries.push({ type: 'message', id, parentId, timestamp: '2026-01-01T00:00:00.000Z', message: { role: 'user', content: `第 ${index} 条` } })
+      parentId = id
+    }
+
+    const flat = treeFromEntries(entries, 'e2999')
+    expect(flat.nodes).toHaveLength(3000)
+    // 扁平：节点上只有标量字段，没有 children
+    expect(flat.nodes.every((node) => !('children' in node))).toBe(true)
+
+    const tree = nestTree(flat)
+    let depth = 0
+    let node = tree.roots[0]
+    while (node) {
+      depth += 1
+      node = node.children[0]
+    }
+    expect(tree.roots).toHaveLength(1)
+    expect(depth).toBe(3000)
+    // 轮次仍然只给活动支线上的用户消息编
+    expect(tree.roots[0].turn).toBe(1)
+  })
+
+  it('扁平形状能原样还原成一棵树（跟一次到位的 entriesToTree 一致）', () => {
+    const user = entry('message', null, { message: { role: 'user', content: '问题' } })
+    const answer = entry('message', user.id as string, { message: { role: 'assistant', content: '回答' } })
+
+    const direct = entriesToTree([user, answer], answer.id as string)
+    const viaFlat = nestTree(treeFromEntries([user, answer], answer.id as string))
+
+    expect(JSON.stringify(viaFlat)).toBe(JSON.stringify(direct))
   })
 })

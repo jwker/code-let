@@ -23,15 +23,15 @@ import type {
   CommandOption,
   ConversationInfo,
   ExtensionErrorInfo,
+  FlatSessionTree,
   ModelOption,
-  SessionTree,
   StreamItem,
   ThinkingLevel,
   TreeNavigateResult
 } from '@contract/index'
 import type { PromptImage } from '../attachments'
 import { entriesToItems } from '@contract/stream'
-import { entriesToTree } from '@contract/tree'
+import { treeFromEntries } from '@contract/tree'
 import { assertTreeNavigable, toNavigateResult } from './treeOps'
 import { thumbnailStreamImage } from '../imageResize'
 
@@ -129,7 +129,7 @@ export interface PiRuntimePort {
   /** 某个 agent 的会话条目 */
   readEntries(agentId: string): StreamItem[]
   /** 某个 agent 的整棵会话树（条目级） */
-  readTree(agentId: string): SessionTree
+  readTree(agentId: string): FlatSessionTree
   /**
    * 切支线：把当前叶移到某个条目。
    *
@@ -702,10 +702,10 @@ export class PiRuntime implements PiRuntimePort {
    * 标签不在这里算：标签是 Pi 的独立条目，最后一次改动才算数 ——
    * 那条规则在 session manager 里，这里只把结果贴到节点上。
    */
-  readTree(agentId: string): SessionTree {
+  readTree(agentId: string): FlatSessionTree {
     const sessionManager = this.tabs.get(agentId)?.runtime?.session.sessionManager
-    if (!sessionManager) return { roots: [], leafId: null }
-    return entriesToTree(sessionManager.getEntries(), sessionManager.getLeafId(), (id) =>
+    if (!sessionManager) return { nodes: [], leafId: null }
+    return treeFromEntries(sessionManager.getEntries(), sessionManager.getLeafId(), (id) =>
       sessionManager.getLabel(id)
     )
   }

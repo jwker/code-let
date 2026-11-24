@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { SessionTree } from '@contract/index'
+import { nestTree } from '@contract/index'
 import { host } from '../host'
 import { useStore } from '../store'
 import { IconBranch } from '../shell/icons'
@@ -47,8 +48,9 @@ export function ConversationTreeEntry() {
     setError(null)
     void host
       .getAgentTree(agentId)
-      .then((next) => {
-        setTree(next)
+      .then((flat) => {
+        // 主进程给的是扁平节点表：嵌套的 children 在 contextBridge 上有 1000 层限制
+        setTree(nestTree(flat))
         setLoading(false)
       })
       .catch((caught: unknown) => {

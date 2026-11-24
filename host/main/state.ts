@@ -26,7 +26,7 @@ import type {
   ProjectTabInfo,
   RightPanelState,
   SessionState,
-  SessionTree,
+  FlatSessionTree,
   ThinkingLevel,
   StreamItem,
   TemporaryChatState,
@@ -1540,7 +1540,7 @@ export class HostState extends EventEmitter {
   }
 
   /** 某个 agent 的整棵会话树（条目级） */
-  readTree(agentId: string): SessionTree {
+  readTree(agentId: string): FlatSessionTree {
     return this.pi.readTree(agentId)
   }
 

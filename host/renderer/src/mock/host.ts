@@ -22,12 +22,12 @@ import type {
   ProviderInfo,
   RightPanelState,
   SessionEvent,
-  SessionTree,
+  FlatSessionTree,
   StreamItem,
   ThinkingLevel,
   TreeNavigateResult
 } from '@contract/index'
-import { entriesToTree } from '@contract/tree'
+import { treeFromEntries } from '@contract/tree'
 
 /**
  * 浏览器预览用的假宿主。
@@ -935,8 +935,8 @@ export function createMockApi(): CodeletApi {
 
     getAgentEntries: async (agentId) => tabs.find((t) => t.id === agentId)?.items ?? [],
 
-    getAgentTree: async (agentId): Promise<SessionTree> =>
-      entriesToTree(FAKE_TREE_ENTRIES, treeLeaf.get(agentId) ?? null, (id) => treeLabels.get(id)),
+    getAgentTree: async (agentId): Promise<FlatSessionTree> =>
+      treeFromEntries(FAKE_TREE_ENTRIES, treeLeaf.get(agentId) ?? null, (id) => treeLabels.get(id)),
 
     navigateTree: async (agentId, targetId): Promise<TreeNavigateResult> => {
       const tab = tabs.find((t) => t.id === agentId)

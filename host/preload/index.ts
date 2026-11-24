@@ -37,7 +37,7 @@ import {
   type PickAttachmentsResult,
   type PreviewEntry,
   type SessionEvent,
-  type SessionTree,
+  type FlatSessionTree,
   type StreamItem,
   type ThinkingLevel,
   type TreeNavigateResult
@@ -78,7 +78,7 @@ const api: CodeletApi = {
   reloadAgent: (agentId) => ipcRenderer.invoke(IPC.agentsReload, { agentId }) as Promise<HostSnapshot>,
   getAgentEntries: (agentId) =>
     ipcRenderer.invoke(IPC.agentsEntries, { agentId }) as Promise<StreamItem[]>,
-  getAgentTree: (agentId) => ipcRenderer.invoke(IPC.agentsTree, { agentId }) as Promise<SessionTree>,
+  getAgentTree: (agentId) => ipcRenderer.invoke(IPC.agentsTree, { agentId }) as Promise<FlatSessionTree>,
   navigateTree: (agentId, targetId, options) =>
     ipcRenderer.invoke(IPC.treeNavigate, { agentId, targetId, ...options }) as Promise<TreeNavigateResult>,
   forkTree: (agentId, targetId) =>

@@ -18,7 +18,14 @@ export type {
   PreviewBlock
 } from './annotation'
 export type { PreviewEntry, PrototypeFile, PrototypeListing } from './preview'
-export type { SessionNodeKind, SessionTree, SessionTreeNode, TreeNavigateResult } from './tree'
+export type {
+  FlatSessionTree,
+  SessionNodeKind,
+  SessionTree,
+  SessionTreeNode,
+  TreeNavigateResult
+} from './tree'
+export { nestTree, treeFromEntries } from './tree'
 export {
   blockCitationPayload,
   blockKey,
@@ -93,7 +100,7 @@ import type {
 } from './agentTypes'
 import type { AnnotationEvent, AnnotationState, BlockCitation } from './annotation'
 import type { PreviewEntry } from './preview'
-import type { SessionTree, TreeNavigateResult } from './tree'
+import type { FlatSessionTree, TreeNavigateResult } from './tree'
 import type { BrowserHost } from './browser'
 import type {
   ModelAuthEvent,
@@ -981,7 +988,7 @@ export interface CodeletApi {
   /** 读某个 agent 的内容流（历史重建，R1 R5） */
   getAgentEntries(agentId: string): Promise<StreamItem[]>
   /** 读某个 agent 的会话树（条目级；一行一轮由渲染层合并） */
-  getAgentTree(agentId: string): Promise<SessionTree>
+  getAgentTree(agentId: string): Promise<FlatSessionTree>
   /**
    * 切支线：把当前叶移到某个条目（`navigateTree`）。
    *

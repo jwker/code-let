@@ -1,4 +1,4 @@
-import type { SessionTree, TreeNavigateResult } from '@contract/index'
+import type { FlatSessionTree, TreeNavigateResult } from '@contract/index'
 
 /**
  * 树操作的空实现。
@@ -7,7 +7,7 @@ import type { SessionTree, TreeNavigateResult } from '@contract/index'
  * 用不到它们的 FakePi 直接把这四个函数挂上去就行，不用每个文件抄一遍。
  */
 export const treeStubs = {
-  readTree: (): SessionTree => ({ roots: [], leafId: null }),
+  readTree: (): FlatSessionTree => ({ nodes: [], leafId: null }),
   navigateTree: async (): Promise<TreeNavigateResult> => ({ cancelled: true }),
   forkTree: async (): Promise<string> => {
     throw new Error('测试里没有另开会话')
